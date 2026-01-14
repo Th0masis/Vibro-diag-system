@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import Login from './Login'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import './App.css'
 
@@ -7,6 +8,7 @@ function App() {
   const [data, setData] = useState([])
   const [diagnosis, setDiagnosis] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [token, setToken] = useState(localStorage.getItem('token'));
 
   // Data pro graf
   const fetchData = async () => {
@@ -19,11 +21,7 @@ function App() {
     }
   }
 
-  useEffect(() => {
-    fetchData();
-  }, [])
-
-  // Funkce diagnostiky
+    // Funkce diagnostiky
   const runDiagnosis = async () => {
     if (data.length == 0) return;
     setLoading(true);
@@ -47,11 +45,29 @@ function App() {
     }
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem('token');
+    setToken(null);
+    delete axios.defaults.headers.common['Authorization'];
+  };
+
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      fetchData();
+    }
+  }, [token]);
+
+  if (!token) {
+    return <Login setToken={setToken} />;
+  }
+
   return (
     <div className="app-container">
       <header className="header-section">
         <h1>Vibrodiagnostický Dashboard</h1>
         <div className="button-group">
+          <button className="btn-update" onClick={handleLogout}>Odhlásit se</button>
           <button className="btn-update" onClick={fetchData}>Aktualizovat data</button>
           <button 
             className="btn-diagnose" 
