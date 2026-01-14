@@ -1,6 +1,11 @@
 import { useState } from 'react';
 import axios from 'axios';
-import './App.css'; 
+import './App.css';
+
+// Import log
+import PulseGuardLogo from './assets/logo-pulseguard.svg';
+import BrLogo from './assets/logo-br.svg';
+import VutLogo from './assets/logo-vut.svg';
 
 function Login({ setToken }) {
   const [username, setUsername] = useState('');
@@ -31,7 +36,9 @@ function Login({ setToken }) {
 
   return (
     <div className="login-card">
-        <h2 style={{ color: '#FF4041', textAlign: 'center', marginTop: 0 }}>VibroDiag Přihlášení</h2>
+        <div className="login-logo-header">
+            <img src={PulseGuardLogo} alt="PulseGuard Logo" className="pulseguard-logo" />
+        </div>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div>
             <label>Uživatelské jméno</label>
@@ -63,6 +70,10 @@ function Login({ setToken }) {
         <p style={{ textAlign: 'center', fontSize: '0.8rem', marginTop: '20px', color: '#64748b' }}>
           B&R Industrial Automation | VUT Brno
         </p>
+        <div className="login-footer-logos">
+            <img src={BrLogo} alt="B&R Industrial Automation Logo" className="partner-logo" />
+            <img src={VutLogo} alt="VUT Brno Logo" className="partner-logo" />
+        </div>
     </div>
   );
 }
