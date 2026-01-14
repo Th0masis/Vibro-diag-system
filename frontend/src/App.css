@@ -1,6 +1,8 @@
-/* App.css */
+/* ==========================================================================
+   1. PROMĚNNÉ A ZÁKLADNÍ NASTAVENÍ
+   ========================================================================== */
 :root {
-  /* Paleta od tebe */
+  /* Brand barvy VUT & B&R */
   --vut-red: #FF4041;
   --br-orange-dark: #FF6A4C;
   --br-orange: #F99244;
@@ -17,17 +19,46 @@
   --bg: #fdfdfd;
   --card-bg: #ffffff;
   --text: #2d2d2d;
+  --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+}
+
+/* ==========================================================================
+   2. LAYOUT A STRUKTURA
+   ========================================================================== */
+.app-layout {
+  position: relative;
+  min-height: 100vh;
+  background: linear-gradient(135deg, #fff 0%, #f9f9f9 100%);
 }
 
 .app-container {
   padding: 2rem;
-  background-color: var(--bg);
-  min-height: 100vh;
+  max-width: 1400px;
+  margin: 0 auto;
   font-family: 'Segoe UI', Roboto, sans-serif;
   color: var(--text);
-  background: linear-gradient(135deg, #fff 0%, #f9f9f9 100%);
+  transition: filter 0.6s ease-in-out; /* Plynulé doostření po loginu */
 }
 
+/* Efekt rozmazání pozadí při odhlášení */
+.blurred {
+  filter: blur(10px) grayscale(30%);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* ==========================================================================
+   3. HLAVIČKA A KOMPONENTY
+   ========================================================================== */
 .header-section {
   display: flex;
   justify-content: space-between;
@@ -42,6 +73,7 @@ h1 {
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: -1px;
+  margin: 0;
 }
 
 .button-group {
@@ -49,6 +81,9 @@ h1 {
   gap: 1rem;
 }
 
+/* ==========================================================================
+   4. TLAČÍTKA
+   ========================================================================== */
 button {
   padding: 0.6rem 1.2rem;
   border-radius: 6px;
@@ -87,7 +122,9 @@ button {
   cursor: not-allowed;
 }
 
-/* Panel diagnostiky */
+/* ==========================================================================
+   5. DIAGNOSTICKÉ PANELY A KARTY
+   ========================================================================== */
 .diag-panel {
   padding: 1.5rem;
   border-radius: 12px;
@@ -100,29 +137,28 @@ button {
 .diag-panel.status-ok {
   background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
 }
+
 .diag-panel.status-fault {
   background: linear-gradient(90deg, var(--vut-red) 0%, #b91c1c 100%);
 }
 
-/* Graf */
 .chart-container {
   background: var(--card-bg);
   padding: 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+  box-shadow: var(--shadow);
   margin-bottom: 2.5rem;
 }
 
-/* Tabulka */
+/* ==========================================================================
+   6. TABULKY
+   ========================================================================== */
 .table-wrapper {
   background: var(--card-bg);
   border-radius: 12px;
   overflow: hidden;
-  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-}
-.table-wrapper th {
-  background: var(--br-orange);
-  color: white;
+  box-shadow: var(--shadow);
+  margin-bottom: 2rem;
 }
 
 table {
@@ -131,7 +167,8 @@ table {
 }
 
 th {
-  background: #f1f5f9;
+  background: var(--br-orange);
+  color: white;
   padding: 1rem;
   text-align: left;
   font-weight: 600;
@@ -146,7 +183,43 @@ tr:hover {
   background-color: #fff7f5;
 }
 
+/* ==========================================================================
+   7. LOGIN SYSTÉM (FANCY OVERLAY)
+   ========================================================================== */
+.login-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 9999;
+  background-color: rgba(0, 0, 0, 0.2); /* Průhledné ztmavení */
+  backdrop-filter: blur(4px); /* Dodatečný blur jen pod loginem */
+}
+
+.login-card {
+  background: white;
+  padding: 2.5rem;
+  border-radius: 16px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  width: 90%;
+  max-width: 400px;
+  border-top: 6px solid var(--br-orange); /* Oranžový B&R akcent */
+  animation: fadeInScale 0.4s ease-out;
+}
+
+/* ==========================================================================
+   8. ANIMACE
+   ========================================================================== */
 @keyframes slideIn {
   from { opacity: 0; transform: translateY(-10px); }
   to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes fadeInScale {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
 }

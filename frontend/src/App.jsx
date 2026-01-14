@@ -21,20 +21,15 @@ function App() {
     }
   }
 
-    // Funkce diagnostiky
+  // Funkce diagnostiky
   const runDiagnosis = async () => {
-    if (data.length == 0) return;
+    if (data.length === 0) return;
     setLoading(true);
-    const latest=data[data.length-1];
+    const latest = data[data.length - 1];
     try {
-      console.log("Posílám k analýze:", {
-        rms: latest.rms_raw,
-        kurtosis: latest.kurtosis,
-        ptp: latest.peak_raw
-      });
       const response = await axios.post('http://127.0.0.1:8001/predict', {
         rms: latest.rms_raw,
-        kurtosis: latest.kurtosis,
+        kurtosis: latest.kurtosis_raw || latest.kurtosis, // Ošetření názvu pole z DB
         ptp: latest.peak_raw
       });
       setDiagnosis(response.data);
@@ -58,95 +53,106 @@ function App() {
     }
   }, [token]);
 
-  if (!token) {
-    return <Login setToken={setToken} />;
-  }
-
   return (
-    <div className="app-container">
-      <header className="header-section">
-        <h1>Vibrodiagnostický Dashboard</h1>
-        <div className="button-group">
-          <button className="btn-update" onClick={handleLogout}>Odhlásit se</button>
-          <button className="btn-update" onClick={fetchData}>Aktualizovat data</button>
-          <button 
-            className="btn-diagnose" 
-            onClick={runDiagnosis} 
-            disabled={loading}
-          >
-            {loading ? 'Analyzuji...' : 'Spustit AI Diagnostiku'}
-          </button>
-        </div>
-      </header>
+    <div className="app-layout">
+      {/* DASHBOARD SEKCE 
+          Pokud token neexistuje, přidáme třídu 'blurred', která dashboard rozmaže přes CSS
+      */}
+      <div className={`app-container ${!token ? 'blurred' : ''}`}>
+        <header className="header-section">
+          <h1>Vibrodiagnostický Dashboard</h1>
+          <div className="button-group">
+            {token && <button className="btn-update" onClick={handleLogout}>Odhlásit se</button>}
+            <button className="btn-update" onClick={fetchData}>Aktualizovat data</button>
+            <button 
+              className="btn-diagnose" 
+              onClick={runDiagnosis} 
+              disabled={loading}
+            >
+              {loading ? 'Analyzuji...' : 'Spustit AI Diagnostiku'}
+            </button>
+          </div>
+        </header>
 
-      {/* PANEL DIAGNOSTIKY */}
-      {diagnosis && (
-        <div className={`diag-panel ${diagnosis.label === 1 ? 'status-fault' : 'status-ok'}`}>
-          <h2 style={{ margin: 0 }}>Stav stroje: {diagnosis.status}</h2>
-          <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
-            Jistota modelu: {(diagnosis.confidence * 100).toFixed(1)}% | 
-            Poslední RMS: {data[data.length-1]?.rms_raw?.toFixed(2)} mm/s
-          </p>
+        {/* PANEL DIAGNOSTIKY */}
+        {diagnosis && (
+          <div className={`diag-panel ${diagnosis.label === 1 ? 'status-fault' : 'status-ok'}`}>
+            <h2 style={{ margin: 0 }}>Stav stroje: {diagnosis.status}</h2>
+            <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
+              Jistota modelu: {(diagnosis.confidence * 100).toFixed(1)}% | 
+              Poslední RMS: {data[data.length-1]?.rms_raw?.toFixed(2)} mm/s
+            </p>
+          </div>
+        )}
+
+        {/* SEKCE S GRAFEM */}
+        <div className="chart-container">
+          <h3 style={{marginTop: 0}}>Trend Vibrací (Real-time)</h3>
+          <div style={{ width: '100%', height: 350 }}>
+            <ResponsiveContainer>
+              <LineChart data={data}>
+                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
+                <XAxis 
+                  dataKey="time" 
+                  tickFormatter={(t) => new Date(t).toLocaleTimeString()} 
+                  stroke="#64748b"
+                />
+                <YAxis stroke="#64748b" />
+                <Tooltip 
+                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
+                  labelFormatter={(t) => new Date(t).toLocaleString()} 
+                />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="rms_raw" 
+                  stroke="#487BE3" 
+                  strokeWidth={4} 
+                  dot={{r: 0}}
+                  activeDot={{ r: 6, stroke: '#F99244', strokeWidth: 2 }}
+                  name="RMS [mm/s]" 
+                  animationDuration={1000}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+        </div>
+
+        {/* TABULKA */}
+        <h3>Detailní log měření</h3>
+        <div className="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th>Čas</th>
+                <th>RMS [mm/s]</th>
+                <th>Peak [g]</th>
+                <th>Kurtosis [-]</th>
+              </tr>
+            </thead>
+            <tbody>
+              {[...data].reverse().slice(0, 15).map((row, index) => (
+                <tr key={index}>
+                  <td>{new Date(row.time).toLocaleString()}</td>
+                  <td><strong>{row.rms_raw?.toFixed(3)}</strong></td>
+                  <td>{row.peak_raw?.toFixed(3)}</td>
+                  <td>{(row.kurtosis_raw || row.kurtosis)?.toFixed(3)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* LOGIN OVERLAY
+          Zobrazí se pouze pokud nemáme token. 
+          V CSS nastavíme, aby překryl celou obrazovku.
+      */}
+      {!token && (
+        <div className="login-overlay">
+          <Login setToken={setToken} />
         </div>
       )}
-
-      {/* SEKCE S GRAFEM */}
-      <div className="chart-container">
-        <h3 style={{marginTop: 0}}>Trend Vibrací (Real-time)</h3>
-        <div style={{ width: '100%', height: 350 }}>
-          <ResponsiveContainer>
-            <LineChart data={data}>
-              <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-              <XAxis 
-                dataKey="time" 
-                tickFormatter={(t) => new Date(t).toLocaleTimeString()} 
-                stroke="#64748b"
-              />
-              <YAxis stroke="#64748b" />
-              <Tooltip 
-                contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                labelFormatter={(t) => new Date(t).toLocaleString()} 
-              />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="rms_raw" 
-                stroke="#487BE3" 
-                strokeWidth={4} 
-                dot={{r: 0}}
-                activeDot={{ r: 6, stroke: '#F99244', strokeWidth: 2 }}
-                name="RMS [mm/s]" 
-                animationDuration={1000}
-              />
-            </LineChart>
-          </ResponsiveContainer>
-        </div>
-      </div>
-
-      {/* TABULKA */}
-      <h3>Detailní log měření</h3>
-      <div className="table-wrapper">
-        <table>
-          <thead>
-            <tr>
-              <th>Čas</th>
-              <th>RMS [mm/s]</th>
-              <th>Peak [g]</th>
-              <th>Kurtosis [-]</th>
-            </tr>
-          </thead>
-          <tbody>
-            {[...data].reverse().slice(0, 15).map((row, index) => (
-              <tr key={index}>
-                <td>{new Date(row.time).toLocaleString()}</td>
-                <td><strong>{row.rms_raw?.toFixed(3)}</strong></td>
-                <td>{row.peak_raw?.toFixed(3)}</td>
-                <td>{row.kurtosis?.toFixed(3)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
     </div>
   )
 }

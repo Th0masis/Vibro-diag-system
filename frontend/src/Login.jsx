@@ -30,9 +30,8 @@ function Login({ setToken }) {
   };
 
   return (
-    <div className="app-container" style={{ display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-      <div className="chart-container" style={{ maxWidth: '400px', width: '100%' }}>
-        <h2 style={{ color: '#FF4041', textAlign: 'center' }}>VibroDiag Přihlášení</h2>
+    <div className="login-card">
+        <h2 style={{ color: '#FF4041', textAlign: 'center', marginTop: 0 }}>VibroDiag Přihlášení</h2>
         <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
           <div>
             <label>Uživatelské jméno</label>
@@ -64,7 +63,6 @@ function Login({ setToken }) {
         <p style={{ textAlign: 'center', fontSize: '0.8rem', marginTop: '20px', color: '#64748b' }}>
           B&R Industrial Automation | VUT Brno
         </p>
-      </div>
     </div>
   );
 }
