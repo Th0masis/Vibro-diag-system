@@ -56,31 +56,183 @@ body {
   user-select: none;
 }
 
+.app-wrapper {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  background-color: #f8fafc;
+}
+
+
 /* ==========================================================================
    3. HLAVIČKA A KOMPONENTY
    ========================================================================== */
-.header-section {
+.main-header {
+  height: 64px;
+  background: #ffffff;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 2rem;
+  padding: 0 2rem;
+  border-bottom: 1px solid #e2e8f0;
 }
 
-h1 {
-  color: var(--br-orange);
-  border-left: 5px solid var(--br-orange);
-  padding-left: 15px;
-  font-weight: 800;
-  text-transform: uppercase;
-  letter-spacing: -1px;
-  margin: 0;
-}
+.header-logo { height: 65px; }
 
-.button-group {
+/* --- NAVIGAČNÍ MENU --- */
+.nav-menu {
+  background: var(--br-orange); /* Oranžový základ */
+  padding: 0 2rem;
   display: flex;
-  gap: 1rem;
+  justify-content: center; /* Vycentrování položek */
+  gap: 10px;
+  box-shadow: 0 4px 12px rgba(249, 146, 68, 0.2);
+  position: sticky;
+  top: 0;
+  z-index: 100;
 }
 
+.nav-item {
+  padding: 1.2rem 1.5rem;
+  text-decoration: none;
+  color: white;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  position: relative; /* Pro indikátor */
+  display: flex;
+  align-items: center;
+}
+
+/* Hover efekt - jemné ztmavení a posun */
+.nav-item:hover {
+  background: rgba(0, 0, 0, 0.05);
+  color: white;
+}
+
+/* Aktivní položka s červeným detailem */
+.nav-item.active {
+  background: rgba(255, 255, 255, 0.2);
+}
+
+/* Fancy indikátor: Červená linka pod aktivním textem */
+.nav-item.active::after {
+  content: '';
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 4px;
+  background: var(--vut-red); /* Červená jako "akcent" */
+  animation: expandWidth 0.3s ease-out;
+}
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  max-width: 1400px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.main-footer {
+  padding: 1.5rem 2rem;
+  background: white;
+  border-top: 1px solid #e2e8f0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #94a3b8;
+  font-size: 0.9rem;
+}
+
+.footer-logo {
+  height: 40px;
+  opacity: 0.8;
+  margin-left: 20px;
+}
+
+/* --- BRANDING V HEADERU --- */
+.brand-text {
+  font-size: 1.5rem;
+  font-weight: 800;
+  letter-spacing: -0.5px;
+  font-family: 'Segoe UI', sans-serif;
+}
+
+.text-pulse {
+  color: var(--br-orange);
+}
+
+.text-guard {
+  color: var(--vut-red);
+}
+
+/* --- UŽIVATELSKÁ SEKCE --- */
+.user-profile {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  background: #f8fafc;
+  padding: 5px 5px 5px 15px;
+  border-radius: 50px; /* Zaoblený "kapslový" vzhled */
+  border: 1px solid #e2e8f0;
+}
+
+.user-details {
+  display: flex;
+  flex-direction: column;
+  line-height: 1.2;
+}
+
+.user-name {
+  font-weight: 700;
+  font-size: 0.9rem;
+  color: var(--text);
+}
+
+.user-role {
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.user-avatar {
+  width: 32px;
+  height: 32px;
+  background: var(--vut-red);
+  color: white;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 0.8rem;
+}
+
+/* --- ČERVENÉ ODHLAŠOVACÍ TLAČÍTKO --- */
+.btn-logout-red {
+  background: var(--vut-red);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 20px;
+  font-weight: 600;
+  font-size: 0.85rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  box-shadow: 0 2px 4px rgba(255, 64, 65, 0.2);
+}
+
+.btn-logout-red:hover {
+  background: #d93637; /* Trochu tmavší červená při hoveru */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 64, 65, 0.3);
+}
+
+.btn-logout-red:active {
+  transform: translateY(0);
+}
 /* ==========================================================================
    4. TLAČÍTKA
    ========================================================================== */
@@ -121,6 +273,16 @@ button {
   opacity: 0.6;
   cursor: not-allowed;
 }
+
+.btn-logout {
+  background: transparent;
+  border: 1px solid #e2e8f0;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.btn-logout:hover { background: #f1f5f9; }
 
 /* ==========================================================================
    5. DIAGNOSTICKÉ PANELY A KARTY
@@ -366,4 +528,21 @@ tr:hover {
 @keyframes fadeInScale {
   from { opacity: 0; transform: scale(0.9); }
   to { opacity: 1; transform: scale(1); }
+}
+/* Animace pro červenou linku */
+@keyframes expandWidth {
+  from { width: 0; left: 50%; }
+  to { width: 100%; left: 0; }
+}
+
+/* Responzivita - na mobilu se menu poskládá */
+@media (max-width: 768px) {
+  .nav-menu {
+    flex-wrap: wrap;
+    padding: 0 10px;
+  }
+  .nav-item {
+    padding: 0.8rem 1rem;
+    font-size: 0.8rem;
+  }
 }

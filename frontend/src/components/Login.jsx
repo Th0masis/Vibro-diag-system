@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import axios from 'axios';
-import './App.css'; 
+import '../App.css'; 
 
-import PulseGuardLogo from './assets/logo-pulseguard.svg';
-import BrLogo from './assets/logo-br.svg';
-import VutLogo from './assets/logo-vut.svg';
-import ViewIcon from './assets/view.png';
+import PulseGuardLogo from '../assets/logo-pulseguard.svg';
+import BrLogo from '../assets/logo-br.svg';
+import VutLogo from '../assets/logo-vut.svg';
+import ViewIcon from '../assets/view.png';
 
 function Login({ setToken }) {
   const [username, setUsername] = useState('');
@@ -87,7 +87,7 @@ function Login({ setToken }) {
         {error && <p className="error-text-simple">{error}</p>}
 
         <button type="submit" className={`login-btn ${loading ? 'loading' : ''}`}>
-          <span className="btn-text">SIGN IN</span>
+          <span className="btn-text">Sign In</span>
           <span className="btn-loader"></span>
         </button>
       </form>

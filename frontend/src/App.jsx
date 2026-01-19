@@ -1,44 +1,23 @@
-import { useState, useEffect } from 'react'
-import axios from 'axios'
-import Login from './Login'
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import './App.css'
+import { useState, useEffect } from 'react';
+import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import axios from 'axios';
+import Login from './components/Login';
+import Dashboard from './pages/Dashboard';
+
+// Loga (předpokládám cesty v src/assets)
+import PulseGuardLogo from './assets/logo-pulseguard.svg';
+import PulseGuardLogoNoText from './assets/logo-pulseguard_notext.svg';
+import BrLogo from './assets/logo-br.svg';
+import VutLogo from './assets/logo-vut.svg';
 
 function App() {
-  const [data, setData] = useState([])
-  const [diagnosis, setDiagnosis] = useState(null);
-  const [loading, setLoading] = useState(false);
   const [token, setToken] = useState(localStorage.getItem('token'));
 
-  // Data pro graf
-  const fetchData = async () => {
-    try {
-      setDiagnosis(null)
-      const response = await axios.get('http://127.0.0.1:8000/history?limit=50')
-      setData(response.data.reverse())
-    } catch (error) {
-      console.error("Chyba při načítání dat:", error)
+  useEffect(() => {
+    if (token) {
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
     }
-  }
-
-  // Funkce diagnostiky
-  const runDiagnosis = async () => {
-    if (data.length === 0) return;
-    setLoading(true);
-    const latest = data[data.length - 1];
-    try {
-      const response = await axios.post('http://127.0.0.1:8001/predict', {
-        rms: latest.rms_raw,
-        kurtosis: latest.kurtosis_raw || latest.kurtosis, // Ošetření názvu pole z DB
-        ptp: latest.peak_raw
-      });
-      setDiagnosis(response.data);
-    } catch (error) {
-      console.error("Diagnostika selhala:", error);
-    } finally {
-      setLoading(false);
-    }
-  };
+  }, [token]);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -46,115 +25,84 @@ function App() {
     delete axios.defaults.headers.common['Authorization'];
   };
 
-  useEffect(() => {
-    if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      fetchData();
-    }
-  }, [token]);
-
-  return (
-    <div className="app-layout">
-      {/* DASHBOARD SEKCE 
-          Pokud token neexistuje, přidáme třídu 'blurred', která dashboard rozmaže přes CSS
-      */}
-      <div className={`app-container ${!token ? 'blurred' : ''}`}>
-        <header className="header-section">
-          <h1>Vibrodiagnostický Dashboard</h1>
-          <div className="button-group">
-            {token && <button className="btn-update" onClick={handleLogout}>Odhlásit se</button>}
-            <button className="btn-update" onClick={fetchData}>Aktualizovat data</button>
-            <button 
-              className="btn-diagnose" 
-              onClick={runDiagnosis} 
-              disabled={loading}
-            >
-              {loading ? 'Analyzuji...' : 'Spustit AI Diagnostiku'}
-            </button>
-          </div>
-        </header>
-
-        {/* PANEL DIAGNOSTIKY */}
-        {diagnosis && (
-          <div className={`diag-panel ${diagnosis.label === 1 ? 'status-fault' : 'status-ok'}`}>
-            <h2 style={{ margin: 0 }}>Stav stroje: {diagnosis.status}</h2>
-            <p style={{ margin: '8px 0 0 0', opacity: 0.9 }}>
-              Jistota modelu: {(diagnosis.confidence * 100).toFixed(1)}% | 
-              Poslední RMS: {data[data.length-1]?.rms_raw?.toFixed(2)} mm/s
-            </p>
-          </div>
-        )}
-
-        {/* SEKCE S GRAFEM */}
-        <div className="chart-container">
-          <h3 style={{marginTop: 0}}>Trend Vibrací (Real-time)</h3>
-          <div style={{ width: '100%', height: 350 }}>
-            <ResponsiveContainer>
-              <LineChart data={data}>
-                <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#eee" />
-                <XAxis 
-                  dataKey="time" 
-                  tickFormatter={(t) => new Date(t).toLocaleTimeString()} 
-                  stroke="#64748b"
-                />
-                <YAxis stroke="#64748b" />
-                <Tooltip 
-                  contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px rgba(0,0,0,0.1)' }}
-                  labelFormatter={(t) => new Date(t).toLocaleString()} 
-                />
-                <Legend />
-                <Line 
-                  type="monotone" 
-                  dataKey="rms_raw" 
-                  stroke="#487BE3" 
-                  strokeWidth={4} 
-                  dot={{r: 0}}
-                  activeDot={{ r: 6, stroke: '#F99244', strokeWidth: 2 }}
-                  name="RMS [mm/s]" 
-                  animationDuration={1000}
-                />
-              </LineChart>
-            </ResponsiveContainer>
-          </div>
+  if (!token) {
+    return (
+      <div className="app-layout">
+        <div className="app-container blurred">
+            {/* Tady může být statické pozadí pro blur */}
         </div>
-
-        {/* TABULKA */}
-        <h3>Detailní log měření</h3>
-        <div className="table-wrapper">
-          <table>
-            <thead>
-              <tr>
-                <th>Čas</th>
-                <th>RMS [mm/s]</th>
-                <th>Peak [g]</th>
-                <th>Kurtosis [-]</th>
-              </tr>
-            </thead>
-            <tbody>
-              {[...data].reverse().slice(0, 15).map((row, index) => (
-                <tr key={index}>
-                  <td>{new Date(row.time).toLocaleString()}</td>
-                  <td><strong>{row.rms_raw?.toFixed(3)}</strong></td>
-                  <td>{row.peak_raw?.toFixed(3)}</td>
-                  <td>{(row.kurtosis_raw || row.kurtosis)?.toFixed(3)}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      </div>
-
-      {/* LOGIN OVERLAY
-          Zobrazí se pouze pokud nemáme token. 
-          V CSS nastavíme, aby překryl celou obrazovku.
-      */}
-      {!token && (
         <div className="login-overlay">
           <Login setToken={setToken} />
         </div>
-      )}
-    </div>
-  )
+      </div>
+    );
+  }
+
+  return (
+    <BrowserRouter>
+      <div className="app-wrapper">
+        {/* HEADER */}
+        <header className="main-header">
+          <div className="header-left">
+            {/* Logo a Textový název */}
+            <div className="brand-wrapper" style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <img src={PulseGuardLogoNoText} alt="" className="header-logo" />
+              <span className="brand-text">
+                <span className="text-pulse">PULSE</span>
+                <span className="text-guard">GUARD</span>
+              </span>
+            </div>
+          </div>
+
+          <div className="header-right">
+            <div className="user-profile">
+              <div className="user-avatar">AD</div> {/* Iniciály nebo ikonka */}
+              <div className="user-details">
+                <span className="user-name">Admin User</span>
+                <span className="user-role">Diagnostik</span>
+              </div>
+              <button className="btn-logout-red" onClick={handleLogout}>
+                Odhlásit se
+              </button>
+            </div>
+          </div>
+        </header>
+
+        {/* NAVIGATION MENU */}
+        <nav className="nav-menu">
+          <NavLink to="/" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Dashboard</NavLink>
+          <NavLink to="/machines" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Machines</NavLink>
+          <NavLink to="/sensors" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Sensors</NavLink>
+          <NavLink to="/ml-sector" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>ML Sector</NavLink>
+          <NavLink to="/users" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>User Management</NavLink>
+        </nav>
+
+        {/* MAIN CONTENT AREA */}
+        <main className="main-content">
+          <Routes>
+            <Route path="/" element={<Dashboard />} />
+            <Route path="/machines" element={<div className="placeholder">Správa strojů</div>} />
+            <Route path="/sensors" element={<div className="placeholder">Přehled senzorů</div>} />
+            <Route path="/ml-sector" element={<div className="placeholder">Analýza dat a trénování modelů</div>} />
+            <Route path="/users" element={<div className="placeholder">Správa uživatelů</div>} />
+            <Route path="*" element={<Navigate to="/" />} />
+          </Routes>
+        </main>
+
+        {/* FOOTER */}
+        <footer className="main-footer">
+          <div className="footer-left">
+            <p>© {new Date().getFullYear()} | Diplomová práce: PulseGuard</p>
+          </div>
+          <div className="footer-right">
+            <img src={PulseGuardLogo} alt="PulseGuard" className="footer-logo" />
+            <img src={BrLogo} alt="B&R" className="footer-logo" />
+            <img src={VutLogo} alt="VUT" className="footer-logo" />
+          </div>
+        </footer>
+      </div>
+    </BrowserRouter>
+  );
 }
 
-export default App
+export default App;
