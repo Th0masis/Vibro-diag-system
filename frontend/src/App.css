@@ -546,3 +546,46 @@ tr:hover {
     font-size: 0.8rem;
   }
 }
+/* ==========================================================================
+   9. USER MANAGEMENT PAGE
+   ========================================================================== */
+/* Role Badges */
+.role-badge {
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 0.75rem;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.role-badge.admin { background: #fee2e2; color: var(--vut-red); }
+.role-badge.user { background: #e0f2fe; color: var(--blue-primary); }
+
+/* Malá tlačítka v tabulce */
+.btn-small-edit, .btn-small-delete {
+  padding: 6px 12px;
+  border-radius: 4px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: white;
+  font-size: 0.8rem;
+}
+.btn-small-edit {
+  border: 1px solid var(--br-orange);
+  color: var(--br-orange);
+  margin-right: 8px;
+}
+.btn-small-edit:hover {
+  background: var(--br-orange);
+  color: white;
+  box-shadow: 0 2px 8px rgba(249, 146, 68, 0.3);
+}
+.btn-small-delete {
+  border: 1px solid var(--vut-red);
+  color: var(--vut-red);
+}
+.btn-small-delete:hover {
+  background: var(--vut-red);
+  color: white;
+  box-shadow: 0 2px 8px rgba(255, 64, 65, 0.3);
+}
