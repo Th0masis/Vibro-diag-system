@@ -207,12 +207,19 @@ tr:hover {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   width: 90%;
   max-width: 400px;
-  border-top: 6px solid var(--br-orange); /* Oranžový B&R akcent */
+  border-top: 6px solid var(--vut-red); /* Oranžový B&R akcent */
   animation: fadeInScale 0.4s ease-out;
 }
 .login-logo-header {
   text-align: center;
   margin-bottom: 2rem; /* Mezera pod logem PulseGuard */
+}
+
+.login-header h2 {
+    color: var(--text);
+    font-size: 1.5rem;
+    font-weight: 700;
+    margin-bottom: 8px;
 }
 
 .pulseguard-logo {
@@ -240,6 +247,113 @@ tr:hover {
 
 .partner-logo:hover {
   opacity: 1; /* Zvýraznění při najetí myší */
+}
+
+.input-wrapper {
+    position: relative;
+    margin-top: 10px;
+    margin-bottom: 30px;
+}
+
+.input-wrapper input {
+    background: #ffffff;
+    border: 1.5px solid #e2e8f0;
+    border-radius: 8px;
+    padding: 14px 16px;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    width: 100%;
+    outline: none;
+}
+
+.input-wrapper input:focus + label,
+.input-wrapper input:not(:placeholder-shown) + label {
+    transform: translateY(-28px) scale(1);
+    color: var(--vut-red);
+    background: #ffffff;
+    padding: 0 6px;
+    font-weight: 600;
+}
+
+.input-wrapper label {
+    position: absolute;
+    left: 16px;
+    top: 14px;
+    color: #94a3b8;
+    font-size: 16px;
+    transition: all 0.2s ease;
+    pointer-events: none;
+    transform-origin: left top;
+}
+
+.input-wrapper input:focus {
+    border-color: var(--vut-red);
+    box-shadow: 0 0 0 4px rgba(249, 146, 68, 0.1);
+}
+.login-btn {
+    width: 100%;
+    background: var(--vut-red); 
+    border: none;
+    border-radius: 8px;
+    padding: 14px;
+    color: white;
+    font-size: 16px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin-top: 15px;
+}
+
+.login-btn:hover {
+    background: var(--vut-red);
+    transform: translateY(-1px);
+}
+
+/* --- OSTATNÍ --- */
+.error-text-simple {
+    color: var(--vut-red);
+    font-size: 0.85rem;
+    margin-bottom: 15px;
+    text-align: left;
+}
+
+.footer-copyright {
+    text-align: center;
+    font-size: 0.75rem;
+    color: #94a3b8;
+    margin-top: 15px;
+}
+
+/* Ikonky pro toggle hesla - použijeme tvé SVG data-urls z tvého návrhu */
+.password-toggle {
+    position: absolute;
+    right: 12px;
+    top: 50%;
+    transform: translateY(-50%);
+    background: none;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px;
+    z-index: 10;
+}
+
+/* Styl pro samotný obrázek ikony */
+.toggle-icon-img {
+    width: 20px;   /* Uprav podle potřeby */
+    height: auto;
+    opacity: 0.5;  /* Ve výchozím stavu trochu vybledlá */
+    transition: all 0.2s ease;
+}
+
+.password-toggle:hover .toggle-icon-img {
+    opacity: 0.8;
+}
+
+.toggle-icon-img.active {
+    opacity: 1;
 }
 /* ==========================================================================
    8. ANIMACE
