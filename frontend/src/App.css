@@ -257,14 +257,14 @@ button {
 }
 
 .btn-diagnose {
-  background: var(--blue-primary);
+  background: var(--br-orange-dark);
   color: white;
   border: none;
   box-shadow: 0 4px 14px 0 rgba(72, 123, 227, 0.39);
 }
 
 .btn-diagnose:hover:not(:disabled) {
-  background: var(--blue-dark);
+  background: var(--br-orange-dark);
   transform: translateY(-2px);
   box-shadow: 0 6px 20px rgba(45, 85, 204, 0.23);
 }
@@ -558,7 +558,8 @@ tr:hover {
   text-transform: uppercase;
 }
 .role-badge.admin { background: #fee2e2; color: var(--vut-red); }
-.role-badge.user { background: #e0f2fe; color: var(--blue-primary); }
+.role-badge.user { background: #e0f2fe; color: var(--blue-primary);}
+.role-badge.operator { background: #fee2e2; color: var(--br-yellow);}
 
 /* Malá tlačítka v tabulce */
 .btn-small-edit, .btn-small-delete {
@@ -588,4 +589,93 @@ tr:hover {
   background: var(--vut-red);
   color: white;
   box-shadow: 0 2px 8px rgba(255, 64, 65, 0.3);
+}
+/* Overlay - ztmaví pozadí */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  backdrop-filter: blur(3px);
+}
+
+/* Okno */
+.modal-content {
+  background: white;
+  padding: 2rem;
+  border-radius: 12px;
+  max-width: 400px;
+  width: 90%;
+  box-shadow: 0 10px 25px rgba(0,0,0,0.2);
+  text-align: center;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 15px;
+  margin-top: 25px;
+}
+
+.btn-cancel {
+  background: #f1f5f9;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-confirm-delete {
+  background: var(--vut-red);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-confirm-delete:hover {
+  background: #d93637;
+}
+.add-user-modal {
+  max-width: 450px;
+}
+
+.add-user-modal .form-group {
+  margin-bottom: 15px;
+}
+
+.add-user-modal input, .add-user-modal select {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 1rem;
+}
+
+.add-user-modal select {
+  background-color: white;
+  cursor: pointer;
+}
+
+.btn-add-confirm {
+  background: var(--br-orange);
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+.btn-add-confirm:hover {
+  background: #e67e22;
 }
