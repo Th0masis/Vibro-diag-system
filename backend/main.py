@@ -4,12 +4,15 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from auth import verify_password, create_access_token
+from auth import verify_password, create_access_token, get_password_hash
 from sqlalchemy import create_engine, text
+from jose import JWTError, jwt
 import uvicorn
 
 # Script FastAPI
 load_dotenv()
+SECRET_KEY = os.getenv("SECRET_KEY")
+ALGORITHM = os.getenv("ALGORITHM")
 
 app = FastAPI(title="VibroDiag API")
 
@@ -26,6 +29,10 @@ DB_URL = os.getenv("DATABASE_URL")
 engine = create_engine(DB_URL)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+
+def get_current_user_role(token: str = Depends(oauth2_scheme)):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    return payload.get("role")
 
 @app.get("/")
 def home():
@@ -122,6 +129,77 @@ def get_all_users(token: str = Depends(oauth2_scheme)):
             for row in result
         ]
         return users_list
+    
+# Odstranění uživatele
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, role: str = Depends(get_current_user_role)):
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může mazat uživatele")
+    with engine.connect() as conn:
+        # Kontrola, aby admin nesmazal sám sebe (volitelné, ale doporučené)
+        # 1. Zjistíme username z tokenu (sub) a ID smazaného uživatele
+        
+        delete_query = text("DELETE FROM users WHERE id_user = :uid")
+        result = conn.execute(delete_query, {"uid": user_id})
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+            
+        return {"message": f"Uživatel s ID {user_id} byl úspěšně smazán"}
 
+# Přidání uživatele
+@app.post("/users")
+def create_user(user_data: dict, token: str = Depends(oauth2_scheme)):
+    # user_data bude obsahovat: username, password, email, role
+    hashed_pwd = get_password_hash(user_data['password'])
+    
+    with engine.connect() as conn:
+        # Kontrola, zda uživatel již neexistuje
+        check_query = text("SELECT username FROM users WHERE username = :user")
+        if conn.execute(check_query, {"user": user_data['username']}).fetchone():
+            raise HTTPException(status_code=400, detail="Uživatel s tímto jménem již existuje")
+
+        query = text("""
+            INSERT INTO users (username, hashed_password, email, role, creation_time) 
+            VALUES (:user, :pwd, :email, :role, :time)
+        """)
+        conn.execute(query, {
+            "user": user_data['username'],
+            "pwd": hashed_pwd,
+            "email": user_data['email'],
+            "role": user_data['role'],
+            "time": datetime.now(timezone.utc)
+        })
+        conn.commit()
+        return {"message": "Uživatel vytvořen"}
+    
+# Úprava uživatele
+@app.put("/users/{user_id}")
+def update_user(user_id: int, updated_data: dict, token: str = Depends(oauth2_scheme)):
+    with engine.connect() as conn:
+        # Základní SQL příkaz pro email a roli
+        sql_text = "UPDATE users SET email = :email, role = :role"
+        params = {
+            "email": updated_data['email'],
+            "role": updated_data['role'],
+            "uid": user_id
+        }
+
+        # Pokud přišlo i heslo, přidáme ho do UPDATE příkazu
+        if updated_data.get('password'):
+            hashed_pwd = get_password_hash(updated_data['password'])
+            sql_text += ", hashed_password = :pwd"
+            params["pwd"] = hashed_pwd
+
+        sql_text += " WHERE id_user = :uid"
+        
+        result = conn.execute(text(sql_text), params)
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+            
+        return {"message": "Uživatel byl aktualizován"}   
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
