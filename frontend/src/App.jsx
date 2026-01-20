@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
+import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
 import Login from './components/Login';
 import Dashboard from './pages/Dashboard';
 import UserManagement from './pages/UserManagement';
-import { jwtDecode } from 'jwt-decode';
+import Sensors from './pages/Sensors';
 
 // Loga (předpokládám cesty v src/assets)
 import PulseGuardLogo from './assets/logo-pulseguard.svg';
@@ -89,7 +90,7 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/machines" element={<div className="placeholder">Správa strojů</div>} />
-              <Route path="/sensors" element={<div className="placeholder">Přehled senzorů</div>} />
+              <Route path="/sensors" element={<Sensors />} />
               <Route path="/ml-sector" element={<div className="placeholder">Analýza dat a trénování modelů</div>} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="*" element={<Navigate to="/" />} />

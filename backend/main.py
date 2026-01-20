@@ -79,6 +79,8 @@ def get_history(limit: int = 100):
         # Vratime data 
         return history
     
+# --- SEKCE UŽIVATELŮ ---
+
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
     with engine.connect() as conn:
@@ -201,5 +203,101 @@ def update_user(user_id: int, updated_data: dict, token: str = Depends(oauth2_sc
             raise HTTPException(status_code=404, detail="Uživatel nenalezen")
             
         return {"message": "Uživatel byl aktualizován"}   
+    
+# --- SEKCE SENZORY ---
+
+@app.get("/sensors")
+def get_all_sensors(token: str = Depends(oauth2_scheme)):
+    """Vrátí seznam všech senzorů včetně informace o přiřazeném stroji"""
+    with engine.connect() as conn:
+        # LEFT JOIN nám umožní vidět i senzory, které zatím nejsou na žádném stroji
+        query = text("""
+            SELECT s.id_sensor, s.serial_number, s.description, s.status, 
+                   s.id_machine, s.position, s.sampling_rate, s.calibration_date
+            FROM sensors s
+            ORDER BY s.id_sensor ASC
+        """)
+        result = conn.execute(query).fetchall()
+        
+        sensors_list = []
+        for row in result:
+            sensors_list.append({
+                "id_sensor": row[0],
+                "serial_number": row[1],
+                "description": row[2],
+                "status": row[3],
+                "id_machine": row[4],
+                "position": row[5],
+                "sampling_rate": row[6],
+                "calibration_date": row[7]
+            })
+        return sensors_list
+
+@app.post("/sensors")
+def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role)):
+    """Registrace nového senzoru do systému (pouze admin)"""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může registrovat senzory")
+    
+    with engine.connect() as conn:
+        query = text("""
+            INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status)
+            VALUES (:sn, :desc, :rate, :cal, 'available')
+        """)
+        conn.execute(query, {
+            "sn": sensor_data['serial_number'],
+            "desc": sensor_data['description'],
+            "rate": sensor_data.get('sampling_rate'),
+            "cal": sensor_data.get('calibration_date')
+        })
+        conn.commit()
+        return {"message": "Senzor byl úspěšně zaregistrován"}
+
+@app.put("/sensors/{sensor_id}")
+def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_current_user_role)):
+    """Aktualizace údajů senzoru nebo jeho přiřazení ke stroji"""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může upravovat senzory")
+
+    with engine.connect() as conn:
+        query = text("""
+            UPDATE sensors 
+            SET description = :desc, 
+                status = :status, 
+                id_machine = :machine_id, 
+                position = :pos,
+                sampling_rate = :rate,
+                calibration_date = :cal
+            WHERE id_sensor = :sid
+        """)
+        result = conn.execute(query, {
+            "desc": updated_data['description'],
+            "status": updated_data['status'],
+            "machine_id": updated_data.get('id_machine'),
+            "pos": updated_data.get('position'),
+            "rate": updated_data.get('sampling_rate'),
+            "cal": updated_data.get('calibration_date'),
+            "sid": sensor_id
+        })
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Senzor nenalezen")
+        return {"message": "Senzor byl aktualizován"}
+
+@app.delete("/sensors/{sensor_id}")
+def delete_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
+    """Odstranění senzoru z evidence"""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může mazat senzory")
+    
+    with engine.connect() as conn:
+        result = conn.execute(text("DELETE FROM sensors WHERE id_sensor = :sid"), {"sid": sensor_id})
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Senzor nenalezen")
+        return {"message": "Senzor byl odstraněn"}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
