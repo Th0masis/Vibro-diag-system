@@ -299,5 +299,119 @@ def delete_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
             raise HTTPException(status_code=404, detail="Senzor nenalezen")
         return {"message": "Senzor byl odstraněn"}
 
+# Získání pouze VOLNÝCH senzorů pro dropdown menu
+@app.get("/sensors/available")
+def get_available_sensors(token: str = Depends(oauth2_scheme)):
+    with engine.connect() as conn:
+        # Vybereme jen ty, co jsou 'available' (skladem)
+        query = text("SELECT id_sensor, serial_number, description FROM sensors WHERE status = 'available'")
+        result = conn.execute(query).fetchall()
+        
+        return [
+            {"id_sensor": row[0], "serial_number": row[1], "description": row[2]} 
+            for row in result
+        ]
+
+# Samotné přiřazení senzoru ke stroji
+@app.post("/machines/{machine_id}/sensors")
+def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_scheme)):
+    """
+    Payload očekává: { "sensor_id": int, "position": str }
+    """
+    with engine.connect() as conn:
+        # 1. Zkontrolujeme, zda senzor existuje a je volný (volitelné, ale bezpečné)
+        # 2. Provedeme UPDATE: přiřadíme stroj, pozici a změníme stav na ACTIVE
+        query = text("""
+            UPDATE sensors 
+            SET id_machine = :mid, 
+                position = :pos, 
+                status = 'active' 
+            WHERE id_sensor = :sid
+        """)
+        
+        result = conn.execute(query, {
+            "mid": machine_id,
+            "pos": payload['position'],
+            "sid": payload['sensor_id']
+        })
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Senzor nenalezen nebo se nepodařilo aktualizovat")
+            
+        return {"message": "Senzor byl úspěšně namontován"}
+
+# --- SEKCE MACHINES ---
+
+@app.get("/machines")
+def get_machines(token: str = Depends(oauth2_scheme)):
+    """Vrátí seznam všech strojů pro tabulku se seznamem strojů"""
+    with engine.connect() as conn:
+        # Jenom dulezite data pro seznam
+        query = text("""
+            SELECT id_machine, name, type, location, status
+            FROM machines
+            ORDER BY id_machine ASC
+        """)
+        result = conn.execute(query).fetchall()
+        machines_list = []
+        for row in result:
+            machines_list.append({
+                "id_machine": row[0],
+                "name": row[1],
+                "type": row[2],
+                "location": row[3],
+                "status": row[4]
+            })
+        return machines_list
+    
+@app.get("/machines/{machine_id}")
+def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """Vrátí kompletní detail stroje včetně připojených senzorů"""
+    with engine.connect() as conn:
+        # 1. Získání informací o stroji
+        query_machine = text("""
+            SELECT id_machine, name, type, location, status, description, installation_date 
+            FROM machines 
+            WHERE id_machine = :mid
+        """)
+        machine = conn.execute(query_machine, {"mid": machine_id}).fetchone()
+        
+        if not machine:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+
+        # 2. Získání senzorů připojených k tomuto stroji
+        query_sensors = text("""
+            SELECT id_sensor, serial_number, description, position, status, sampling_rate 
+            FROM sensors 
+            WHERE id_machine = :mid
+        """)
+        sensors_result = conn.execute(query_sensors, {"mid": machine_id}).fetchall()
+        
+        sensors_list = []
+        for s in sensors_result:
+            sensors_list.append({
+                "id_sensor": s[0],
+                "serial_number": s[1],
+                "description": s[2],
+                "position": s[3],
+                "status": s[4],
+                "sampling_rate": s[5]
+            })
+
+        # Sestavení odpovědi
+        return {
+            "info": {
+                "id_machine": machine[0],
+                "name": machine[1],
+                "type": machine[2],
+                "location": machine[3],
+                "status": machine[4],
+                "description": machine[5],
+                "installation_date": machine[6]
+            },
+            "sensors": sensors_list
+        }
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
