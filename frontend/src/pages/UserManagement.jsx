@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
+import ConfirmModal from '../components/ConfirmModal';
+
 function UserManagement() {
   const [users, setUsers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -160,18 +162,13 @@ function UserManagement() {
         )}
       </div>
       {/* MODÁLNÍ OKNO PRO POTVRZENÍ SMAZÁNÍ */}
-      {userToDelete && (
-        <div className="modal-overlay">
-          <div className="modal-content">
-            <h3 style={{ color: 'var(--vut-red)' }}>Confirm delete</h3>
-            <p>Are you sure You want to delete user with ID<strong>{userToDelete}</strong>? You can't take this action back.</p>
-            <div className="modal-actions">
-              <button className="btn-cancel" onClick={() => setUserToDelete(null)}>Cancel</button>
-              <button className="btn-confirm-delete" onClick={handleDelete}>Delete user</button>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal 
+        isOpen={!!userToDelete}
+        onClose={() => setUserToDelete(null)}
+        onConfirm={handleDelete}
+        title="Potvrdit smazání uživatele"
+        message="Opravdu chcete tohoto uživatele trvale odstranit z evidence? Tuto akci nelze vzít zpět."
+      />
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">

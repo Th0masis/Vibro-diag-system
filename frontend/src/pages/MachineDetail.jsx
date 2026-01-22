@@ -2,201 +2,245 @@ import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import axios from 'axios';
 
+import ServiceNotes from '../components/ServiceNotes';
+import MeasurementsHistory from '../components/MeasurementsHistory';
+
 function MachineDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState('sensors'); // Výchozí záložka
 
-  // Stavy pro přiřazování senzoru
+  // Stavy pro přiřazování senzoru (zkráceno pro přehlednost)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [availableSensors, setAvailableSensors] = useState([]);
   const [assignForm, setAssignForm] = useState({ sensor_id: '', position: '' });
 
-  // Načtení detailu stroje
   const fetchDetail = async () => {
     try {
       const response = await axios.get(`http://127.0.0.1:8000/machines/${id}`);
       setData(response.data);
     } catch (error) {
-      console.error("Chyba při načítání detailu:", error);
+      console.error("Chyba:", error);
     } finally {
       setLoading(false);
     }
   };
 
-  useEffect(() => {
-    fetchDetail();
-  }, [id]);
+  const getSeverityStyles = (severity) => {
+    switch (severity) {
+      case 'CRITICAL': 
+        return { border: 'var(--vut-red)', bg: '#fff1f2', text: '#991b1b', icon: '🔴' };
+      case 'WARNING': 
+        return { border: 'var(--br-orange)', bg: '#fffbeb', text: '#92400e', icon: '🟠' };
+      case 'INFO': 
+      default: 
+        return { border: '#3b82f6', bg: '#eff6ff', text: '#1e40af', icon: '🔵' };
+    }
+  };
 
-  // Načtení volných senzorů (volá se až po otevření modálu)
+  useEffect(() => { fetchDetail(); }, [id]);
+
+  // Funkce pro rychlé odpojení senzoru
+  const handleDetachSensor = async (sensorId) => {
+    if(!window.confirm("Opravdu odebrat tento senzor ze stroje?")) return;
+    try {
+      await axios.post(`http://127.0.0.1:8000/machines/${id}/sensors/${sensorId}/detach`);
+      fetchDetail();
+    } catch (error) {
+      alert("Chyba při odpojování.");
+    }
+  };
+
+  // --- Zbytek logiky pro modál (stejné jako předtím) ---
   const openAssignModal = async () => {
     try {
       const res = await axios.get('http://127.0.0.1:8000/sensors/available');
       setAvailableSensors(res.data);
-      setAssignForm({ sensor_id: '', position: '' }); // Reset formuláře
+      setAssignForm({ sensor_id: '', position: '' });
       setIsAssignModalOpen(true);
-    } catch (error) {
-      alert("Nepodařilo se načíst seznam volných senzorů.");
-    }
+    } catch (error) { alert("Chyba načítání senzorů"); }
   };
 
-  // Odeslání formuláře (Přiřazení)
   const handleAttachSensor = async (e) => {
     e.preventDefault();
-    if (!assignForm.sensor_id) return alert("Vyberte senzor ze seznamu.");
-
     try {
-      await axios.post(`http://127.0.0.1:8000/machines/${id}/sensors`, {
-        sensor_id: assignForm.sensor_id,
-        position: assignForm.position
-      });
-      
+      await axios.post(`http://127.0.0.1:8000/machines/${id}/sensors`, assignForm);
       setIsAssignModalOpen(false);
-      fetchDetail(); // Refresh stránky, aby se nový senzor objevil v tabulce
-    } catch (error) {
-      alert("Chyba při přiřazování: " + error.response?.data?.detail);
-    }
+      fetchDetail();
+    } catch (error) { alert("Chyba přiřazení"); }
   };
 
-  if (loading) return <div className="page-container"><p>Načítám data stroje...</p></div>;
-  if (!data) return <div className="page-container"><p>Stroj nenalezen.</p></div>;
+  if (loading || !data) return <div className="page-container">Načítám...</div>;
 
-  const { info, sensors } = data;
+  const { info, sensors, last_note } = data;
 
-  return (
+return (
     <div className="page-container">
-      {/* HLAVIČKA */}
-      <div style={{ marginBottom: '30px', display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-        <div>
-          <button onClick={() => navigate('/machines')} className="btn-cancel" style={{ marginBottom: '10px' }}>
-            ← Zpět na seznam
-          </button>
-          <h1 style={{ margin: 0, color: 'var(--text)' }}>{info.name}</h1>
-          <p style={{ color: '#64748b', margin: '5px 0 0 0' }}>{info.type} • {info.location}</p>
+      
+      {/* 1. HLAVIČKA - PŘESKLÁDANÁ */}
+      <div className="machine-header-container">
+        {/* Levá část: Název, Status, Info */}
+        <div className="machine-title-section">
+          <h1>
+            {info.name}
+            {/* Status Badge přímo vedle nadpisu */}
+            <span className={`role-badge ${info.status}`} style={{ fontSize: '0.9rem', padding: '4px 12px', borderRadius: '20px', verticalAlign: 'middle' }}>
+               {info.status}
+            </span>
+          </h1>
+          <div className="machine-meta">
+            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{info.type}</span>
+            <span style={{ margin: '0 10px' }}>•</span>
+            <span>📍 {info.location}</span>
+          </div>
         </div>
-        <div style={{ textAlign: 'right' }}>
-           <div style={{ fontSize: '0.9rem', color: '#64748b', marginBottom: '5px' }}>Aktuální kondice</div>
-           <span className={`role-badge ${info.status}`} style={{ fontSize: '1.2rem', padding: '10px 20px' }}>
-             {info.status}
-           </span>
+
+        {/* Pravá část: Tlačítko Zpět */}
+        <div>
+          <button onClick={() => navigate('/machines')} className="btn-back">
+            <span>↩</span> Zpět na seznam
+          </button>
         </div>
       </div>
 
-      <div className="dashboard-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '20px' }}>
+      {/* 2. HORNÍ GRID (3 BOXY) */}
+      <div className="dashboard-grid-3">
         
-        {/* INFO KARTA */}
-        <div className="card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <h3 style={{ marginTop: 0, color: 'var(--br-orange)', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>
-            Technické údaje
-          </h3>
-          <div className="detail-grid">
-            <div className="detail-item"><label>ID Stroje</label><p>{info.id_machine}</p></div>
-            <div className="detail-item"><label>Instalace</label><p>{info.installation_date ? new Date(info.installation_date).toLocaleDateString('cs-CZ') : '-'}</p></div>
+        {/* BOX 1: Technické údaje (Oranžový vrch) */}
+        <div className="detail-card card-tech">
+          <div className="card-title" style={{ color: 'var(--br-orange)' }}>Technické údaje</div>
+          <div className="detail-grid" style={{ gap: '12px' }}>
+            <div className="detail-item"><label>ID Stroje</label><p style={{fontWeight:'bold'}}>#{info.id_machine}</p></div>
+            <div className="detail-item"><label>Instalace</label><p>{info.installation_date}</p></div>
             <div className="detail-item" style={{ gridColumn: 'span 2' }}>
-                <label>Popis</label>
-                <p style={{ lineHeight: '1.5' }}>{info.description}</p>
+                <label>Popis zařízení</label>
+                <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>{info.description}</p>
             </div>
           </div>
         </div>
 
-        {/* SENZORY KARTA */}
-        <div className="card" style={{ background: 'white', padding: '20px', borderRadius: '12px', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-             <h3 style={{ margin: 0, color: 'var(--text)' }}>Osazené senzory</h3>
-             <button className="btn-diagnose" onClick={openAssignModal} style={{ fontSize: '0.8rem', padding: '6px 12px' }}>
-               + Přiřadit senzor
-             </button>
+        {/* BOX 2: Senzory (Modrý vrch) */}
+        <div className="detail-card card-sensors">
+          <div className="card-title">
+             <span>Senzory ({sensors.length})</span>
+             <button className="btn-diagnose" onClick={openAssignModal} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>+ Přidat</button>
+          </div>
+          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '150px', paddingRight: '5px' }}>
+            {sensors.length === 0 ? <p style={{ color: '#ccc', fontStyle: 'italic', fontSize: '0.9rem' }}>Bez senzorů</p> : (
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+                {sensors.map(s => (
+                  <li key={s.id_sensor} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
+                    <div style={{ lineHeight: '1.2' }}>
+                      <div style={{ fontWeight: '600', fontSize: '0.9rem', color: '#334155' }}>{s.description}</div>
+                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>S/N: {s.serial_number}</div>
+                    </div>
+                    <button 
+                      className="btn-detach"
+                      onClick={() => handleDetachSensor(s.id_sensor)}
+                      title="Odpojit senzor"
+                    >
+                      ✕
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+
+        {/* BOX 3: Nejnovější poznámka (VUT Červený vrch) */}
+        <div className="detail-card card-note" 
+             style={{ 
+               borderTopColor: last_note ? getSeverityStyles(last_note.severity).border : '#cbd5e1' 
+             }}
+        >
+          <div className="card-title" style={{ color: last_note ? getSeverityStyles(last_note.severity).border : '#64748b' }}>
+            Poslední záznam
           </div>
           
-          {sensors.length === 0 ? (
-            <p style={{ color: '#94a3b8', fontStyle: 'italic', padding: '20px', textAlign: 'center', background: '#f8fafc', borderRadius: '8px' }}>
-              Zatím žádné senzory. Klikněte na tlačítko výše pro montáž.
-            </p>
+          {last_note ? (
+            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ 
+                    background: getSeverityStyles(last_note.severity).bg, 
+                    borderLeft: `4px solid ${getSeverityStyles(last_note.severity).border}`, 
+                    padding: '12px', 
+                    fontSize: '0.9rem', 
+                    fontStyle: 'italic',
+                    color: getSeverityStyles(last_note.severity).text,
+                    marginBottom: '10px',
+                    borderRadius: '0 4px 4px 0',
+                    // NOVÉ: Scrollování pro dlouhý text v náhledu
+                    maxHeight: '120px', 
+                    overflowY: 'auto'
+                }}>
+                  "{last_note.content}"
+                </div>
+              </div>
+              <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <span style={{ fontWeight: '600', color: '#475569' }}>👤 {last_note.author}</span>
+                {/* NOVÉ: Datum včetně času */}
+                <span>🕒 {new Date(last_note.timestamp).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              </div>
+            </div>
           ) : (
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ borderBottom: '1px solid #e2e8f0', textAlign: 'left', fontSize: '0.85rem', color: '#64748b' }}>
-                  <th style={{ padding: '10px' }}>Pozice</th>
-                  <th style={{ padding: '10px' }}>Senzor (S/N)</th>
-                  <th style={{ padding: '10px' }}>Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {sensors.map(s => (
-                  <tr key={s.id_sensor} style={{ borderBottom: '1px solid #f1f5f9' }}>
-                    <td style={{ padding: '12px 10px', fontWeight: 'bold' }}>{s.position || 'Neurčeno'}</td>
-                    <td style={{ padding: '12px 10px' }}>
-                        <div>{s.description}</div>
-                        <small style={{ color: '#94a3b8' }}>{s.serial_number}</small>
-                    </td>
-                    <td style={{ padding: '12px 10px' }}>
-                        <span className={`role-badge ${s.status}`} style={{ fontSize: '0.75rem' }}>{s.status}</span>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#cbd5e1' }}>
+              <span style={{ fontSize: '2rem', marginBottom: '10px' }}>📝</span>
+              <span>Žádné poznámky</span>
+            </div>
           )}
+        </div>
+
+      </div>
+
+      {/* 3. TABS (Záložky) */}
+      <div className="tabs-container">
+        <div className="tabs-header">
+          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>Senzory (Detail)</button>
+          <button className={`tab-btn ${activeTab === 'graphs' ? 'active' : ''}`} onClick={() => setActiveTab('graphs')}>Grafy</button>
+          <button className={`tab-btn ${activeTab === 'diagnostics' ? 'active' : ''}`} onClick={() => setActiveTab('diagnostics')}>Diagnostika (ML)</button>
+          <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Deník údržby</button>
+          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Historie měření</button>
+        </div>
+
+        <div className="tab-content">
+          {activeTab === 'sensors' && <div style={{color: '#64748b'}}>Zde bude podrobná tabulka senzorů...</div>}
+          {activeTab === 'graphs' && <div style={{color: '#64748b'}}>Zde budou interaktivní grafy...</div>}
+          {activeTab === 'diagnostics' && <div style={{color: '#64748b'}}>Zde budou výsledky z ML modelu...</div>}
+          {activeTab === 'notes' && (<ServiceNotes machineId={info.id_machine} onNoteAdded={() => fetchDetail()}/>)}
+          {activeTab === 'history' && (<MeasurementsHistory machineId={info.id_machine} />)}
         </div>
       </div>
 
-      {/* MODÁL PRO PŘIŘAZENÍ SENZORU */}
-      {isAssignModalOpen && (
+      {/* ... ZDE VLOŽ MODÁL PRO PŘIŘAZENÍ (stejný kód jako předtím) ... */}
+       {isAssignModalOpen && (
         <div className="modal-overlay">
-          <div className="modal-content add-user-modal">
+           <div className="modal-content add-user-modal">
             <h2 style={{ color: 'var(--br-orange)', marginBottom: '20px' }}>Montáž senzoru</h2>
             <form onSubmit={handleAttachSensor}>
-              
               <div className="form-group">
-                <label>Vyberte senzor (pouze 'Available')</label>
-                <select 
-                  value={assignForm.sensor_id}
-                  onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})}
-                  required
-                  style={{ padding: '10px', width: '100%', border: '1px solid #cbd5e1', borderRadius: '6px' }}
-                >
-                  <option value="" disabled>-- Vyberte senzor ze skladu --</option>
-                  {availableSensors.map(s => (
-                    <option key={s.id_sensor} value={s.id_sensor}>
-                      {s.serial_number} - {s.description}
-                    </option>
-                  ))}
+                <label>Vyberte senzor</label>
+                <select value={assignForm.sensor_id} onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})} required>
+                  <option value="">-- Vybrat --</option>
+                  {availableSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.serial_number} - {s.description}</option>)}
                 </select>
-                {availableSensors.length === 0 && (
-                  <small style={{ color: 'var(--vut-red)', display: 'block', marginTop: '5px' }}>
-                    Žádné volné senzory ve skladu. Nejdříve je musíte registrovat nebo uvolnit z jiného stroje.
-                  </small>
-                )}
               </div>
-
               <div className="form-group">
-                <label>Umístění na stroji (Pozice)</label>
-                <input 
-                  type="text" 
-                  placeholder="např. Ložisko motoru - Strana ventilátoru"
-                  value={assignForm.position}
-                  onChange={(e) => setAssignForm({...assignForm, position: e.target.value})}
-                  required
-                />
+                <label>Pozice</label>
+                <input type="text" value={assignForm.position} onChange={(e) => setAssignForm({...assignForm, position: e.target.value})} required />
               </div>
-
               <div className="modal-actions">
                 <button type="button" className="btn-cancel" onClick={() => setIsAssignModalOpen(false)}>Zrušit</button>
-                <button type="submit" className="btn-add-confirm" disabled={availableSensors.length === 0}>
-                  Namontovat senzor
-                </button>
+                <button type="submit" className="btn-add-confirm">Namontovat</button>
               </div>
             </form>
           </div>
         </div>
       )}
 
-      {/* PLACEHOLDER GRAFY */}
-      <div style={{ marginTop: '20px', padding: '40px', border: '2px dashed #cbd5e1', borderRadius: '12px', textAlign: 'center', color: '#64748b' }}>
-          Zde budou grafy vibrační analýzy a historie měření
-      </div>
     </div>
   );
 }

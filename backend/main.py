@@ -8,6 +8,7 @@ from auth import verify_password, create_access_token, get_password_hash
 from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
 import uvicorn
+import seed
 
 # Script FastAPI
 load_dotenv()
@@ -235,29 +236,62 @@ def get_all_sensors(token: str = Depends(oauth2_scheme)):
 
 @app.post("/sensors")
 def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role)):
-    """Registrace nového senzoru do systému (pouze admin)"""
+    """Registrace nového senzoru. Možnost rovnou přiřadit ke stroji."""
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může registrovat senzory")
     
+    # Validace: Pokud je vybrán stroj, status musí být 'active'
+    status = sensor_data.get('status', 'available')
+    machine_id = sensor_data.get('id_machine')
+    position = sensor_data.get('position')
+
+    # Pokud uživatel vybral stroj, ale nechal status 'available', backend to opraví nebo vyčistí
+    if machine_id and status == 'available':
+        # Zde jsou dvě možnosti: buď vyhodit chybu, nebo automaticky nastavit active.
+        # Zvolíme variantu: Pokud je stroj, status se stane 'active'.
+        status = 'active'
+    
+    # Pokud není stroj, status nemůže být 'active' (pokud to tak uživatel omylem poslal)
+    if not machine_id and status == 'active':
+        status = 'available'
+
     with engine.connect() as conn:
         query = text("""
-            INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status)
-            VALUES (:sn, :desc, :rate, :cal, 'available')
+            INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status, id_machine, position)
+            VALUES (:sn, :desc, :rate, :cal, :status, :mid, :pos)
         """)
-        conn.execute(query, {
-            "sn": sensor_data['serial_number'],
-            "desc": sensor_data['description'],
-            "rate": sensor_data.get('sampling_rate'),
-            "cal": sensor_data.get('calibration_date')
-        })
-        conn.commit()
+        try:
+            conn.execute(query, {
+                "sn": sensor_data['serial_number'],
+                "desc": sensor_data['description'],
+                "rate": sensor_data.get('sampling_rate'),
+                "cal": sensor_data.get('calibration_date'),
+                "status": status,
+                "mid": machine_id,
+                "pos": position
+            })
+            conn.commit()
+        except Exception as e:
+            # Ošetření chyby, např. duplicitní sériové číslo
+            raise HTTPException(status_code=400, detail=str(e))
+            
         return {"message": "Senzor byl úspěšně zaregistrován"}
 
 @app.put("/sensors/{sensor_id}")
 def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_current_user_role)):
-    """Aktualizace údajů senzoru nebo jeho přiřazení ke stroji"""
+    """Aktualizace údajů senzoru. Pokud se změní status na 'available' nebo 'maintenance', senzor se odpojí od stroje."""
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může upravovat senzory")
+
+    # LOGIKA ODPOJENÍ:
+    # Pokud senzor není aktivní, nesmí být na stroji.
+    new_status = updated_data.get('status')
+    machine_id = updated_data.get('id_machine')
+    position = updated_data.get('position')
+
+    if new_status in ['available', 'maintenance']:
+        machine_id = None
+        position = None
 
     with engine.connect() as conn:
         query = text("""
@@ -272,9 +306,10 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
         """)
         result = conn.execute(query, {
             "desc": updated_data['description'],
-            "status": updated_data['status'],
-            "machine_id": updated_data.get('id_machine'),
-            "pos": updated_data.get('position'),
+            "status": new_status,
+            "machine_id": machine_id,
+            "position": position, # Pozor, v SQL mám parametr :pos, ale tady posílám klíč
+            "pos": position,      # Pro jistotu, aby sedělo jméno parametru
             "rate": updated_data.get('sampling_rate'),
             "cal": updated_data.get('calibration_date'),
             "sid": sensor_id
@@ -283,6 +318,7 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
         
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Senzor nenalezen")
+            
         return {"message": "Senzor byl aktualizován"}
 
 @app.delete("/sensors/{sensor_id}")
@@ -341,6 +377,24 @@ def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_sc
             
         return {"message": "Senzor byl úspěšně namontován"}
 
+# 1. Nový endpoint pro rychlé odpojení senzoru (tlačítko "X")
+@app.post("/machines/{machine_id}/sensors/{sensor_id}/detach")
+def detach_sensor_from_machine(machine_id: int, sensor_id: int, token: str = Depends(oauth2_scheme)):
+    with engine.connect() as conn:
+        # Nastavíme senzor zpět na 'available' a vymažeme vazby
+        query = text("""
+            UPDATE sensors 
+            SET id_machine = NULL, position = NULL, status = 'available' 
+            WHERE id_sensor = :sid AND id_machine = :mid
+        """)
+        result = conn.execute(query, {"sid": sensor_id, "mid": machine_id})
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Senzor nebyl na tomto stroji nalezen")
+            
+        return {"message": "Senzor byl odpojen"}
+
 # --- SEKCE MACHINES ---
 
 @app.get("/machines")
@@ -367,51 +421,168 @@ def get_machines(token: str = Depends(oauth2_scheme)):
     
 @app.get("/machines/{machine_id}")
 def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """Vrátí kompletní detail stroje včetně připojených senzorů"""
     with engine.connect() as conn:
-        # 1. Získání informací o stroji
-        query_machine = text("""
-            SELECT id_machine, name, type, location, status, description, installation_date 
-            FROM machines 
-            WHERE id_machine = :mid
-        """)
+        # A) Info o stroji
+        query_machine = text("SELECT * FROM machines WHERE id_machine = :mid")
         machine = conn.execute(query_machine, {"mid": machine_id}).fetchone()
-        
-        if not machine:
-            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+        if not machine: raise HTTPException(status_code=404, detail="Stroj nenalezen")
 
-        # 2. Získání senzorů připojených k tomuto stroji
-        query_sensors = text("""
-            SELECT id_sensor, serial_number, description, position, status, sampling_rate 
-            FROM sensors 
-            WHERE id_machine = :mid
+        # B) Senzory
+        query_sensors = text("SELECT * FROM sensors WHERE id_machine = :mid")
+        sensors = [dict(row._mapping) for row in conn.execute(query_sensors, {"mid": machine_id}).fetchall()]
+
+        # C) NOVÉ: Poslední poznámka (Latest Note)
+        query_note = text("""
+            SELECT content, timestamp, severity, username 
+            FROM service_notes sn
+            JOIN users u ON sn.id_user = u.id_user
+            WHERE sn.id_machine = :mid 
+            ORDER BY sn.timestamp DESC 
+            LIMIT 1
         """)
-        sensors_result = conn.execute(query_sensors, {"mid": machine_id}).fetchall()
+        last_note = conn.execute(query_note, {"mid": machine_id}).fetchone()
         
-        sensors_list = []
-        for s in sensors_result:
-            sensors_list.append({
-                "id_sensor": s[0],
-                "serial_number": s[1],
-                "description": s[2],
-                "position": s[3],
-                "status": s[4],
-                "sampling_rate": s[5]
-            })
+        last_note_data = None
+        if last_note:
+            last_note_data = {
+                "content": last_note[0],
+                "timestamp": last_note[1],
+                "severity": last_note[2],
+                "author": last_note[3]
+            }
 
-        # Sestavení odpovědi
         return {
-            "info": {
-                "id_machine": machine[0],
-                "name": machine[1],
-                "type": machine[2],
-                "location": machine[3],
-                "status": machine[4],
-                "description": machine[5],
-                "installation_date": machine[6]
-            },
-            "sensors": sensors_list
+            "info": dict(machine._mapping), # Převede SQLAlchemy row na dict
+            "sensors": sensors,
+            "last_note": last_note_data
         }
+
+@app.get("/machines/{machine_id}/measurements")
+def get_machine_measurements(machine_id: int, limit: int = 50, token: str = Depends(oauth2_scheme)):
+    """Vrátí historii naměřených dat (Feature Data) pro tabulku historie"""
+    with engine.connect() as conn:
+        query = text("""
+            SELECT 
+                fd.time, 
+                s.description as sensor_name,
+                s.position,
+                fd.rms_raw,
+                fd.peak_raw,
+                fd.iso_10816
+            FROM feature_data fd
+            JOIN measurements m ON fd.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE fd.id_machine = :mid
+            ORDER BY fd.time DESC
+            LIMIT :lim
+        """)
+        result = conn.execute(query, {"mid": machine_id, "lim": limit}).fetchall()
+        
+        return [
+            {
+                "time": row[0],
+                "sensor": row[1],
+                "position": row[2],
+                "rms": row[3],
+                "peak": row[4],
+                "iso": row[5]
+            }
+            for row in result
+        ]
+
+# --- SEKCE SERVICE NOTES ---
+
+@app.get("/machines/{machine_id}/notes")
+def get_machine_notes(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """Vrátí historii poznámek pro daný stroj"""
+    with engine.connect() as conn:
+        query = text("""
+            SELECT sn.id_note, sn.content, sn.severity, sn.timestamp, u.username
+            FROM service_notes sn
+            JOIN users u ON sn.id_user = u.id_user
+            WHERE sn.id_machine = :mid
+            ORDER BY sn.timestamp DESC
+        """)
+        result = conn.execute(query, {"mid": machine_id}).fetchall()
+        
+        return [
+            {
+                "id_note": row[0],
+                "content": row[1],
+                "severity": row[2],
+                "timestamp": row[3],
+                "author": row[4]
+            }
+            for row in result
+        ]
+
+@app.post("/machines/{machine_id}/notes")
+def add_service_note(machine_id: int, note: dict, token: str = Depends(oauth2_scheme)):
+    """Přidání nové servisní poznámky (autor se bere z tokenu)"""
+    # Získáme ID přihlášeného uživatele
+    user = get_current_user_role(token) # Musíme najít ID uživatele podle username
+    
+    with engine.connect() as conn:
+        # Nejdřív zjistíme ID usera (pokud get_current_user vrací jen jméno/objekt)
+        # Předpokládám, že ve tvém auth.py get_current_user vrací username. 
+        # Rychlý fix: dotaz na ID podle jména v tokenu (sub)
+        
+        # 1. Dekodování tokenu pro získání username (pokud nemáš pomocnou fci co vrací ID)
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        username = payload.get("sub")
+        
+        user_query = text("SELECT id_user FROM users WHERE username = :name")
+        user_id = conn.execute(user_query, {"name": username}).scalar()
+
+        if not user_id:
+             raise HTTPException(status_code=401, detail="Neznámý uživatel")
+
+        # 2. Vložení poznámky
+        query = text("""
+            INSERT INTO service_notes (id_machine, id_user, content, severity, timestamp)
+            VALUES (:mid, :uid, :content, :severity, :now)
+        """)
+        conn.execute(query, {
+            "mid": machine_id,
+            "uid": user_id,
+            "content": note['content'],
+            "severity": note.get('severity', 'INFO'),
+            "now": datetime.now(timezone.utc)
+        })
+        conn.commit()
+        
+        return {"message": "Poznámka uložena"}
+
+@app.delete("/machines/{machine_id}/notes/{note_id}")
+def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oauth2_scheme)):
+    """Smazání servisní poznámky"""
+    # Zde by se dalo přidat ověření, že mazat může jen admin nebo autor
+    with engine.connect() as conn:
+        query = text("DELETE FROM service_notes WHERE id_note = :nid AND id_machine = :mid")
+        result = conn.execute(query, {"nid": note_id, "mid": machine_id})
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Poznámka nenalezena")
+            
+        return {"message": "Poznámka smazána"}
+
+# --- SEKCE MEASUREMENTS (DATA) ---
+
+@app.post("/machines/{machine_id}/simulate")
+def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    Spustí generátor dat ze souboru seed.py.
+    """
+    # Zavoláme funkci ze seed.py
+    result = seed.simulate_machine_data(machine_id)
+    
+    if result["status"] == "error":
+        raise HTTPException(status_code=400, detail=result["message"])
+        
+    return {"message": result["message"], "simulated_fault": result.get("fault")}
+
+# Endpoint GET /machines/{machine_id}/measurements necháme tak, jak je (ten jen čte data)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
