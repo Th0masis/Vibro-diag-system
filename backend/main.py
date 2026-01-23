@@ -400,15 +400,30 @@ def detach_sensor_from_machine(machine_id: int, sensor_id: int, token: str = Dep
 
 @app.get("/machines")
 def get_machines(token: str = Depends(oauth2_scheme)):
-    """Vrátí seznam všech strojů pro tabulku se seznamem strojů"""
+    """Vrátí seznam strojů včetně detailů poslední poznámky a jejího autora"""
     with engine.connect() as conn:
-        # Jenom dulezite data pro seznam
         query = text("""
-            SELECT id_machine, name, type, location, status
-            FROM machines
-            ORDER BY id_machine ASC
+            SELECT 
+                m.id_machine, 
+                m.name, 
+                m.type, 
+                m.location, 
+                m.status,
+                -- Obsah poznámky
+                (SELECT content FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note,
+                -- Severity
+                (SELECT severity FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_severity,
+                -- Autor (JOIN přímo v subquery)
+                (SELECT u.username FROM service_notes sn JOIN users u ON sn.id_user = u.id_user 
+                 WHERE sn.id_machine = m.id_machine ORDER BY sn.timestamp DESC LIMIT 1) as last_note_author,
+                -- Čas (převedeme na ISO formát string pro JS)
+                (SELECT to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM service_notes 
+                 WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_time
+            FROM machines m
+            ORDER BY m.id_machine ASC
         """)
         result = conn.execute(query).fetchall()
+        
         machines_list = []
         for row in result:
             machines_list.append({
@@ -416,10 +431,14 @@ def get_machines(token: str = Depends(oauth2_scheme)):
                 "name": row[1],
                 "type": row[2],
                 "location": row[3],
-                "status": row[4]
+                "status": row[4],
+                "last_note": row[5],
+                "last_note_severity": row[6],
+                "last_note_author": row[7],
+                "last_note_time": row[8]
             })
-        return machines_list
-    
+        return machines_list    
+
 @app.get("/machines/{machine_id}")
 def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:

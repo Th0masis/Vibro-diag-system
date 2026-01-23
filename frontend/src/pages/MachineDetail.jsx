@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
 import ServiceNotes from '../components/ServiceNotes';
@@ -11,10 +11,11 @@ import MachineDiagnostics from '../components/MachineDiagnostics';
 function MachineDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
   
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('sensors'); // Výchozí záložka
+  const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
 
   // Stavy pro přiřazování senzoru (zkráceno pro přehlednost)
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
@@ -44,8 +45,15 @@ function MachineDetail() {
     }
   };
 
-  useEffect(() => { fetchDetail(); }, [id]);
-
+  useEffect(() => {
+    fetchDetail();
+  }, [id]);
+   
+  useEffect(() => {
+    if (location.state?.tab) {
+      setActiveTab(location.state.tab);
+    }
+  }, [location.state]);
   // Funkce pro rychlé odpojení senzoru
   const handleDetachSensor = async (sensorId) => {
     if(!window.confirm("Opravdu odebrat tento senzor ze stroje?")) return;

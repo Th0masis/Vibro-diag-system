@@ -898,3 +898,25 @@ tr:hover {
   border-bottom: 3px solid var(--vut-red);
   background: linear-gradient(to top, #fff5f5 0%, transparent 100%);
 }
+/* ==========================================================================
+   12.  DASHBOARD 
+   ========================================================================== */
+.detail-card {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Aby byly všechny karty v řádku stejně vysoké */
+  justify-content: space-between;
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.detail-card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
+}
+
+/* Upravíme tlačítko btn-back, aby v dashboardu vypadalo jako akční tlačítko */
+.btn-back {
+  /* ... stávající styly ... */
+  border: 1px solid #e2e8f0;
+  padding: 10px;
+}
