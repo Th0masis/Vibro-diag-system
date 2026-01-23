@@ -9,6 +9,7 @@ from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
 import uvicorn
 import seed
+import requests
 
 # Script FastAPI
 load_dotenv()
@@ -490,6 +491,83 @@ def get_machine_measurements(machine_id: int, limit: int = 50, token: str = Depe
             for row in result
         ]
 
+@app.post("/machines/{machine_id}/diagnose")
+def run_machine_diagnostics(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    1. Načte poslední naměřená data stroje z DB.
+    2. Odešle je do ML Service (port 8001).
+    3. Zpracuje výsledek a aktualizuje stav stroje.
+    """
+    
+    # 1. Získání posledních dat z DB
+    with engine.connect() as conn:
+        # Potřebujeme RMS, Peak (jako PTP) a Kurtosis
+        # Pozor: V seed.py jsi ukládal 'kurtosis_raw', v GET /latest-data čteš index 9.
+        # Ujistíme se, že čteme správné sloupce.
+        query_data = text("""
+            SELECT rms_raw, peak_raw, kurtosis_raw 
+            FROM feature_data 
+            WHERE id_machine = :mid 
+            ORDER BY time DESC 
+            LIMIT 1
+        """)
+        last_measurement = conn.execute(query_data, {"mid": machine_id}).fetchone()
+        
+        if not last_measurement:
+            raise HTTPException(status_code=400, detail="Nedostatek dat. Nejdříve proveďte měření (Simulaci).")
+            
+        # Mapování DB sloupců na vstup ML modelu (VibrationData)
+        # DB: (rms_raw, peak_raw, kurtosis_raw)
+        ml_payload = {
+            "rms": float(last_measurement[0]),
+            "ptp": float(last_measurement[1]),       # Použijeme Peak jako PTP
+            "kurtosis": float(last_measurement[2])
+        }
+
+        # 2. Volání ML Service
+        ml_service_url = "http://127.0.0.1:8001/predict"
+        
+        try:
+            print(f"Odesílám do ML: {ml_payload}") # Debug log
+            response = requests.post(ml_service_url, json=ml_payload)
+            response.raise_for_status()
+            ml_result = response.json()
+        except requests.exceptions.ConnectionError:
+            raise HTTPException(status_code=503, detail="ML Service (port 8001) neodpovídá.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba ML predikce: {str(e)}")
+
+        # 3. Překlad výsledku pro naši aplikaci
+        # ML vrací: "status": "PORUCHA" nebo "V POŘÁDKU"
+        # My chceme: "FAULT" nebo "OK"
+        
+        app_status = "OK"
+        if ml_result["status"] == "PORUCHA":
+            app_status = "FAULT"
+            
+        # Vytvoření popisu pro frontend
+        description = "Vibrační hodnoty jsou v normě."
+        recommendation = "Žádná akce není nutná."
+        
+        if app_status == "FAULT":
+            description = f"Model detekoval anomálii! (Jistota: {ml_result['confidence']*100:.1f}%)"
+            recommendation = "Doporučena okamžitá kontrola ložisek."
+
+        # Update statusu stroje v DB
+        conn.execute(text("UPDATE machines SET status = :st WHERE id_machine = :mid"), 
+                     {"st": app_status, "mid": machine_id})
+        conn.commit()
+
+    # Vrátíme formát, který očekává naše React komponenta MachineDiagnostics.jsx
+    return {
+        "status": app_status,             # OK / FAULT
+        "prediction": ml_result["status"], # "V POŘÁDKU" / "PORUCHA" (text z ML)
+        "confidence": ml_result["confidence"],
+        "description": description,
+        "recommendation": recommendation,
+        "model_version": "Mafalda Joblib Model v1"
+    }
+
 # --- SEKCE SERVICE NOTES ---
 
 @app.get("/machines/{machine_id}/notes")
@@ -582,7 +660,6 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
         
     return {"message": result["message"], "simulated_fault": result.get("fault")}
 
-# Endpoint GET /machines/{machine_id}/measurements necháme tak, jak je (ten jen čte data)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

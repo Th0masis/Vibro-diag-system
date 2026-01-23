@@ -4,6 +4,9 @@ import axios from 'axios';
 
 import ServiceNotes from '../components/ServiceNotes';
 import MeasurementsHistory from '../components/MeasurementsHistory';
+import MachineGraphs from '../components/MachineGraphs';
+import MachineSensors from '../components/MachineSensors';
+import MachineDiagnostics from '../components/MachineDiagnostics';
 
 function MachineDetail() {
   const { id } = useParams();
@@ -199,19 +202,25 @@ return (
       {/* 3. TABS (Záložky) */}
       <div className="tabs-container">
         <div className="tabs-header">
-          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>Senzory (Detail)</button>
           <button className={`tab-btn ${activeTab === 'graphs' ? 'active' : ''}`} onClick={() => setActiveTab('graphs')}>Grafy</button>
           <button className={`tab-btn ${activeTab === 'diagnostics' ? 'active' : ''}`} onClick={() => setActiveTab('diagnostics')}>Diagnostika (ML)</button>
           <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Deník údržby</button>
           <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Historie měření</button>
+          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>Senzory (Detail)</button>
         </div>
 
         <div className="tab-content">
-          {activeTab === 'sensors' && <div style={{color: '#64748b'}}>Zde bude podrobná tabulka senzorů...</div>}
-          {activeTab === 'graphs' && <div style={{color: '#64748b'}}>Zde budou interaktivní grafy...</div>}
-          {activeTab === 'diagnostics' && <div style={{color: '#64748b'}}>Zde budou výsledky z ML modelu...</div>}
+          {activeTab === 'graphs' && (<MachineGraphs machineId={info.id_machine} />)}
+          {activeTab === 'diagnostics' && (<MachineDiagnostics machineId={info.id_machine} onDiagnosisComplete={fetchDetail} />)}
           {activeTab === 'notes' && (<ServiceNotes machineId={info.id_machine} onNoteAdded={() => fetchDetail()}/>)}
           {activeTab === 'history' && (<MeasurementsHistory machineId={info.id_machine} />)}
+          {activeTab === 'sensors' && (
+            <MachineSensors 
+                sensors={sensors}             // Předáváme seznam senzorů, které už máme načtené
+                machineId={info.id_machine}   // ID stroje pro případné API volání (detach)
+                onRefresh={fetchDetail}       // Funkce pro obnovení dat po změně
+            />
+          )}
         </div>
       </div>
 
