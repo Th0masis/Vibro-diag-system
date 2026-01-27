@@ -1,5 +1,5 @@
 from datetime import datetime, timezone
-import os
+import os, json, seed, requests, uvicorn
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,14 +7,12 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from auth import verify_password, create_access_token, get_password_hash
 from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
-import uvicorn
-import seed
-import requests
 
 # Script FastAPI
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
+ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 
 app = FastAPI(title="VibroDiag API")
 
@@ -586,6 +584,69 @@ def run_machine_diagnostics(machine_id: int, token: str = Depends(oauth2_scheme)
         "recommendation": recommendation,
         "model_version": "Mafalda Joblib Model v1"
     }
+
+@app.get("/machines/{machine_id}/rul")
+def get_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    1. Vytáhne historii RMS z databáze.
+    2. Pošle ji do ML Service.
+    3. Vrátí predikci RUL.
+    """
+    with engine.connect() as conn:
+        # 1. Kontrola, zda stroj existuje a má senzor
+        # Pro zjednodušení bereme data z prvního aktivního senzoru
+        sensor_query = text("SELECT id_sensor FROM sensors WHERE id_machine = :mid LIMIT 1")
+        sensor = conn.execute(sensor_query, {"mid": machine_id}).fetchone()
+        
+        if not sensor:
+             raise HTTPException(status_code=404, detail="Stroj nemá senzory.")
+        sensor_id = sensor[0]
+
+        # 2. Načtení historie RMS (seřazené od nejstarší po nejnovější)
+        # Omezíme to třeba na posledních 500 měření, ať neposíláme tuny dat
+        history_query = text("""
+            SELECT rms_raw 
+            FROM feature_data 
+            JOIN measurements ON feature_data.id_measurement = measurements.id_measurement
+            WHERE measurements.id_sensor = :sid
+            ORDER BY measurements.timestamp ASC
+            LIMIT 500
+        """)
+        
+        result = conn.execute(history_query, {"sid": sensor_id}).fetchall()
+        
+        # Převedeme výsledek SQL na obyčejný list floatů [0.5, 0.6, ...]
+        rms_history = [row[0] for row in result]
+        
+        if len(rms_history) < 10:
+             return {"status": "warning", "message": "Nedostatek dat pro predikci (min 10)."}
+
+    # 3. Volání ML Service
+    try:
+        payload = {
+            "history": rms_history,
+            "limit": 10.0 # ISO limit, můžeme to v budoucnu tahat z nastavení stroje
+        }
+        
+        # Odeslání požadavku na ML mikroslužbu
+        response = requests.post(f"{ML_SERVICE_URL}/predict-rul", json=payload, timeout=5)
+        
+        if response.status_code == 200:
+            return response.json()
+        else:
+            raise HTTPException(status_code=503, detail=f"ML Service error: {response.text}")
+            
+    except requests.exceptions.ConnectionError:
+        # Pokud ML service neběží, nechceme shodit backend, vrátíme info
+        return {
+            "models": None,
+            "recommended_model": "none",
+            "final_prediction_days": None,
+            "error": "ML Service is offline"
+        }
+    except Exception as e:
+        print(f"Chyba RUL predikce: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # --- SEKCE SERVICE NOTES ---
 

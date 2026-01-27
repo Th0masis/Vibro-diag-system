@@ -6,7 +6,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from rul_models import RULPredictor
+from rul_models import RULPredictor, LSTMPredictor
 
 
 # Definice vstupních dat (co nám pošle backend nebo frontend)
@@ -32,6 +32,8 @@ app.add_middleware(
 
 # Načtení natrénovaného modelu hned při startu
 model = joblib.load('models/mafaulda_model.joblib')
+lstm_model = LSTMPredictor(model_path="./models/model_rul.h5", scaler_path="./models/scaler_rul.pkl")
+
 
 @app.get("/")
 def home():
@@ -63,34 +65,33 @@ def predict(data: VibrationData):
 
 @app.post("/predict-rul")
 def predict_remaining_life(data: RULRequest):
-    """
-    Vypočítá RUL pomocí lineární a exponenciální regrese.
-    """
-    predictor = RULPredictor(limit_threshold=data.limit)
+    # 1. Matematické modely
+    math_predictor = RULPredictor(limit_threshold=data.limit)
+    lin_rul = math_predictor.predict_linear(data.history)
+    exp_rul = math_predictor.predict_exponential(data.history)
     
-    lin_rul = predictor.predict_linear(data.history)
-    exp_rul = predictor.predict_exponential(data.history)
+    # 2. AI Model (LSTM)
+    lstm_rul_days = lstm_model.predict(data.history)
     
-    # Jednoduchá logika pro doporučení "lepšího" modelu
-    # Pokud poslední hodnota rychle roste (exponenciála existuje), věříme jí víc.
-    recommended_model = "linear"
+    # 3. Logika pro výběr vítěze
+    # Priorita: LSTM (pokud funguje) -> Exponenciála -> Lineární
     final_prediction = lin_rul
-    
+    selected_method = "linear"
+
     if exp_rul is not None:
-        # Pokud exponenciální model dává smysl a predikuje něco rozumného
-        recommended_model = "exponential"
         final_prediction = exp_rul
+        selected_method = "exponential"
         
+    if lstm_rul_days is not None:
+        final_prediction = lstm_rul_days
+        selected_method = "lstm_ai"
+
     return {
         "models": {
             "linear_rul_days": round(lin_rul, 1) if lin_rul else None,
-            "exponential_rul_days": round(exp_rul, 1) if exp_rul else None
+            "exponential_rul_days": round(exp_rul, 1) if exp_rul else None,
+            "lstm_ai_rul_days": round(lstm_rul_days, 1) if lstm_rul_days else None
         },
-        "recommended_model": recommended_model,
+        "recommended_model": selected_method,
         "final_prediction_days": round(final_prediction, 1) if final_prediction else None
     }
-
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="127.0.0.1", port=8001)
