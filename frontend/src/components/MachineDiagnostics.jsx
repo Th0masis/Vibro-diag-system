@@ -16,7 +16,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
     setDiagResult(null);
     try {
       // Předpokládáme auth token v localStorage
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const res = await axios.post(
         `http://127.0.0.1:8000/machines/${machineId}/diagnose`,
         {}, 
@@ -36,7 +36,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
     setRulLoading(true);
     setRulResult(null);
     try {
-      const token = localStorage.getItem('token');
+      const token = sessionStorage.getItem('token');
       const res = await axios.get(
         `http://127.0.0.1:8000/machines/${machineId}/rul`,
         { headers: { Authorization: `Bearer ${token}` } }

@@ -2,16 +2,20 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
-function Dashboard() {
+function Dashboard( {token} ) {
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
   const navigate = useNavigate();
 
-  useEffect(() => {
+useEffect(() => {
     const fetchMachines = async () => {
       try {
-        // Využijeme tvůj existující endpoint /machines
-        const res = await axios.get('http://127.0.0.1:8000/machines');
+        setLoading(true); // Reset loading stavu při změně tokenu
+        
+        // 2. Přidána hlavička Authorization s tokenem
+        const res = await axios.get('http://127.0.0.1:8000/machines', {
+            headers: { Authorization: `Bearer ${token}` }
+        });
         setMachines(res.data);
       } catch (err) {
         console.error("Chyba při načítání dashboardu", err);
@@ -19,8 +23,12 @@ function Dashboard() {
         setLoading(false);
       }
     };
-    fetchMachines();
-  }, []);
+
+    // 3. Spustíme fetch jen pokud máme token
+    if (token) {
+        fetchMachines();
+    }
+  }, [token]); // 4. Důležité: Spustí se znovu, když App.js pošle nový token
 
   // Pomocná funkce pro navigaci na konkrétní záložku
   const goToDetail = (id, tabName) => {

@@ -16,7 +16,7 @@ import BrLogo from './assets/logo-br.svg';
 import VutLogo from './assets/logo-vut.svg';
 
 function App() {
-  const [token, setToken] = useState(localStorage.getItem('token'));
+  const [token, setToken] = useState(sessionStorage.getItem('token'));
   const [currentUser, setCurrentUser] = useState(null);
 
   useEffect(() => {
@@ -37,7 +37,7 @@ function App() {
   }, [token]);
 
   const handleLogout = () => {
-    localStorage.removeItem('token');
+    sessionStorage.removeItem('token');
     setToken(null);
     delete axios.defaults.headers.common['Authorization'];
   };
@@ -90,7 +90,7 @@ function App() {
           {/* MAIN CONTENT AREA */}
           <main className="main-content">
             <Routes>
-              <Route path="/" element={<Dashboard />} />
+              <Route path="/" element={<Dashboard token={token} />} />
               <Route path="/machines" element={<Machines />} />
               <Route path="/sensors" element={<Sensors />} />
               <Route path="/ml-sector" element={<div className="placeholder">Analýza dat a trénování modelů</div>} />

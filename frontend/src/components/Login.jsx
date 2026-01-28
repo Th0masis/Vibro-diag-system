@@ -28,7 +28,7 @@ function Login({ setToken }) {
         headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
       });
       const token = response.data.access_token;
-      localStorage.setItem('token', token);
+      sessionStorage.setItem('token', token);
       setToken(token);
     } catch (err) {
       setError('Nesprávné jméno nebo heslo');
