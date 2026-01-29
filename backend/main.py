@@ -437,6 +437,54 @@ def get_machines(token: str = Depends(oauth2_scheme)):
             })
         return machines_list    
 
+@app.post("/machines")
+def create_machine(machine_data: dict, role: str = Depends(get_current_user_role)):
+    """
+    Registrace nového stroje.
+    Vyžaduje roli 'admin'.
+    """
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může přidávat stroje")
+    
+    # Validace povinných polí
+    name = machine_data.get('name')
+    if not name:
+        raise HTTPException(status_code=400, detail="Název stroje je povinný údaj.")
+
+    # Extrakce dalších dat s defaultními hodnotami
+    description = machine_data.get('description', '')
+    m_type = machine_data.get('type', '')
+    location = machine_data.get('location', '')
+    status = machine_data.get('status', 'OFFLINE') # Pokud neuvedeno, začínáme jako OFFLINE
+
+
+    # Ověření, zda je status validní (volitelné, ale doporučené)
+    valid_statuses = ['OK', 'WARNING', 'CRITICAL', 'OFFLINE']
+    if status not in valid_statuses:
+        status = 'OFFLINE'
+
+    with engine.connect() as conn:
+        # SQL dotaz pro vložení
+        query = text("""
+            INSERT INTO machines (name, description, type, location, status)
+            VALUES (:name, :description, :type, :loc, :status)
+        """)
+        
+        try:
+            conn.execute(query, {
+                "name": name,
+                "description": description,
+                "type": m_type,
+                "loc": location,
+                "status": status
+            })
+            conn.commit()
+        except Exception as e:
+            # Nejčastější chyba bude UniqueConstraint na jméno stroje (pokud ho máš v DB nastavený)
+            print(f"Chyba při vytváření stroje: {e}")
+            raise HTTPException(status_code=400, detail="Nepodařilo se vytvořit stroj. Ověřte, zda název již neexistuje.")
+            
+    return {"message": "Stroj byl úspěšně přidán"}
 @app.get("/machines/{machine_id}")
 def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:

@@ -20,7 +20,7 @@ function Sensors() {
     calibration_date: '',
     position: '',
     status: 'available',
-    id_machine: '' // NOVÉ: ID stroje při registraci
+    id_machine: ''
   });
 
   // Načtení senzorů I strojů
@@ -46,7 +46,6 @@ function Sensors() {
 
   const handleAddSensor = async (e) => {
     e.preventDefault();
-    // Úprava payloadu: pokud je id_machine prázdný string, pošleme null
     const payload = { ...newSensor };
     if (payload.id_machine === '') payload.id_machine = null;
 
