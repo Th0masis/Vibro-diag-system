@@ -485,6 +485,7 @@ def create_machine(machine_data: dict, role: str = Depends(get_current_user_role
             raise HTTPException(status_code=400, detail="Nepodařilo se vytvořit stroj. Ověřte, zda název již neexistuje.")
             
     return {"message": "Stroj byl úspěšně přidán"}
+
 @app.get("/machines/{machine_id}")
 def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:
@@ -774,6 +775,65 @@ def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oaut
         return {"message": "Poznámka smazána"}
 
 # --- SEKCE MEASUREMENTS (DATA) ---
+
+@app.post("/measurements")
+def create_measurement(measurement_data: dict, role: str = Depends(get_current_user_role)):
+    """
+    Vytvoří nový záznam o měření (registruje raw soubor).
+    Vrací ID nového měření.
+    """
+    # 1. Kontrola role (pokud chceš omezit zápis)
+    # Pro účely skriptů to můžeš nechat volnější, nebo vyžadovat 'admin'
+    if role not in ["admin", "operator"]:
+         raise HTTPException(status_code=403, detail="Nemáte oprávnění přidávat měření.")
+
+    # 2. Manuální validace povinných polí
+    id_sensor = measurement_data.get('id_sensor')
+    raw_data_path = measurement_data.get('raw_data_path')
+    timestamp_str = measurement_data.get('timestamp') # Přijde jako string!
+
+    if not id_sensor or not raw_data_path or not timestamp_str:
+        raise HTTPException(status_code=400, detail="Chybí povinné pole (id_sensor, raw_data_path nebo timestamp).")
+
+    notes = measurement_data.get('notes', '')
+
+    with engine.connect() as conn:
+        try:
+            # 3. Kontrola, zda senzor existuje
+            sensor_exists = conn.execute(
+                text("SELECT id_sensor FROM sensors WHERE id_sensor = :id"),
+                {"id": id_sensor}
+            ).fetchone()
+            
+            if not sensor_exists:
+                raise HTTPException(status_code=404, detail=f"Senzor s ID {id_sensor} neexistuje.")
+
+            # 4. Vložení záznamu
+            # Poznámka: Postgres je chytrý a obvykle umí převést ISO string na timestamp sám.
+            # Pokud by to padalo, museli bychom použít: datetime.fromisoformat(timestamp_str)
+            query = text("""
+                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                VALUES (:sid, :ts, :path, :notes)
+                RETURNING id_measurement
+            """)
+            
+            result = conn.execute(query, {
+                "sid": id_sensor,
+                "ts": timestamp_str,
+                "path": raw_data_path,
+                "notes": notes
+            })
+            conn.commit()
+            
+            new_id = result.scalar()
+            return {
+                "message": "Measurement created", 
+                "id_measurement": new_id
+            }
+
+        except Exception as e:
+            print(f"Chyba při ukládání měření: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/machines/{machine_id}/simulate")
 def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_scheme)):
