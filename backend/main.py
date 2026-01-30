@@ -850,11 +850,8 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
 
 @app.get("/machines/{machine_id}/history")
 def get_machine_history(machine_id: int, role: str = Depends(get_current_user_role)):
-    """
-    Vrátí historii měření pro daný stroj včetně vypočtených features (pokud existují).
-    """
     with engine.connect() as conn:
-        # Změnil jsem s.name na s.serial_number, protože 'name' v tabulce sensors zřejmě nemáš
+        # PŘIDÁNO: f.min_val, f.max_val
         query = text("""
             SELECT 
                 m.id_measurement, 
@@ -864,34 +861,39 @@ def get_machine_history(machine_id: int, role: str = Depends(get_current_user_ro
                 s.serial_number as sensor_name,
                 f.rms_raw, 
                 f.kurtosis_raw,
+                f.peak_raw,
+                f.crest_factor,
+                f.min_val,
+                f.max_val,
                 f.id_featureset
             FROM measurements m
             JOIN sensors s ON m.id_sensor = s.id_sensor
             LEFT JOIN feature_data f ON m.id_measurement = f.id_measurement
             WHERE s.id_machine = :mid
-            ORDER BY m.timestamp DESC
+            ORDER BY m.timestamp ASC
         """)
         
-        try:
-            result = conn.execute(query, {"mid": machine_id}).fetchall()
+        result = conn.execute(query, {"mid": machine_id}).fetchall()
+        
+        history = []
+        for row in result:
+            history.append({
+                "id_measurement": row[0],
+                "timestamp": row[1],
+                "raw_data_path": row[2],
+                "notes": row[3],
+                "sensor_name": row[4],
+                "rms": row[5],
+                "kurtosis": row[6],
+                "peak": row[7],
+                "crest_factor": row[8],
+                # Nové položky (indexy se posunuly)
+                "min_val": row[9],
+                "max_val": row[10],
+                "processed": row[11] is not None
+            })
             
-            history = []
-            for row in result:
-                history.append({
-                    "id_measurement": row[0],
-                    "timestamp": row[1],
-                    "raw_data_path": row[2],
-                    "notes": row[3],
-                    "sensor_name": row[4], # Tady bude serial_number
-                    "rms": row[5],
-                    "kurtosis": row[6],
-                    "processed": row[7] is not None
-                })
-                
-            return history
-        except Exception as e:
-            print(f"SQL Error: {e}")
-            raise HTTPException(status_code=500, detail="Chyba při čtení historie z databáze.")
+        return history
 
 @app.post("/measurements/{id_measurement}/process")
 def process_measurement_data(id_measurement: int, role: str = Depends(get_current_user_role)):
