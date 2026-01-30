@@ -1,7 +1,8 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import List, Optional
+from scipy.stats import kurtosis
 import joblib
 import numpy as np
 import pandas as pd
@@ -95,3 +96,41 @@ def predict_remaining_life(data: RULRequest):
         "recommended_model": selected_method,
         "final_prediction_days": round(final_prediction, 1) if final_prediction else None
     }
+
+@app.post("/process-features")
+def process_features(payload: dict):
+    path = payload.get("path")
+    try:
+        df = pd.read_csv(path)
+        signal = df.iloc[:, 0].values # První sloupec (H nebo V dle souboru)
+        
+        # Výpočty
+        rms = np.sqrt(np.mean(signal**2))
+        kurt = kurtosis(signal)
+        peak = np.max(np.abs(signal))
+        max_v = np.max(signal)
+        min_v = np.min(signal)
+        crest = peak / rms if rms != 0 else 0
+        
+        return {
+            "rms_raw": float(rms),
+            "kurtosis_raw": float(kurt),
+            "peak_raw": float(peak),
+            "max_val": float(max_v),
+            "min_val": float(min_v),
+            "crest_factor": float(crest)
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+    
+@app.post("/get-raw-data")
+def get_raw_data(payload: dict):
+    path = payload.get("path")
+    # Downsampling pro frontend (např. každý 16. bod)
+    step = payload.get("step", 16) 
+    try:
+        df = pd.read_csv(path)
+        signal = df.iloc[::step, 0].tolist() # Každý n-tý bod
+        return signal
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))   

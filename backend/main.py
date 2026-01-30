@@ -848,6 +848,123 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
         
     return {"message": result["message"], "simulated_fault": result.get("fault")}
 
+@app.get("/machines/{machine_id}/history")
+def get_machine_history(machine_id: int, role: str = Depends(get_current_user_role)):
+    """
+    Vrátí historii měření pro daný stroj včetně vypočtených features (pokud existují).
+    """
+    with engine.connect() as conn:
+        # Změnil jsem s.name na s.serial_number, protože 'name' v tabulce sensors zřejmě nemáš
+        query = text("""
+            SELECT 
+                m.id_measurement, 
+                m.timestamp, 
+                m.raw_data_path, 
+                m.notes,
+                s.serial_number as sensor_name,
+                f.rms_raw, 
+                f.kurtosis_raw,
+                f.id_featureset
+            FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            LEFT JOIN feature_data f ON m.id_measurement = f.id_measurement
+            WHERE s.id_machine = :mid
+            ORDER BY m.timestamp DESC
+        """)
+        
+        try:
+            result = conn.execute(query, {"mid": machine_id}).fetchall()
+            
+            history = []
+            for row in result:
+                history.append({
+                    "id_measurement": row[0],
+                    "timestamp": row[1],
+                    "raw_data_path": row[2],
+                    "notes": row[3],
+                    "sensor_name": row[4], # Tady bude serial_number
+                    "rms": row[5],
+                    "kurtosis": row[6],
+                    "processed": row[7] is not None
+                })
+                
+            return history
+        except Exception as e:
+            print(f"SQL Error: {e}")
+            raise HTTPException(status_code=500, detail="Chyba při čtení historie z databáze.")
+
+@app.post("/measurements/{id_measurement}/process")
+def process_measurement_data(id_measurement: int, role: str = Depends(get_current_user_role)):
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nedostatečná oprávnění")
+
+    with engine.connect() as conn:
+        # OPRAVENÝ SQL DOTAZ: id_machine bereme z tabulky sensors (s)
+        query_path = text("""
+            SELECT m.raw_data_path, s.id_machine 
+            FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE m.id_measurement = :id
+        """)
+        
+        res = conn.execute(query_path, {"id": id_measurement}).fetchone()
+        if not res: 
+            raise HTTPException(status_code=404, detail="Měření nebylo nalezeno")
+        
+        path, machine_id = res
+        
+        # Volání ML Service (zůstává stejné)
+        try:
+            ml_res = requests.post(f"{ML_SERVICE_URL}/process-features", json={"path": path})
+            if ml_res.status_code != 200:
+                raise HTTPException(status_code=500, detail="ML Service selhala při výpočtu")
+            
+            features = ml_res.json()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Nepodařilo se spojit s ML Service: {e}")
+        
+        # Uložení do feature_data (zůstává stejné)
+        query_insert = text("""
+            INSERT INTO feature_data (id_measurement, id_machine, rms_raw, kurtosis_raw, peak_raw, max_val, min_val, crest_factor, time)
+            VALUES (:mid, :mach, :rms, :kurt, :peak, :maxv, :minv, :crest, NOW())
+        """)
+        
+        try:
+            conn.execute(query_insert, {
+                "mid": id_measurement, "mach": machine_id,
+                "rms": features['rms_raw'], "kurt": features['kurtosis_raw'],
+                "peak": features['peak_raw'], "maxv": features['max_val'],
+                "minv": features['min_val'], "crest": features['crest_factor']
+            })
+            conn.commit()
+        except Exception as e:
+            print(f"Chyba při insertu features: {e}")
+            raise HTTPException(status_code=500, detail="Chyba při zápisu výsledků do databáze")
+        
+    return {"message": "Data úspěšně zpracována", "id_measurement": id_measurement}
+
+@app.get("/measurements/{id_measurement}/raw")
+def proxy_raw_data(id_measurement: int):
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
+        if not res: raise HTTPException(status_code=404)
+        
+        ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": res[0], "step": 16})
+        return ml_res.json()
+
+@app.get("/measurements/{id_measurement}/features")
+def get_measurement_features(id_measurement: int):
+    with engine.connect() as conn:
+        query = text("""
+            SELECT f.*, m.raw_data_path 
+            FROM feature_data f 
+            JOIN measurements m ON f.id_measurement = m.id_measurement 
+            WHERE f.id_measurement = :id
+        """)
+        row = conn.execute(query, {"id": id_measurement}).fetchone()
+        if not row: return None
+        # Převedeme na dict pro frontend
+        return dict(row._mapping)
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
