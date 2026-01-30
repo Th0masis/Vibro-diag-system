@@ -920,3 +920,106 @@ tr:hover {
   border: 1px solid #e2e8f0;
   padding: 10px;
 }
+
+/* ==========================================================================
+   13.  MACHINE DETAIL 
+   ========================================================================== */
+
+/* --- VUT / B&R STYLE --- */
+
+/* Karta filtru a hlavičky */
+.history-header-card {
+  background: white;
+  border-top: 4px solid var(--vut-red-dark); /* VUT Červená */
+  padding: 20px;
+  border-radius: 8px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
+  margin-bottom: 20px;
+}
+
+/* Stylový Select */
+.custom-select {
+  padding: 10px 15px;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  background-color: #f8fafc;
+  color: #334155;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  outline: none;
+}
+
+.custom-select:focus {
+  border-color: var(--br-orange);
+  box-shadow: 0 0 0 3px rgba(228, 0, 43, 0.1);
+}
+
+/* Custom Checkbox */
+.custom-checkbox {
+  appearance: none;
+  background-color: #fff;
+  margin: 0;
+  font: inherit;
+  color: currentColor;
+  width: 1.15em;
+  height: 1.15em;
+  border: 2px solid #cbd5e1;
+  border-radius: 4px;
+  display: grid;
+  place-content: center;
+  cursor: pointer;
+  transition: 0.2s;
+}
+
+.custom-checkbox::before {
+  content: "";
+  width: 0.65em;
+  height: 0.65em;
+  transform: scale(0);
+  transition: 120ms transform ease-in-out;
+  box-shadow: inset 1em 1em white;
+  transform-origin: center;
+  clip-path: polygon(14% 44%, 0 65%, 50% 100%, 100% 16%, 80% 0%, 43% 62%);
+}
+
+.custom-checkbox:checked {
+  background-color: var(--br-orange);
+  border-color: var(--bg);
+}
+
+.custom-checkbox:checked::before {
+  transform: scale(1);
+}
+
+/* Progress Bar Container */
+.progress-container {
+  width: 100%;
+  background-color: #f1f5f9;
+  border-radius: 99px;
+  height: 10px;
+  margin-top: 10px;
+  overflow: hidden;
+}
+
+/* Progress Bar Fill */
+.progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #cd3808 0%, #E4002B 100%);
+  transition: width 0.3s ease-in-out;
+  border-radius: 99px;
+}
+
+/* Badge pro vybrané položky */
+.selection-badge {
+  background: #fff1f2; /* Světle červená */
+  border: 1px solid #fecdd3;
+  color: #be123c;
+  padding: 6px 16px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+  font-size: 0.9rem;
+}
