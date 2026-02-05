@@ -1,10 +1,14 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import MachineCard from '../components/MachineCard';
+import MeasurementDetailModal from '../components/MeasurementDetailModal'; // 1. Import Modalu ZDE
 
 function Dashboard({ token }) {
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
+  
+  // 2. Stav pro modal je nyní v Dashboardu (na úrovni celé stránky)
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState(null);
 
   useEffect(() => {
     const fetchMachines = async () => {
@@ -37,14 +41,27 @@ function Dashboard({ token }) {
       
       <div style={{ 
         display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', // Kompaktnější šířka
+        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', 
         gap: '20px',
-        alignItems: 'stretch' // Aby karty měly stejnou výšku v řádku
+        alignItems: 'stretch' 
       }}>
         {machines.map(m => (
-          <MachineCard key={m.id_machine} machine={m} />
+          <MachineCard 
+            key={m.id_machine} 
+            machine={m} 
+            // 3. Předáváme funkci pro otevření modalu do karty
+            onOpenDetail={(id) => setSelectedMeasurementId(id)}
+          />
         ))}
       </div>
+
+      {/* 4. Modal se vykresluje TADY, nezávisle na kartách */}
+      {selectedMeasurementId && (
+        <MeasurementDetailModal 
+          measurementId={selectedMeasurementId} 
+          onClose={() => setSelectedMeasurementId(null)} 
+        />
+      )}
     </div>
   );
 }
