@@ -8,6 +8,7 @@ create_user.py
 # Python (ml_service)
 __pycache__/
 ml_service/venv/
+ml_service/venv_wsl/
 ml_service/data
 .env
 
