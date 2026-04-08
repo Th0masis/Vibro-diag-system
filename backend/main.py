@@ -968,5 +968,34 @@ def get_measurement_features(id_measurement: int):
         # Převedeme na dict pro frontend
         return dict(row._mapping)
 
+@app.get("/measurements/{id_measurement}/fft")
+def proxy_fft_data(id_measurement: int):
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
+        if not res: 
+            raise HTTPException(status_code=404, detail="Měření nenalezeno")
+        
+        try:
+            # Zavolá ML service pro výpočet FFT
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-fft", json={"path": res[0]})
+            ml_res.raise_for_status() # Vyhodí výjimku, pokud ML service vrátí 500
+            return ml_res.json()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
+
+@app.get("/measurements/{id_measurement}/cwt")
+def proxy_cwt_data(id_measurement: int):
+    with engine.connect() as conn:
+        res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
+        if not res: 
+            raise HTTPException(status_code=404, detail="Měření nenalezeno")
+        
+        try:
+            # Zavolá ML service pro vygenerování CWT obrázku
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-cwt", json={"path": res[0]})
+            ml_res.raise_for_status()
+            return ml_res.json()
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

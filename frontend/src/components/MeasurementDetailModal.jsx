@@ -5,48 +5,46 @@ import {
 } from 'recharts';
 
 function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
+  // --- ZÁKLADNÍ STAVY ---
   const [loading, setLoading] = useState(true);
-  const [details, setDetails] = useState(null); // Features (pokud existují)
-  const [rawData, setRawData] = useState([]);   // Graf
+  const [details, setDetails] = useState(null); 
+  const [rawData, setRawData] = useState([]);   
   const [isProcessing, setIsProcessing] = useState(false);
-  const [meta, setMeta] = useState({});         // Cesta k souboru atd.
+  
+  // --- STAVY PRO ROZŠÍŘENOU VIZUALIZACI ---
+  const [activeTab, setActiveTab] = useState('time'); // 'time', 'fft', 'cwt'
+  const [fftData, setFftData] = useState([]);
+  const [cwtImage, setCwtImage] = useState(null);
+  const [loadingViz, setLoadingViz] = useState(false);
 
   // XJTU-SY sampling parameters
-  const SAMPLING_FREQ = 25600; // 25.6 kHz
-  const DOWNSAMPLE_STEP = 16;  // Musí odpovídat tomu, co posílá backend (step=16)
+  const SAMPLING_FREQ = 25600; 
+  const DOWNSAMPLE_STEP = 16;  
 
+  // 1. Načtení základu (Časový signál + Vypočtené parametry)
   const fetchDetail = async () => {
     try {
       setLoading(true);
-      // Paralelní volání: Raw data + Features
-      // Pokud features neexistují (404/null), musíme to ošetřit, aby nespadl celý Promise.all
-      // Proto voláme features zvlášť nebo v try-catch bloku, pokud backend vrací null.
       
       const rawRes = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/raw`);
       
-      // Pokusíme se načíst features. Pokud neexistují, backend vrátí null nebo prázdný objekt
       let featResData = null;
       try {
         const featRes = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/features`);
-        featResData = featRes.data; // Může být null
+        featResData = featRes.data; 
       } catch (e) {
         console.log("Features zatím neexistují.");
       }
 
-      // Přepočet indexů na čas (ms)
-      const formattedRaw = rawRes.data.map((val, idx) => ({
-        // t = (index * step / freq) * 1000 ms
+      const signalData = Array.isArray(rawRes.data) ? rawRes.data : rawRes.data.signal;
+      
+      const formattedRaw = signalData.map((val, idx) => ({
         time: ((idx * DOWNSAMPLE_STEP) / SAMPLING_FREQ * 1000).toFixed(1), 
         v: val
       }));
       
       setRawData(formattedRaw);
       setDetails(featResData);
-      
-      // Pokud máme features, vezmeme cestu odtamtud, jinak si ji musíme vytáhnout z raw endpointu nebo historie
-      // Pro zjednodušení předpokládám, že rawRes.data je jen pole. 
-      // Pokud potřebujeme cestu i u nezpracovaných dat, museli bychom upravit backend endpoint /raw aby vracel objekt { data: [], path: "" }
-      // Pro teď zobrazíme cestu jen když máme features, nebo ji pošleme přes props z parenta.
       
     } catch (error) {
       console.error("Chyba detailu:", error);
@@ -59,12 +57,42 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
     if (measurementId) fetchDetail();
   }, [measurementId]);
 
+  // 2. Načtení FFT a CWT podle aktivní záložky
+  useEffect(() => {
+    const fetchAdvancedViz = async () => {
+      setLoadingViz(true);
+      try {
+        if (activeTab === 'fft' && fftData.length === 0) {
+          const res = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/fft`);
+          const formattedFft = res.data.frequencies.map((freq, i) => ({
+            freq: freq,
+            amp: res.data.amplitudes[i]
+          }));
+          setFftData(formattedFft);
+        } 
+        else if (activeTab === 'cwt' && !cwtImage) {
+          const res = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/cwt`);
+          setCwtImage(res.data.cwt_image);
+        }
+      } catch (err) {
+        console.error(`Chyba načítání ${activeTab}:`, err);
+      } finally {
+        setLoadingViz(false);
+      }
+    };
+
+    if (activeTab !== 'time') {
+      fetchAdvancedViz();
+    }
+  }, [activeTab, measurementId, fftData.length, cwtImage]);
+
+
   const handleProcess = async () => {
     setIsProcessing(true);
     try {
       await axios.post(`http://127.0.0.1:8000/measurements/${measurementId}/process`);
-      await fetchDetail(); // Obnovíme data v modalu (načtou se nové features)
-      if (onProcessed) onProcessed(); // Řekneme rodiči (tabulce), ať se aktualizuje
+      await fetchDetail(); 
+      if (onProcessed) onProcessed(); 
     } catch (error) {
       alert("Chyba při zpracování: " + error.message);
     } finally {
@@ -78,7 +106,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
     <div className="modal-overlay">
       <div className="modal-content detail-modal-styled" style={{ maxWidth: '1300px', padding: 0, borderRadius: '8px', overflow: 'hidden' }}>
         
-        {/* --- HLAVIČKA (B&R Style) --- */}
+        {/* --- HLAVIČKA --- */}
         <div style={{ 
           background: 'linear-gradient(90deg, #cd3808 0%, #ff5e00 100%)', 
           padding: '15px 25px', 
@@ -89,7 +117,6 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Detail měření #{measurementId}</h2>
-            {/* Tlačítko pro zpracování přímo v hlavičce */}
             <button 
               onClick={handleProcess}
               disabled={!!details || isProcessing}
@@ -121,44 +148,112 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
           {loading ? <p>Načítám data...</p> : (
             <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '25px' }}>
               
-              {/* LEVÝ SLOUPEC: GRAF */}
-              <div className="card-shadow" style={{ background: 'white', padding: '20px', borderRadius: '8px' }}>
-                <h4 style={{ margin: '0 0 15px 0', color: '#475569' }}>Časový průběh vibrací (1.28 s snapshot)</h4>
-                <div style={{ width: '100%', height: '450px' }}>
-                  <ResponsiveContainer>
-                    <LineChart data={rawData}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                      <XAxis 
-                        dataKey="time" 
-                        label={{ value: 'Čas [ms]', position: 'insideBottomRight', offset: -5 }} 
-                        tick={{ fontSize: 12 }}
-                      />
-                      <YAxis 
-                        label={{ value: 'Amplituda [g]', angle: -90, position: 'insideLeft' }} 
-                        domain={['auto', 'auto']}
-                        tick={{ fontSize: 12 }}
-                      />
-                      <Tooltip 
-                        contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                        formatter={(value) => [value.toFixed(4) + ' g', 'Amplituda']}
-                        labelFormatter={(label) => `Čas: ${label} ms`}
-                      />
-                      {/* Referenční čára nuly */}
-                      <ReferenceLine y={0} stroke="#cbd5e1" />
-                      <Line 
-                        type="monotone" 
-                        dataKey="v" 
-                        stroke="#cd3808" 
-                        strokeWidth={1.5} 
-                        dot={false} 
-                        isAnimationActive={false} // Vypnutí animace pro rychlost
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+              {/* LEVÝ SLOUPEC: GRAFY A ZÁLOŽKY */}
+              <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                
+                {/* ZÁLOŽKY */}
+                <div className="viz-tabs">
+                  <button className={`viz-tab ${activeTab === 'time' ? 'active' : ''}`} onClick={() => setActiveTab('time')}>
+                    Časový průběh (1.28 s)
+                  </button>
+                  <button className={`viz-tab ${activeTab === 'fft' ? 'active' : ''}`} onClick={() => setActiveTab('fft')}>
+                    Frekvenční spektrum (FFT)
+                  </button>
+                  <button className={`viz-tab ${activeTab === 'cwt' ? 'active' : ''}`} onClick={() => setActiveTab('cwt')}>
+                    Časově-frekvenční (CWT)
+                  </button>
+                </div>
+
+                {/* PLÁTNO GRAFU */}
+                <div style={{ padding: '20px', width: '100%', height: '450px', position: 'relative' }}>
+                  
+                  {loadingViz ? (
+                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                      Generuji {activeTab.toUpperCase()}...
+                    </div>
+                  ) : (
+                    <>
+                      {/* 1. ČASOVÝ PRŮBĚH */}
+                      {activeTab === 'time' && (
+                        <ResponsiveContainer>
+                          <LineChart data={rawData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis 
+                              dataKey="time" 
+                              label={{ value: 'Čas [ms]', position: 'insideBottomRight', offset: -5 }} 
+                              tick={{ fontSize: 12 }}
+                            />
+                            <YAxis 
+                              label={{ value: 'Amplituda [g]', angle: -90, position: 'insideLeft' }} 
+                              domain={['auto', 'auto']}
+                              tick={{ fontSize: 12 }}
+                            />
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                              formatter={(value) => [value.toFixed(4) + ' g', 'Amplituda']}
+                              labelFormatter={(label) => `Čas: ${label} ms`}
+                            />
+                            <ReferenceLine y={0} stroke="#cbd5e1" />
+                            <Line 
+                              type="monotone" 
+                              dataKey="v" 
+                              stroke="#cd3808" 
+                              strokeWidth={1.5} 
+                              dot={false} 
+                              isAnimationActive={false} 
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {/* 2. FREKVENČNÍ SPEKTRUM (FFT) */}
+                      {activeTab === 'fft' && (
+                        <ResponsiveContainer>
+                          <LineChart data={fftData}>
+                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                            <XAxis 
+                              dataKey="freq" 
+                              label={{ value: 'Frekvence [Hz]', position: 'insideBottomRight', offset: -5 }} 
+                              tickFormatter={(val) => val.toFixed(0)}
+                              tick={{ fontSize: 12 }}
+                            />
+                            <YAxis 
+                              label={{ value: 'Amplituda', angle: -90, position: 'insideLeft' }} 
+                              tick={{ fontSize: 12 }}
+                            />
+                            <Tooltip 
+                              contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                              formatter={(value) => [value.toFixed(4), 'Amplituda']}
+                              labelFormatter={(label) => `Frekvence: ${Number(label).toFixed(1)} Hz`}
+                            />
+                            <Line 
+                              type="monotone" 
+                              dataKey="amp" 
+                              stroke="#0284c7" /* Modrá barva pro odlišení */
+                              strokeWidth={1.5} 
+                              dot={false} 
+                              isAnimationActive={false} 
+                            />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      )}
+
+                      {/* 3. CWT SKALOGRAM */}
+                      {activeTab === 'cwt' && cwtImage && (
+                        <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                          <img 
+                            src={cwtImage} 
+                            alt="CWT Scalogram" 
+                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
+                          />
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
 
-              {/* PRAVÝ SLOUPEC: HODNOTY */}
+              {/* PRAVÝ SLOUPEC: HODNOTY (Nezměněno) */}
               <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', background: '#fff7ed' }}>
                   <h4 style={{ margin: 0, color: '#9a3412' }}>Vypočtené parametry</h4>
