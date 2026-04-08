@@ -8,6 +8,7 @@ import UserManagement from './pages/UserManagement';
 import Sensors from './pages/Sensors';
 import Machines from './pages/Machines';
 import MachineDetail from './pages/MachineDetail';
+import MlSector from './pages/MlSector'
 
 // Loga (předpokládám cesty v src/assets)
 import PulseGuardLogo from './assets/logo-pulseguard.svg';
@@ -93,7 +94,7 @@ function App() {
               <Route path="/" element={<Dashboard token={token} />} />
               <Route path="/machines" element={<Machines />} />
               <Route path="/sensors" element={<Sensors />} />
-              <Route path="/ml-sector" element={<div className="placeholder">Analýza dat a trénování modelů</div>} />
+              <Route path="/ml-sector" element={<MlSector />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="*" element={<Navigate to="/" />} />
               <Route path="/machines/:id" element={<MachineDetail />} />

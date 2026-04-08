@@ -997,5 +997,49 @@ def proxy_cwt_data(id_measurement: int):
             return ml_res.json()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
+
+# --- SEKCE MACHINE LEARNING ---
+@app.get("/ml-models")
+def get_ml_models(role: str = Depends(get_current_user_role)):
+    """
+    Vrátí seznam všech ML modelů zaregistrovaných v systému.
+    """
+    # Můžeš omezit přístup jen pro admina, nebo nechat i pro operátora,
+    # aby viděl, jaké modely systém používá k diagnostice.
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nemáte oprávnění k zobrazení modelů.")
+
+    with engine.connect() as conn:
+        try:
+            # Vytáhneme všechny modely, seřazené např. podle ID nebo typu
+            query = text("""
+                SELECT 
+                    id_model, 
+                    name, 
+                    version, 
+                    type, 
+                    path_to_model, 
+                    accuracy, 
+                    training_date, 
+                    description, 
+                    is_active
+                FROM ml_models
+                ORDER BY id_model ASC
+            """)
+            
+            result = conn.execute(query).fetchall()
+            
+            # Převedeme výsledky na seznam slovníků
+            models = []
+            for row in result:
+                # Použijeme ._mapping pro bezpečný převod řádku na dictionary
+                models.append(dict(row._mapping))
+                
+            return models
+
+        except Exception as e:
+            print(f"Chyba při načítání ML modelů: {e}")
+            raise HTTPException(status_code=500, detail="Chyba databáze při načítání modelů.")
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
