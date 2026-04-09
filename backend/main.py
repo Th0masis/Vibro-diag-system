@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from auth import verify_password, create_access_token, get_password_hash
 from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
+from typing import Optional
 
 # Script FastAPI
 load_dotenv()
@@ -1252,5 +1253,67 @@ def predict_machine_rul(machine_id: int):
             "unit": "dní",
             "used_model": used_model
         }
+    
+@app.get("/training-segments")
+def get_training_segments(
+    machine_id: Optional[int] = None,
+    sensor_id: Optional[int] = None,
+    datetime_from: Optional[str] = None,
+    datetime_to: Optional[str] = None
+):
+    """
+    Vyhledá dostupná měření podle detailních filtrů (včetně času).
+    """
+    with engine.connect() as conn:
+        query_str = """
+            SELECT 
+                mac.id_machine, mac.name as machine_name,
+                s.id_sensor, s.position as sensor_name,
+                MIN(m.timestamp) as date_from,
+                MAX(m.timestamp) as date_to,
+                COUNT(m.id_measurement) as measurements_count
+            FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            JOIN machines mac ON s.id_machine = mac.id_machine
+            WHERE 1=1
+        """
+        params = {}
+        
+        if machine_id:
+            query_str += " AND mac.id_machine = :machine_id"
+            params["machine_id"] = machine_id
+        if sensor_id:
+            query_str += " AND s.id_sensor = :sensor_id"
+            params["sensor_id"] = sensor_id
+            
+        # React 'datetime-local' posílá formát YYYY-MM-DDTHH:MM (s Tčkem uprostřed)
+        if datetime_from:
+            query_str += " AND m.timestamp >= :dt_from"
+            params["dt_from"] = datetime_from.replace("T", " ") + ":00"
+        if datetime_to:
+            query_str += " AND m.timestamp <= :dt_to"
+            params["dt_to"] = datetime_to.replace("T", " ") + ":59"
+            
+        query_str += " GROUP BY mac.id_machine, mac.name, s.id_sensor, s.position"
+        query_str += " ORDER BY MAX(m.timestamp) DESC"
+        
+        result = conn.execute(text(query_str), params).fetchall()
+        
+        segments = []
+        for row in result:
+            display_sensor = row.sensor_name if row.sensor_name else f"Senzor #{row.id_sensor}"
+            segments.append({
+                "id": f"{row.id_machine}_{row.id_sensor}", 
+                "machine": row.machine_name,
+                "sensor": display_sensor,
+                # Vracíme čas na minuty přesně pro hezčí zobrazení v tabulce
+                "dateFrom": str(row.date_from)[:16], 
+                "dateTo": str(row.date_to)[:16],
+                "measurementsCount": row.measurements_count
+            })
+            
+        return segments
+    
+    
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

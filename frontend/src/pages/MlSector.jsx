@@ -1,18 +1,26 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import ModelTrainingModal from '../components/ModelTrainingModal';
 
 function MlSector() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedModel, setSelectedModel] = useState(null);
+  
+  // Stav pro otevírání nového tréninkového wizardu
+  const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
 
-  useEffect(() => {
+ useEffect(() => {
     const fetchModels = async () => {
       try {
         setLoading(true);
-        // Volání backendu (Axios automaticky použije interceptory, pokud jsou nastaveny)
-        const res = await axios.get('http://127.0.0.1:8000/ml-models');
+        // Získáme token
+        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+
+        // Přidáme token do požadavku
+        const res = await axios.get('http://127.0.0.1:8000/ml-models', { headers });
         
         setModels(res.data);
         if (res.data.length > 0) {
@@ -20,7 +28,7 @@ function MlSector() {
         }
       } catch (err) {
         console.error("Chyba při načítání ML modelů", err);
-        setError("Nepodařilo se načíst modely ze serveru.");
+        setError("Nepodařilo se načíst modely ze serveru. Zkontrolujte přihlášení.");
       } finally {
         setLoading(false);
       }
@@ -28,7 +36,7 @@ function MlSector() {
 
     fetchModels();
   }, []);
-
+  
   if (loading) return <div className="main-content">Načítám Machine Learning sektor...</div>;
   if (error) return <div className="main-content" style={{ color: 'var(--vut-red)' }}>{error}</div>;
 
@@ -58,6 +66,7 @@ function MlSector() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {models.map(model => {
               const isSelected = selectedModel?.id_model === model.id_model;
+              
               return (
                 <button 
                   key={model.id_model}
@@ -80,14 +89,7 @@ function MlSector() {
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
                     <span style={{ fontWeight: 'bold', color: isSelected ? 'var(--br-orange)' : 'var(--text-main)', fontSize: '1rem' }}>
                       {model.name} 
-                      {/* ZDE PŘIDÁNA VERZE DO SEZNAMU */}
-                      <span style={{ 
-                        marginLeft: '8px', 
-                        fontSize: '0.75rem', 
-                        fontWeight: 'normal', 
-                        opacity: 0.6,
-                        color: 'var(--text-muted)'
-                      }}>
+                      <span style={{ marginLeft: '8px', fontSize: '0.75rem', fontWeight: 'normal', opacity: 0.6, color: 'var(--text-muted)' }}>
                         v{model.version}
                       </span>
                     </span>
@@ -135,7 +137,6 @@ function MlSector() {
             <div style={{ padding: '30px' }}>
               
               <div className="detail-grid" style={{ marginBottom: '30px' }}>
-                {/* Karta Přesnost */}
                 <div className="detail-card" style={{ alignItems: 'center', justifyContent: 'center', padding: '30px' }}>
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>
                     Metrika (Accuracy)
@@ -145,10 +146,9 @@ function MlSector() {
                   </div>
                 </div>
 
-                {/* Karta Datum tréninku */}
                 <div className="detail-card" style={{ alignItems: 'center', justifyContent: 'center', padding: '30px' }}>
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>
-                    Datum natrénování
+                    Datum posledního tréninku
                   </label>
                   <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '15px' }}>
                     {new Date(selectedModel.training_date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })}
@@ -157,6 +157,25 @@ function MlSector() {
                     v {new Date(selectedModel.training_date).toLocaleTimeString('cs-CZ')}
                   </div>
                 </div>
+              </div>
+
+              {/* SEKCE: TRÉNINK A FINE-TUNING */}
+              <div style={{ marginBottom: '30px', background: '#f8fafc', border: '1px solid #e2e8f0', borderRadius: '8px', padding: '25px' }}>
+                <h4 className="card-title" style={{ display: 'flex', alignItems: 'center', gap: '10px', color: 'var(--text-main)', borderBottom: 'none', marginBottom: '15px' }}>
+                  🧠 Fine-Tuning a aktualizace modelu
+                </h4>
+                <p style={{ color: 'var(--text-muted)', lineHeight: '1.6', marginBottom: '20px' }}>
+                  Baseline model je možné přetrénovat na reálných datech z provozu (Transfer Learning). 
+                  Tím se model adaptuje na specifický šum a rezonanci vašich lokálních ložisek a strojů, což výrazně zvýší spolehlivost predikcí v produkčním prostředí.
+                </p>
+                
+                <button 
+                  className="btn-diagnose" 
+                  onClick={() => setIsTrainingModalOpen(true)}
+                  style={{ background: 'var(--vut-red)', padding: '12px 24px', fontSize: '1rem' }}
+                >
+                  ⚙️ Spustit přetrénování modelu
+                </button>
               </div>
 
               {/* Sekce Popis */}
@@ -206,6 +225,15 @@ function MlSector() {
           </div>
         )}
       </div>
+
+      {/* MODAL PRO TRÉNINK */}
+      {isTrainingModalOpen && selectedModel && (
+        <ModelTrainingModal 
+          model={selectedModel} 
+          onClose={() => setIsTrainingModalOpen(false)} 
+        />
+      )}
+
     </div>
   );
 }
