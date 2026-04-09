@@ -5,7 +5,7 @@ import time
 from datetime import datetime, timedelta
 
 # --- KONFIGURACE ---
-DATASET_PATH = r"C:\Code\Vibro-diag-system\ml_service\data\XJTU-SY\XJTU-SY_Bearing_Datasets\35Hz12kN\Bearing1_2"
+DATASET_PATH = r"C:\Code\Vibro-diag-system\ml_service\data\XJTU-SY\XJTU-SY_Bearing_Datasets\35Hz12kN\Bearing1_1"
 BASE_URL = "http://127.0.0.1:8000"
 TOKEN_URL = f"{BASE_URL}/login"          # Endpoint pro přihlášení
 API_URL = f"{BASE_URL}/measurements"     # Endpoint pro data
@@ -15,8 +15,8 @@ USERNAME = "admin"
 PASSWORD = ".admin" 
 
 # ID senzorů z tvé databáze
-ID_SENSOR_H = 9 
-ID_SENSOR_V = 10
+ID_SENSOR_H = 6 
+ID_SENSOR_V = 7
 
 def login():
     """Získá přístupový token pro admina."""

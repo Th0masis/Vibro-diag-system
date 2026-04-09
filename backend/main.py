@@ -1041,5 +1041,216 @@ def get_ml_models(role: str = Depends(get_current_user_role)):
             print(f"Chyba při načítání ML modelů: {e}")
             raise HTTPException(status_code=500, detail="Chyba databáze při načítání modelů.")
 
+@app.post("/machines/{machine_id}/analyze-anomaly")
+def analyze_machine_anomaly(machine_id: int):
+    """
+    Spustí detekci anomálií (AE_ANOWGAN) na nejnovějším měření daného stroje.
+    """
+    with engine.connect() as conn:
+        # 1. Najít nejnovější měření pro daný stroj
+        query_meas = text("""
+            SELECT m.id_measurement, m.raw_data_path 
+            FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid
+            ORDER BY m.timestamp DESC
+            LIMIT 1
+        """)
+        meas = conn.execute(query_meas, {"mid": machine_id}).fetchone()
+        
+        if not meas:
+            raise HTTPException(status_code=404, detail="Pro tento stroj nebylo nalezeno žádné měření.")
+            
+        id_measurement, raw_data_path = meas
+        
+        # 2. Najít ID aktivního modelu AE_ANOWGAN
+        query_model = text("""
+            SELECT id_model FROM ml_models 
+            WHERE name = 'AE_ANOWGAN' AND is_active = true 
+            LIMIT 1
+        """)
+        model = conn.execute(query_model).fetchone()
+        
+        if not model:
+            raise HTTPException(status_code=500, detail="Aktivní model AE_ANOWGAN nebyl nalezen v databázi.")
+        id_model = model[0]
+        
+        # 3. Přeposlání požadavku na ML Service
+        try:
+            ml_payload = {"path": raw_data_path}
+            # Předpokládáme, že ML_SERVICE_URL máš definované nahoře v souboru
+            ml_res = requests.post(f"{ML_SERVICE_URL}/analyze-anomaly", json=ml_payload)
+            ml_res.raise_for_status()
+            ml_data = ml_res.json() 
+            # Očekáváme JSON: { "anomaly_score": 0.025, "is_anomaly": true/false }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
+            
+        anomaly_score = ml_data.get("anomaly_score")
+        is_anomaly = ml_data.get("is_anomaly")
+        
+        # Nastavení textového štítku podle výsledku
+        label = "Zjištěna anomálie" if is_anomaly else "Zdrávý chod"
+        
+        # 4. Uložení výsledku do tabulky analysis_results
+        query_insert = text("""
+            INSERT INTO analysis_results 
+            (id_measurement, id_model, prediction_type, prediction_value, prediction_label, confidence, timestamp)
+            VALUES (:mid, :modid, 'Anomaly Score', :val, :label, :conf, NOW())
+        """)
+        try:
+            conn.execute(query_insert, {
+                "mid": id_measurement,
+                "modid": id_model,
+                "val": anomaly_score,
+                "label": label,
+                "conf": 1.0 # GAN klasicky nevrací pravděpodobnost (0-1), u anomálie můžeme dát 1.0 nebo přepočítat
+            })
+            conn.commit()
+        except Exception as e:
+            print(f"Chyba při ukládání výsledku: {e}")
+            raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek analýzy do databáze.")
+            
+        return {
+            "anomaly_score": anomaly_score,
+            "is_anomaly": is_anomaly,
+            "message": "Analýza úspěšně dokončena"
+        }
+
+@app.post("/machines/{machine_id}/classify-fault")
+def classify_machine_fault(machine_id: int):
+    """
+    Spustí klasifikaci poruchy (1D_CNNwWGN) na nejnovějším měření.
+    """
+    with engine.connect() as conn:
+        # 1. Najít nejnovější měření pro daný stroj
+        query_meas = text("""
+            SELECT m.id_measurement, m.raw_data_path 
+            FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid
+            ORDER BY m.timestamp DESC
+            LIMIT 1
+        """)
+        meas = conn.execute(query_meas, {"mid": machine_id}).fetchone()
+        
+        if not meas:
+            raise HTTPException(status_code=404, detail="Žádné měření nenalezeno.")
+            
+        id_measurement, raw_data_path = meas
+        
+        # 2. Najít ID modelu pro klasifikaci
+        query_model = text("""
+            SELECT id_model FROM ml_models 
+            WHERE name = '1D_CNNwWGN' AND is_active = true 
+            LIMIT 1
+        """)
+        model = conn.execute(query_model).fetchone()
+        
+        if not model:
+            raise HTTPException(status_code=500, detail="Aktivní model 1D_CNNwWGN nebyl nalezen.")
+        id_model = model[0]
+        
+        # 3. Komunikace s ML Service
+        try:
+            ml_payload = {"path": raw_data_path}
+            ml_res = requests.post(f"{ML_SERVICE_URL}/classify-fault", json=ml_payload)
+            ml_res.raise_for_status()
+            ml_data = ml_res.json() 
+            # Očekáváme JSON: { "fault_type": "Porucha vnějšího kroužku", "confidence": 0.985 }
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba komunikace s ML Service: {e}")
+            
+        fault_type = ml_data.get("fault_type")
+        confidence = ml_data.get("confidence")
+        
+        # 4. Uložení výsledku
+        query_insert = text("""
+            INSERT INTO analysis_results 
+            (id_measurement, id_model, prediction_type, prediction_label, confidence, timestamp)
+            VALUES (:mid, :modid, 'Fault Classification', :label, :conf, NOW())
+        """)
+        try:
+            conn.execute(query_insert, {
+                "mid": id_measurement,
+                "modid": id_model,
+                "label": fault_type,
+                "conf": confidence
+            })
+            conn.commit()
+        except Exception as e:
+            print(f"Chyba při ukládání výsledku klasifikace: {e}")
+            raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek klasifikace.")
+            
+        return ml_data
+
+@app.post("/machines/{machine_id}/predict-rul")
+def predict_machine_rul(machine_id: int):
+    """
+    Spustí predikci RUL (Bi-LSTM) na sekvenci posledních 10 měření.
+    """
+    with engine.connect() as conn:
+        # 1. Zjištění poslední klasifikované poruchy pro výběr modelu
+        query_label = text("""
+            SELECT ar.prediction_label 
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
+            ORDER BY ar.timestamp DESC LIMIT 1
+        """)
+        last_label_row = conn.execute(query_label, {"mid": machine_id}).fetchone()
+        
+        # Určení kategorie: Outer Race (OR), Inner Race (IR), nebo Ostatní/Zdrávé (O)
+        category = "O"
+        if last_label_row and last_label_row[0]:
+            label = last_label_row[0].lower()
+            if "outer" in label or "vnější" in label:
+                category = "OR"
+            elif "inner" in label or "vnitřní" in label:
+                category = "IR"
+
+        # 2. Vytáhnutí posledních 10 měření (seřazeno od nejstaršího po nejnovější pro LSTM okno)
+        query_meas = text("""
+            SELECT raw_data_path 
+            FROM (
+                SELECT m.raw_data_path, m.timestamp
+                FROM measurements m
+                JOIN sensors s ON m.id_sensor = s.id_sensor
+                WHERE s.id_machine = :mid
+                ORDER BY m.timestamp DESC
+                LIMIT 10
+            ) sub
+            ORDER BY timestamp ASC
+        """)
+        meas_rows = conn.execute(query_meas, {"mid": machine_id}).fetchall()
+        
+        if len(meas_rows) < 10:
+            raise HTTPException(status_code=400, detail=f"Nedostatek dat pro RUL. Potřebujeme 10 měření, máme {len(meas_rows)}.")
+            
+        paths = [row[0] for row in meas_rows]
+        
+        # 3. Komunikace s ML Service
+        try:
+            ml_payload = {"paths": paths, "category": category}
+            ml_res = requests.post(f"{ML_SERVICE_URL}/predict-rul", json=ml_payload)
+            ml_res.raise_for_status()
+            ml_data = ml_res.json() 
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Chyba komunikace s ML Service: {e}")
+            
+        rul_fraction = ml_data.get("rul_fraction")
+        used_model = ml_data.get("used_model")
+        
+        # Převod zlaomku (0-1) na reálné dny. 
+        # (Zde předpokládáme, že celková životnost ložiska je např. 30 dní. Tuto konstantu si uprav podle reálných specifikací).
+        MAX_LIFESPAN_DAYS = 30
+        rul_days = round(rul_fraction * MAX_LIFESPAN_DAYS, 1)
+        
+        return {
+            "rul_value": rul_days,
+            "unit": "dní",
+            "used_model": used_model
+        }
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

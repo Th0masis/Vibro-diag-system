@@ -2,232 +2,214 @@ import { useState } from 'react';
 import axios from 'axios';
 
 function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
-  // --- STAV PRO KLASICKOU DIAGNOSTIKU (CO SE DĚJE) ---
-  const [diagLoading, setDiagLoading] = useState(false);
-  const [diagResult, setDiagResult] = useState(null);
+  // --- 1. STAV: DETEKCE ANOMÁLIÍ (AE_ANOWGAN) ---
+  const [anomalyLoading, setAnomalyLoading] = useState(false);
+  const [anomalyResult, setAnomalyResult] = useState(null);
 
-  // --- STAV PRO RUL PREDIKCI (KDY SE TO POKAZÍ) ---
+  // --- 2. STAV: KLASIFIKACE PORUCH (1D_CNNwWGN) ---
+  const [classLoading, setClassLoading] = useState(false);
+  const [classResult, setClassResult] = useState(null);
+
+  // --- 3. STAV: PREDIKCE RUL (Bi-LSTM) ---
   const [rulLoading, setRulLoading] = useState(false);
   const [rulResult, setRulResult] = useState(null);
 
-  // 1. Funkce pro spuštění diagnostiky poruch (Původní)
-  const runAnalysis = async () => {
-    setDiagLoading(true);
-    setDiagResult(null);
+  // Získání tokenu (podle toho, jak ho máš v aplikaci uložený)
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return token ? { Authorization: `Bearer ${token}` } : {};
+  };
+
+  // --- FUNKCE PRO SPUŠTĚNÍ JEDNOTLIVÝCH MODELŮ ---
+
+  const runAnomalyDetection = async () => {
+    setAnomalyLoading(true);
+    setAnomalyResult(null);
     try {
-      // Předpokládáme auth token v localStorage
-      const token = sessionStorage.getItem('token');
       const res = await axios.post(
-        `http://127.0.0.1:8000/machines/${machineId}/diagnose`,
+        `http://127.0.0.1:8000/machines/${machineId}/analyze-anomaly`,
         {}, 
-        { headers: { Authorization: `Bearer ${token}` } }
+        { headers: getAuthHeader() }
       );
-      setDiagResult(res.data);
+      setAnomalyResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert("Chyba při spouštění diagnostiky.");
+      alert("Chyba při spouštění detekce anomálií: " + (error.response?.data?.detail || error.message));
     } finally {
-      setDiagLoading(false);
+      setAnomalyLoading(false);
     }
   };
 
-  // 2. Funkce pro spuštění RUL predikce (Nová)
+  const runClassification = async () => {
+    setClassLoading(true);
+    setClassResult(null);
+    try {
+      const res = await axios.post(
+        `http://127.0.0.1:8000/machines/${machineId}/classify-fault`,
+        {}, 
+        { headers: getAuthHeader() }
+      );
+      setClassResult(res.data);
+      if (onDiagnosisComplete) onDiagnosisComplete();
+    } catch (error) {
+      alert("Chyba při klasifikaci poruchy: " + (error.response?.data?.detail || error.message));
+    } finally {
+      setClassLoading(false);
+    }
+  };
+
   const runRULAnalysis = async () => {
     setRulLoading(true);
     setRulResult(null);
     try {
-      const token = sessionStorage.getItem('token');
-      const res = await axios.get(
-        `http://127.0.0.1:8000/machines/${machineId}/rul`,
-        { headers: { Authorization: `Bearer ${token}` } }
+      const res = await axios.post(
+        `http://127.0.0.1:8000/machines/${machineId}/predict-rul`,
+        {},
+        { headers: getAuthHeader() }
       );
       setRulResult(res.data);
+      if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      console.error(error);
-      alert("Chyba při načítání RUL predikce.");
+      alert("Chyba při predikci životnosti: " + (error.response?.data?.detail || error.message));
     } finally {
       setRulLoading(false);
     }
   };
 
-  // Pomocná barva pro výsledek diagnostiky
-  const getResultColor = (status) => {
-    if (status === 'OK') return '#166534';
-    if (status === 'WARNING') return '#ca8a04';
-    return '#dc2626';
-  };
-
-  // Pomocná barva pro RUL (podle počtu dní)
-  const getRulColor = (days) => {
-    if (days === null) return '#94a3b8'; // Šedá (neznámo)
-    if (days > 14) return '#166534';     // Zelená
-    if (days > 7) return '#ca8a04';      // Oranžová
-    return '#dc2626';                    // Červená
-  };
-
   return (
-    <div style={{ maxWidth: '800px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '30px' }}>
+    <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '25px' }}>
       
-      {/* ==========================================================================================
-          SEKCE 1: AI DIAGNOSTIKA (CO SE DĚJE?) - FIALOVÁ
-         ========================================================================================== */}
-      <div className="detail-card" style={{ borderTop: '4px solid #8b5cf6', background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, color: '#5b21b6' }}>✨ AI Diagnostika Poruch</h2>
-            <span style={{ background: '#f3e8ff', color: '#6b21a8', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                Classification Ready
-            </span>
+      {/* =====================================================================
+          SEKCE 1: DETEKCE ANOMÁLIÍ (AE_ANOWGAN)
+         ===================================================================== */}
+      <div className="detail-card card-sensors" style={{ borderTop: '4px solid var(--br-orange)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
+              1. Detekce Anomálií
+            </h2>
+            <span className="role-badge active">AE_ANOWGAN (CWT)</span>
         </div>
 
-        {/* Info o modelu */}
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '20px' }}>
-            <div className="detail-item">
-                <label style={{display:'block', fontSize:'0.85rem', color:'#64748b'}}>Nasazený model</label>
-                <strong style={{color:'#1e293b'}}>VibroGuard Random Forest v2.4</strong>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
+          Unsupervised Auto-Encoder GAN model. Převádí signál na časově-frekvenční reprezentaci (TFR) a počítá Anomaly Score na základě chyby rekonstrukce.
+        </p>
+
+        {anomalyResult ? (
+          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '15px' }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Anomaly Score:</span>
+              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: anomalyResult.is_anomaly ? 'var(--vut-red)' : '#16a34a' }}>
+                {anomalyResult.anomaly_score?.toFixed(4)}
+              </span>
             </div>
-            <div className="detail-item">
-                <label style={{display:'block', fontSize:'0.85rem', color:'#64748b'}}>Přesnost</label>
-                <strong style={{color:'#1e293b'}}>96.4% (Validace)</strong>
+            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+              <span className={`role-badge ${anomalyResult.is_anomaly ? 'FAULT' : 'OK'}`}>
+                {anomalyResult.is_anomaly ? 'ZJIŠTĚNA ANOMÁLIE' : 'ZDRÁVÝ CHOD'}
+              </span>
             </div>
-        </div>
-
-        <button 
-            className="btn-diagnose" 
-            onClick={runAnalysis} 
-            disabled={diagLoading}
-            style={{ 
-                width: '100%', padding: '12px', fontSize: '1rem', 
-                background: diagLoading ? '#e2e8f0' : '#7c3aed', 
-                color: diagLoading ? '#94a3b8' : 'white',
-                border: 'none', borderRadius: '6px', cursor: diagLoading ? 'not-allowed' : 'pointer',
-                transition: 'background 0.2s'
-            }}
-        >
-            {diagLoading ? '⚙️ Analyzuji signál...' : '🚀 Spustit diagnostiku poruch'}
-        </button>
-      </div>
-
-      {/* ==========================================================================================
-          SEKCE 2: RUL PREDIKCE (KDY SE TO POKAZÍ?) - MODRÁ
-         ========================================================================================== */}
-      <div className="detail-card" style={{ borderTop: '4px solid #3b82f6', background: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 5px rgba(0,0,0,0.05)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-            <h2 style={{ margin: 0, color: '#1e40af' }}>⏳ Predikce Životnosti (RUL)</h2>
-            <span style={{ background: '#dbeafe', color: '#1e40af', padding: '4px 12px', borderRadius: '20px', fontSize: '0.85rem', fontWeight: 'bold' }}>
-                LSTM / Regression
-            </span>
-        </div>
-
-        <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px dashed #cbd5e1', marginBottom: '20px' }}>
-            <p style={{ margin: 0, color: '#64748b', fontSize: '0.9rem' }}>
-                Tento modul využívá <strong>LSTM neuronovou síť</strong> (trénovanou na NASA IMS datech) a matematickou regresi k odhadu zbývajícího času do kritického selhání.
-            </p>
-        </div>
-
-        {/* Pokud máme výsledek, zobrazíme ho, jinak tlačítko */}
-        {rulResult ? (
-            <div style={{ animation: 'fadeIn 0.5s' }}>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', background: '#eff6ff', padding: '20px', borderRadius: '8px', border: '1px solid #bfdbfe' }}>
-                    
-                    {/* Hlavní číslo */}
-                    <div>
-                        <span style={{ fontSize: '0.9rem', color: '#64748b', textTransform: 'uppercase', letterSpacing: '1px' }}>Zbývá přibližně</span>
-                        <div style={{ fontSize: '3rem', fontWeight: 'bold', color: getRulColor(rulResult.final_prediction_days), lineHeight: '1' }}>
-                            {rulResult.final_prediction_days !== null ? `${rulResult.final_prediction_days} dní` : 'N/A'}
-                        </div>
-                        <div style={{ marginTop: '5px', fontSize: '0.85rem', color: '#1e3a8a' }}>
-                            Doporučený model: <strong>{rulResult.recommended_model === 'lstm_ai' ? 'Deep Learning LSTM' : rulResult.recommended_model}</strong>
-                        </div>
-                    </div>
-
-                    {/* Detaily modelů */}
-                    <div style={{ textAlign: 'right', borderLeft: '1px solid #dbeafe', paddingLeft: '20px' }}>
-                        <div style={{marginBottom: '5px', fontSize: '0.9rem', color: '#475569'}}>
-                            Linear: <strong>{rulResult.models.linear_rul_days ?? '-'}</strong> dní
-                        </div>
-                        <div style={{marginBottom: '5px', fontSize: '0.9rem', color: '#475569'}}>
-                            Exponenciální: <strong>{rulResult.models.exponential_rul_days ?? '-'}</strong> dní
-                        </div>
-                        <div style={{fontSize: '0.9rem', color: '#2563eb', fontWeight: 'bold'}}>
-                            LSTM (AI): {rulResult.models.lstm_ai_rul_days ?? '-'} dní
-                        </div>
-                    </div>
-                </div>
-                
-                <button 
-                    onClick={() => setRulResult(null)}
-                    style={{ marginTop: '15px', background: 'transparent', border: '1px solid #94a3b8', color: '#64748b', padding: '8px 16px', borderRadius: '4px', cursor: 'pointer', fontSize: '0.85rem' }}
-                >
-                    🔄 Resetovat analýzu
-                </button>
-            </div>
-        ) : (
-            <button 
-                className="btn-rul" 
-                onClick={runRULAnalysis} 
-                disabled={rulLoading}
-                style={{ 
-                    width: '100%', padding: '12px', fontSize: '1rem', 
-                    background: rulLoading ? '#e2e8f0' : '#2563eb', 
-                    color: rulLoading ? '#94a3b8' : 'white',
-                    border: 'none', borderRadius: '6px', cursor: rulLoading ? 'not-allowed' : 'pointer',
-                    transition: 'background 0.2s'
-                }}
-            >
-                {rulLoading ? '⏳ Počítám regresi a LSTM...' : '📊 Spustit predikci životnosti'}
+            <button onClick={() => setAnomalyResult(null)} className="btn-cancel" style={{ marginTop: '15px', width: '100%', padding: '8px' }}>
+              Resetovat výsledek
             </button>
+          </div>
+        ) : (
+          <button 
+            className="btn-diagnose" 
+            onClick={runAnomalyDetection} 
+            disabled={anomalyLoading}
+            style={{ width: '100%' }}
+          >
+            {anomalyLoading ? '⏳ Generuji CWT a počítám skóre...' : '🔍 Spustit detekci anomálií'}
+          </button>
         )}
       </div>
 
-
-      {/* ==========================================================================================
-          MODÁL PRO DIAGNOSTIKU (PŮVODNÍ)
-         ========================================================================================== */}
-      {diagResult && (
-        <div className="modal-overlay" style={{
-            position:'fixed', top:0, left:0, width:'100%', height:'100%', 
-            background:'rgba(0,0,0,0.5)', display:'flex', justifyContent:'center', alignItems:'center', zIndex: 1000
-        }}>
-          <div className="modal-content" style={{ 
-              background:'white', padding:'30px', borderRadius:'12px', width:'90%', maxWidth:'500px', 
-              textAlign: 'center', borderTop: `6px solid ${getResultColor(diagResult.status)}` 
-          }}>
-            
-            <h2 style={{ color: getResultColor(diagResult.status), fontSize: '2rem', margin: '10px 0' }}>
-                {diagResult.status}
+      {/* =====================================================================
+          SEKCE 2: KLASIFIKACE PORUCH (1D_CNNwWGN)
+         ===================================================================== */}
+      <div className="detail-card card-tech" style={{ borderTop: '4px solid var(--vut-red)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
+              2. Klasifikace Poruchy
             </h2>
-            
-            <p style={{ fontSize: '1.2rem', fontWeight: 'bold', color: '#334155' }}>
-                {diagResult.prediction}
-            </p>
+            <span className="role-badge active">1D_CNNwWGN (FFT)</span>
+        </div>
 
-            <div style={{ margin: '20px 0', padding: '15px', background: '#f8fafc', borderRadius: '8px', textAlign: 'left' }}>
-                <div style={{ marginBottom: '10px', display: 'flex', justifyContent: 'space-between' }}>
-                    <span style={{ color: '#64748b' }}>Jistota modelu:</span>
-                    <strong style={{ color: '#334155' }}>{(diagResult.confidence * 100).toFixed(1)} %</strong>
-                </div>
-                <div style={{ height: '8px', background: '#e2e8f0', borderRadius: '4px', overflow: 'hidden' }}>
-                    <div style={{ width: `${diagResult.confidence * 100}%`, height: '100%', background: getResultColor(diagResult.status) }}></div>
-                </div>
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
+          Konvoluční neuronová síť 1D trénovaná pomocí WGAN. Určuje přesný typ mechanické závady ložiska z frekvenčního spektra (FFT).
+        </p>
+
+        {classResult ? (
+          <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '15px' }}>
+            <div style={{ textAlign: 'center', marginBottom: '15px' }}>
+              <span style={{ color: 'var(--vut-red)', fontWeight: 600, display: 'block', marginBottom: '5px' }}>Detekovaný typ poruchy:</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 'bold', color: 'var(--vut-red-dark)' }}>
+                {classResult.fault_type}
+              </span>
             </div>
-
-            <div style={{ textAlign: 'left', marginBottom: '20px' }}>
-                <h4 style={{ margin: '0 0 5px 0', color: '#475569' }}>Detaily analýzy:</h4>
-                <p style={{ margin: 0, color: '#64748b', lineHeight: '1.4' }}>{diagResult.description}</p>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '10px', borderRadius: '6px' }}>
+              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Jistota modelu (Confidence):</span>
+              <strong style={{ color: 'var(--text-main)' }}>{(classResult.confidence * 100).toFixed(1)} %</strong>
             </div>
-
-            <button 
-                onClick={() => setDiagResult(null)} 
-                style={{ 
-                    marginTop: '15px', width: '100%', padding: '12px', 
-                    background: '#e2e8f0', border:'none', borderRadius:'6px', cursor:'pointer', fontWeight:'bold', color:'#475569'
-                }}
-            >
-                Zavřít
+            <button onClick={() => setClassResult(null)} className="btn-cancel" style={{ marginTop: '15px', width: '100%', padding: '8px' }}>
+              Resetovat výsledek
             </button>
           </div>
+        ) : (
+          <button 
+            className="btn-diagnose" 
+            onClick={runClassification} 
+            disabled={classLoading}
+            style={{ width: '100%', background: 'var(--vut-red)' }}
+          >
+            {classLoading ? '⏳ Klasifikuji poruchu...' : '🏷️ Spustit klasifikaci poruchy'}
+          </button>
+        )}
+      </div>
+
+      {/* =====================================================================
+          SEKCE 3: PREDIKCE RUL (Bi-LSTM)
+         ===================================================================== */}
+      <div className="detail-card card-note" style={{ borderTop: '4px solid var(--blue-primary)' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
+              3. Predikce Životnosti (RUL)
+            </h2>
+            <span className="role-badge user">Bi-LSTM Ensemble</span>
         </div>
-      )}
+
+        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
+          Rekurentní neuronové sítě vyhodnocující časové řady. Automaticky se zvolí specifický model (Vnitřní/Vnější kroužek) dle výsledku klasifikace.
+        </p>
+
+        {rulResult ? (
+          <div style={{ background: '#e0f2fe', padding: '20px', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '15px' }}>
+             <div style={{ textAlign: 'center' }}>
+                <span style={{ fontSize: '0.95rem', color: 'var(--blue-dark)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                  Zbývající užitečná životnost (RUL)
+                </span>
+                <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: 'var(--blue-primary)', margin: '10px 0' }}>
+                    {rulResult.rul_value} {rulResult.unit}
+                </div>
+                <div style={{ fontSize: '0.85rem', color: 'var(--blue-dark)', opacity: 0.8 }}>
+                    Použitý model: <strong>{rulResult.used_model}</strong>
+                </div>
+            </div>
+            <button onClick={() => setRulResult(null)} className="btn-cancel" style={{ marginTop: '20px', width: '100%', padding: '8px', background: 'white', color: 'var(--blue-dark)' }}>
+              Resetovat výsledek
+            </button>
+          </div>
+        ) : (
+          <button 
+            className="btn-diagnose" 
+            onClick={runRULAnalysis} 
+            disabled={rulLoading}
+            style={{ width: '100%', background: 'var(--blue-primary)' }}
+          >
+            {rulLoading ? '⏳ Analyzuji časové řady...' : '⏱️ Odhadnout zbývající životnost'}
+          </button>
+        )}
+      </div>
 
     </div>
   );
