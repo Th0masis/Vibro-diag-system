@@ -1188,7 +1188,7 @@ def classify_machine_fault(machine_id: int):
 @app.post("/machines/{machine_id}/predict-rul")
 def predict_machine_rul(machine_id: int):
     """
-    Spustí predikci RUL (Bi-LSTM) na sekvenci posledních 10 měření.
+    Spustí predikci RUL (Bi-LSTM) na sekvenci posledních 10 měření a uloží výsledek do databáze.
     """
     with engine.connect() as conn:
         # 1. Zjištění poslední klasifikované poruchy pro výběr modelu
@@ -1211,11 +1211,11 @@ def predict_machine_rul(machine_id: int):
             elif "inner" in label or "vnitřní" in label:
                 category = "IR"
 
-        # 2. Vytáhnutí posledních 10 měření (seřazeno od nejstaršího po nejnovější pro LSTM okno)
+        # 2. Vytáhnutí posledních 10 měření VČETNĚ id_measurement
         query_meas = text("""
-            SELECT raw_data_path 
+            SELECT id_measurement, raw_data_path 
             FROM (
-                SELECT m.raw_data_path, m.timestamp
+                SELECT m.id_measurement, m.raw_data_path, m.timestamp
                 FROM measurements m
                 JOIN sensors s ON m.id_sensor = s.id_sensor
                 WHERE s.id_machine = :mid
@@ -1229,7 +1229,9 @@ def predict_machine_rul(machine_id: int):
         if len(meas_rows) < 10:
             raise HTTPException(status_code=400, detail=f"Nedostatek dat pro RUL. Potřebujeme 10 měření, máme {len(meas_rows)}.")
             
-        paths = [row[0] for row in meas_rows]
+        # Z indexu 1 bereme cesty, z indexu 0 bereme ID
+        paths = [row[1] for row in meas_rows]
+        latest_measurement_id = meas_rows[-1][0] # ID toho absolutně nejnovějšího měření v okně
         
         # 3. Komunikace s ML Service
         try:
@@ -1243,17 +1245,37 @@ def predict_machine_rul(machine_id: int):
         rul_fraction = ml_data.get("rul_fraction")
         used_model = ml_data.get("used_model")
         
-        # Převod zlaomku (0-1) na reálné dny. 
-        # (Zde předpokládáme, že celková životnost ložiska je např. 30 dní. Tuto konstantu si uprav podle reálných specifikací).
+        # Převod zlomku (0-1) na reálné dny
         MAX_LIFESPAN_DAYS = 30
         rul_days = round(rul_fraction * MAX_LIFESPAN_DAYS, 1)
+        
+        # 4. ULOŽENÍ VÝSLEDKU DO DATABÁZE
+        # Pokusíme se najít ID RUL modelu v databázi
+        model_query = text("SELECT id_model FROM ml_models WHERE name LIKE '%Bi-LSTM%' OR type LIKE '%RUL%' LIMIT 1")
+        model_row = conn.execute(model_query).fetchone()
+        model_id = model_row[0] if model_row else None
+
+        insert_query = text("""
+            INSERT INTO analysis_results 
+            (id_model, id_measurement, prediction_type, prediction_value, prediction_label, timestamp)
+            VALUES (:model_id, :meas_id, 'RUL Prediction', :val, :label, NOW())
+        """)
+        
+        conn.execute(insert_query, {
+            "model_id": model_id,
+            "meas_id": latest_measurement_id,
+            "val": rul_days,
+            "label": f"{rul_days} dní"
+        })
+        
+        conn.commit() # DŮLEŽITÉ: Uložení do DB
         
         return {
             "rul_value": rul_days,
             "unit": "dní",
             "used_model": used_model
         }
-    
+        
 @app.get("/training-segments")
 def get_training_segments(
     machine_id: Optional[int] = None,
@@ -1314,6 +1336,66 @@ def get_training_segments(
             
         return segments
     
-    
+@app.get("/machines/{machine_id}/latest-ai")
+def get_latest_ai_results(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    Vrátí nejnovější výsledky AI diagnostiky (Anomálie, Klasifikace, RUL) pro konkrétní stroj.
+    """
+    with engine.connect() as conn:
+        # Nejnovější detekce anomálií (AE_ANOWGAN)
+        query_anomaly = text("""
+            SELECT ar.prediction_value, ar.prediction_label, ar.timestamp 
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid AND ar.prediction_type = 'Anomaly Detection'
+            ORDER BY ar.timestamp DESC LIMIT 1
+        """)
+        anomaly = conn.execute(query_anomaly, {"mid": machine_id}).fetchone()
+
+        # Nejnovější klasifikace poruchy (1D_CNN)
+        query_fault = text("""
+            SELECT ar.prediction_label, ar.confidence, ar.timestamp 
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
+            ORDER BY ar.timestamp DESC LIMIT 1
+        """)
+        fault = conn.execute(query_fault, {"mid": machine_id}).fetchone()
+
+        # Nejnovější RUL (Bi-LSTM)
+        query_rul = text("""
+            SELECT ar.prediction_value, ar.timestamp 
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid AND ar.prediction_type = 'RUL Prediction'
+            ORDER BY ar.timestamp DESC LIMIT 1
+        """)
+        rul = conn.execute(query_rul, {"mid": machine_id}).fetchone()
+
+        # Formátování času pro frontend
+        def format_ts(ts):
+            return ts.strftime('%d.%m.%Y %H:%M') if ts else None
+
+        return {
+            "anomaly": {
+                "value": anomaly[0] if anomaly else None,
+                "label": anomaly[1] if anomaly else None,
+                "timestamp": format_ts(anomaly[2]) if anomaly else None
+            },
+            "fault": {
+                "label": fault[0] if fault else None,
+                "confidence": fault[1] if fault else None,
+                "timestamp": format_ts(fault[2]) if fault else None
+            },
+            "rul": {
+                "value": rul[0] if rul else None,
+                "timestamp": format_ts(rul[1]) if rul else None
+            }
+        }
+
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

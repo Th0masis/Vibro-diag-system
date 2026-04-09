@@ -2,15 +2,14 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
-// Import Modalu JSME ODSTRANILI
+// Importujeme nový pásek pro AI diagnostiku
+import AiStatusBanner from './AiStatusBanner'; // Ujisti se, že cesta odpovídá umístění souboru
 
 // Přijímáme novou prop 'onOpenDetail'
 function MachineCard({ machine, onOpenDetail }) {
   const navigate = useNavigate();
   const [graphData, setGraphData] = useState([]);
   const [sensors, setSensors] = useState([]); 
-  
-  // Stav selectedMeasurementId JSME ODSTRANILI (řeší rodič)
 
   const statusColor = machine.status === 'OK' ? '#22c55e' : machine.status === 'WARNING' ? '#ff8200' : '#E4002B';
   const statusBg = machine.status === 'OK' ? '#dcfce7' : machine.status === 'WARNING' ? '#ffedd5' : '#fee2e2';
@@ -68,10 +67,8 @@ function MachineCard({ machine, onOpenDetail }) {
       height: '100%' 
     }}>
       
-      {/* ... HLAVIČKA A OBSAH ZŮSTÁVAJÍ STEJNÉ ... */}
-      
       {/* 1. HLAVIČKA */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '15px' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
         <div>
           <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#1e293b' }}>{machine.name}</h3>
           <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{machine.type}</span>
@@ -85,6 +82,10 @@ function MachineCard({ machine, onOpenDetail }) {
         </span>
       </div>
 
+      {/* 2. AI DIAGNOSTIKA - PÁSEK */}
+      <AiStatusBanner machineId={machine.id_machine} />
+
+      {/* 3. HLAVNÍ TĚLO KARTY */}
       <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '15px', flex: 1 }}>
         <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
           
@@ -148,7 +149,6 @@ function MachineCard({ machine, onOpenDetail }) {
         </div>
       </div>
 
-      {/* MODAL UŽ TADY NENÍ */}
     </div>
   );
 }
