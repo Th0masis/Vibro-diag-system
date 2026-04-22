@@ -1,8 +1,10 @@
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from scipy.stats import kurtosis, skew
 from scipy.fft import rfft, rfftfreq
 from sklearn.preprocessing import MinMaxScaler
+from pydantic import BaseModel
+from typing import List
 import numpy as np
 import pandas as pd
 import io, base64, pywt
@@ -14,6 +16,12 @@ import torch.nn.functional as F
 from models import Encoder, Generator as Decoder, Discriminator
 from models import BearingFault1DCNN
 from models import BiLSTM_RUL
+# IMPORT UTILS
+from utils import extract_14_features
+# IMPORT TRENINKOVYCH SKRIPTU
+from train_aeanowgan import run_training_pipeline
+from train_1dcnn import run_1dcnn_training_pipeline
+from train_rul import run_rul_training_pipeline
 
 app = FastAPI(title="Machine Learning Service")
 
@@ -48,9 +56,9 @@ FAULT_CLASSES = {
     4: "Porucha valivého elementu (Ball Fault) - Ball_007",
     5: "Porucha valivého elementu (Ball Fault) - Ball_014",
     6: "Porucha valivého elementu (Ball Fault) - Ball_021",
-    6: "Porucha vnějšího kroužku (Outer Race) - OR_007",
-    7: "Porucha vnějšího kroužku (Outer Race) - OR_014",
-    8: "Porucha vnějšího kroužku (Outer Race) - OR_021" 
+    7: "Porucha vnějšího kroužku (Outer Race) - OR_007",
+    8: "Porucha vnějšího kroužku (Outer Race) - OR_014",
+    9: "Porucha vnějšího kroužku (Outer Race) - OR_021" 
 }
 
 encoders = []
@@ -121,31 +129,31 @@ def process_signal_to_tensor(signal_frame):
         
     return net_tfr
 
-def extract_14_features(path):
-    """Zkopírováno z tvého process_data.py - extrahuje 14 parametrů z H a V signálu."""
-    try:
-        # Tvá data mají H signál v 0. sloupci a V signál v 1. sloupci
-        df = pd.read_csv(path, header=None)
-        h_sig = pd.to_numeric(df.iloc[:, 0], errors='coerce').dropna().values
-        v_sig = pd.to_numeric(df.iloc[:, 1], errors='coerce').dropna().values
-        
-        def calc_7_features(signal):
-            if len(signal) == 0: return [0]*7
-            rms = np.sqrt(np.mean(signal**2))
-            var = np.var(signal)
-            skewness = skew(signal)
-            kurt = kurtosis(signal)
-            peak = np.max(np.abs(signal))
-            p2p = np.max(signal) - np.min(signal)
-            crest = peak / rms if rms > 0 else 0
-            return [rms, var, skewness, kurt, peak, p2p, crest]
-            
-        h_feats = calc_7_features(h_sig)
-        v_feats = calc_7_features(v_sig)
-        return h_feats + v_feats # Spojení do 1D pole o délce 14
-    except Exception as e:
-        print(f"Chyba při extrakci příznaků z {path}: {e}")
-        return [0.0] * 14
+# ==========================================
+# Base Model pro trenink
+# ==========================================
+class FineTunePayload(BaseModel):
+    file_paths: List[str]     # Seznam cest k souborům na APC
+    webhook_url: str          # URL na backendu (např. "http://backend:8000/api/webhook/train-done")
+    epochs: int = 10          # Volitelné, pro ladění z frontendu
+    batch_size: int = 16
+
+class LabeledMeasurement(BaseModel):
+    path: str
+    label: int  # 0 až 9 (indexy podle tvého FAULT_CLASSES)
+
+class FineTune1DCNNPayload(BaseModel):
+    measurements: List[LabeledMeasurement]
+    webhook_url: str
+    epochs: int = 10
+    batch_size: int = 64
+
+class FineTuneRULPayload(BaseModel):
+    category: str             # "OR", "IR", nebo "O"
+    file_paths: List[str]     # MUSÍ BÝT CHRONOLOGICKY SEŘAZENÉ!
+    webhook_url: str
+    epochs: int = 50          # Pro LSTM stačí méně epoch
+    batch_size: int = 32
 
 @app.get("/")
 def home():
@@ -410,3 +418,66 @@ def get_cwt(payload: dict):
     except Exception as e:
         print(f"Chyba při výpočtu CWT: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+# ==========================================
+# FINE-TUNNING ENDPOINTY
+# ==========================================
+@app.post("/trigger-finetuning")
+def trigger_finetuning(payload: FineTunePayload, background_tasks: BackgroundTasks):
+    """
+    Endpoint volaný backendem. Okamžitě vrací 200 OK a trénink spouští na pozadí.
+    """
+    if not payload.file_paths:
+        raise HTTPException(status_code=400, detail="Nebyla dodána žádná data pro trénink.")
+    
+    # 2. Zařazení úlohy do fronty na pozadí
+    background_tasks.add_task(
+        run_training_pipeline, 
+        file_paths=payload.file_paths, 
+        webhook_url=payload.webhook_url,
+        epochs=payload.epochs,
+        batch_size=payload.batch_size
+    )
+    
+    # 3. Okamžitá odpověď pro backend (timeout nehrozí)
+    return {
+        "status": "accepted",
+        "message": "Trénink byl úspěšně spuštěn na pozadí.",
+        "files_to_process": len(payload.file_paths)
+    }
+
+@app.post("/trigger-finetuning-1dcnn")
+def trigger_finetuning_1dcnn(payload: FineTune1DCNNPayload, background_tasks: BackgroundTasks):
+    """
+    Endpoint pro spuštění přetrénování klasifikátoru.
+    """
+    if not payload.measurements:
+        raise HTTPException(status_code=400, detail="Nebyla dodána žádná data pro trénink.")
+    
+    # Převod na list slovníků pro background task
+    data_to_train = [{"path": m.path, "label": m.label} for m in payload.measurements]
+    
+    background_tasks.add_task(
+        run_1dcnn_training_pipeline, 
+        measurements=data_to_train, 
+        webhook_url=payload.webhook_url,
+        epochs=payload.epochs,
+        batch_size=payload.batch_size
+    )
+    
+    return {"status": "accepted", "message": "Fine-tuning 1DCNN spuštěn na pozadí."}
+
+@app.post("/trigger-finetuning-rul")
+def trigger_finetuning_rul(payload: FineTuneRULPayload, background_tasks: BackgroundTasks):
+    if len(payload.file_paths) <= 10:
+        raise HTTPException(status_code=400, detail="Pro okno velikosti 10 je potřeba více než 10 souborů.")
+        
+    background_tasks.add_task(
+        run_rul_training_pipeline, 
+        category=payload.category,
+        file_paths=payload.file_paths,
+        webhook_url=payload.webhook_url,
+        epochs=payload.epochs,
+        batch_size=payload.batch_size
+    )
+    return {"status": "accepted", "message": f"Bi-LSTM fine-tuning spuštěn pro kategorii {payload.category}."}
