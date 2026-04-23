@@ -1,5 +1,6 @@
 from fastapi import FastAPI, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
+from contextlib import asynccontextmanager  # <-- PŘIDÁNO PRO LIFESPAN
 from scipy.stats import kurtosis, skew
 from scipy.fft import rfft, rfftfreq
 from sklearn.preprocessing import MinMaxScaler
@@ -12,18 +13,87 @@ import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-# Importujeme tvé modely (Generator přejmenujeme na lokální Decoder pro přehlednost)
+import requests 
+
 from models import Encoder, Generator as Decoder, Discriminator
 from models import BearingFault1DCNN
 from models import BiLSTM_RUL
-# IMPORT UTILS
 from utils import extract_14_features
-# IMPORT TRENINKOVYCH SKRIPTU
 from train_aeanowgan import run_training_pipeline
 from train_1dcnn import run_1dcnn_training_pipeline
 from train_rul import run_rul_training_pipeline
 
-app = FastAPI(title="Machine Learning Service")
+# CWT konfigurace
+IMG_SIZE = 256
+WAVELET = 'cmor1.5-1.0'
+FRAME_SIZE = 1024
+
+DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+BACKEND_URL = "http://127.0.0.1:8000" 
+
+encoders = []
+decoders = []
+discriminators = []
+cnn_model = None
+bilstm_models = {}
+
+# --- NOVÝ ZPŮSOB STARTU APLIKACE (LIFESPAN) ---
+def load_models_from_backend():
+    global encoders, decoders, discriminators, cnn_model, bilstm_models
+    print("Dotazuji se backendu na nejnovější 'ready' modely...")
+    
+    try:
+        response = requests.post(f"{BACKEND_URL}/models/sync-active")
+        response.raise_for_status()
+        active_paths = response.json()
+
+        # 1. Načtení AE_ANOWGAN (očekává složku)
+        anowgan_dir = active_paths.get("AE_ANOWGAN")
+        if anowgan_dir:
+            for i in range(3):
+                enc = Encoder().to(DEVICE)
+                dec = Decoder().to(DEVICE)
+                disc = Discriminator().to(DEVICE)
+                enc.load_state_dict(torch.load(f"{anowgan_dir}/encoder_final_{i}.pth", map_location=DEVICE))
+                dec.load_state_dict(torch.load(f"{anowgan_dir}/decoder_final_{i}.pth", map_location=DEVICE))
+                disc.load_state_dict(torch.load(f"{anowgan_dir}/discriminator_final_{i}.pth", map_location=DEVICE))
+                enc.eval(); dec.eval(); disc.eval()
+                encoders.append(enc); decoders.append(dec); discriminators.append(disc)
+            print(f"AE-AnoWGAN načten z: {anowgan_dir}")
+
+        # 2. Načtení 1D CNN (očekává soubor)
+        cnn_path = active_paths.get("1D_CNN")
+        if cnn_path:
+            cnn_model = BearingFault1DCNN().to(DEVICE)
+            cnn_model.load_state_dict(torch.load(cnn_path, map_location=DEVICE))
+            cnn_model.eval()
+            print(f"1D_CNN načten z: {cnn_path}")
+
+        # 3. Načtení Bi-LSTM (očekává složku)
+        lstm_dir = active_paths.get("Bi-LSTM")
+        if lstm_dir:
+            for cat in ['OR', 'IR', 'O']:
+                try:
+                    model_rul = BiLSTM_RUL(input_size=14).to(DEVICE)
+                    model_rul.load_state_dict(torch.load(f"{lstm_dir}/bilstm_model_single_{cat}.pth", map_location=DEVICE))
+                    model_rul.eval()
+                    bilstm_models[cat] = model_rul
+                except Exception as e:
+                    print(f"Upozornění: RUL model {cat} nenačten ({e})")
+            print(f"Bi-LSTM RUL modely načteny z: {lstm_dir}")
+
+    except Exception as e:
+        print(f"KRITICKÁ CHYBA PŘI NAČÍTÁNÍ MODELŮ Z BACKENDU: {e}")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    print(f"ML Service startuje na zařízení: {DEVICE}")
+    load_models_from_backend()
+    yield # Zde aplikace běží
+    print("Vypínám ML Servisu...")
+
+# Inicializace FastAPI aplikace s novým lifespan
+app = FastAPI(title="Machine Learning Service", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,21 +103,7 @@ app.add_middleware(
     allow_headers=["*"],    
 )
 
-# CWT konfigurace
-IMG_SIZE = 256
-WAVELET = 'cmor1.5-1.0'
-FRAME_SIZE = 1024
-
-# ==========================================
-# NAČTENÍ AI MODELŮ DO PAMĚTI (PŘI STARTU)
-# ==========================================
-DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-print(f"ML Service běží na zařízení: {DEVICE}")
-
-ANOMALY_MODEL_DIR = "./models/AE_ANOWGAN"
-CLASSIFY_MODEL_DIR = "./models/1DCNN"
-RUL_MODEL_DIR = "./models/Bi-LSTM"
-
+# ... (Níže už pokračují tvé pomocné funkce def process_signal_to_tensor() a všechny endpointy, beze změny) ...
 FAULT_CLASSES = {
     0: "Zdravé ložisko (Normal)",
     1: "Porucha vnitřního kroužku (Inner Race) - IR_007",
@@ -60,48 +116,6 @@ FAULT_CLASSES = {
     8: "Porucha vnějšího kroužku (Outer Race) - OR_014",
     9: "Porucha vnějšího kroužku (Outer Race) - OR_021" 
 }
-
-encoders = []
-decoders = []
-discriminators = []
-
-try:
-    for i in range(3):
-        enc = Encoder().to(DEVICE)
-        dec = Decoder().to(DEVICE)
-        disc = Discriminator().to(DEVICE)
-        
-        enc.load_state_dict(torch.load(f"{ANOMALY_MODEL_DIR}/encoder_final_{i}.pth", map_location=DEVICE))
-        dec.load_state_dict(torch.load(f"{ANOMALY_MODEL_DIR}/decoder_final_{i}.pth", map_location=DEVICE))
-        disc.load_state_dict(torch.load(f"{ANOMALY_MODEL_DIR}/discriminator_final_{i}.pth", map_location=DEVICE))
-        
-        # Přepnutí do inferenčního módu (vypne trénovací vlastnosti jako Dropout)
-        enc.eval()
-        dec.eval()
-        disc.eval()
-        
-        encoders.append(enc)
-        decoders.append(dec)
-        discriminators.append(disc)
-    print("Všechny 3 páry AE-AnoWGAN modelů úspěšně načteny!")
-    cnn_model = BearingFault1DCNN().to(DEVICE)
-    cnn_model.load_state_dict(torch.load(f"{CLASSIFY_MODEL_DIR}/bearing_fault_model.pth", map_location=DEVICE))
-    cnn_model.eval()
-    print("1D_CNNwWGN model úspěšně načten!")
-    bilstm_models = {}
-    for cat in ['OR', 'IR', 'O']:
-        try:
-            model_rul = BiLSTM_RUL(input_size=14).to(DEVICE)
-            model_rul.load_state_dict(torch.load(f"{RUL_MODEL_DIR}/bilstm_model_single_{cat}.pth", map_location=DEVICE))
-            model_rul.eval()
-            bilstm_models[cat] = model_rul
-            print(f"Bi-LSTM RUL model pro kategorii {cat} úspěšně načten!")
-        except Exception as e:
-            print(f"VAROVÁNÍ: Nepodařilo se načíst RUL model {cat}. Chyba: {e}")
-except Exception as e:
-    print(f"VAROVÁNÍ: Nepodařilo se načíst váhy modelů. Zkontroluj cestu. Chyba: {e}")
-
-
 # ==========================================
 # POMOCNÁ FUNKCE PRO CWT DO TENZORU
 # ==========================================
@@ -135,6 +149,7 @@ def process_signal_to_tensor(signal_frame):
 class FineTunePayload(BaseModel):
     file_paths: List[str]     # Seznam cest k souborům na APC
     webhook_url: str          # URL na backendu (např. "http://backend:8000/api/webhook/train-done")
+    save_path: str
     epochs: int = 10          # Volitelné, pro ladění z frontendu
     batch_size: int = 16
 
@@ -145,6 +160,7 @@ class LabeledMeasurement(BaseModel):
 class FineTune1DCNNPayload(BaseModel):
     measurements: List[LabeledMeasurement]
     webhook_url: str
+    save_path: str
     epochs: int = 10
     batch_size: int = 64
 
@@ -152,6 +168,7 @@ class FineTuneRULPayload(BaseModel):
     category: str             # "OR", "IR", nebo "O"
     file_paths: List[str]     # MUSÍ BÝT CHRONOLOGICKY SEŘAZENÉ!
     webhook_url: str
+    save_path: str
     epochs: int = 50          # Pro LSTM stačí méně epoch
     batch_size: int = 32
 
@@ -481,3 +498,23 @@ def trigger_finetuning_rul(payload: FineTuneRULPayload, background_tasks: Backgr
         batch_size=payload.batch_size
     )
     return {"status": "accepted", "message": f"Bi-LSTM fine-tuning spuštěn pro kategorii {payload.category}."}
+
+@app.post("/reload")
+def reload_active_models():
+    """
+    Endpoint volaný backendem po změně produkční verze.
+    Způsobí okamžité přenačtení modelů z disku do paměti.
+    """
+    try:
+        print("\n[RELOAD] Přijat požadavek na aktualizaci produkčních modelů...")
+        # Vymažeme staré seznamy, aby se modely neduplikovaly v paměti
+        global encoders, decoders, discriminators, cnn_model, bilstm_models
+        encoders, decoders, discriminators = [], [], []
+        
+        # Spustíme naši existující načítací funkci
+        load_models_from_backend()
+        
+        return {"status": "success", "message": "Modely byly úspěšně přenačteny."}
+    except Exception as e:
+        print(f"[RELOAD] Chyba při přenačítání: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

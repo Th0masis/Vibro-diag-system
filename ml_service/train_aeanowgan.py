@@ -63,7 +63,7 @@ def load_raw_data_from_paths(file_paths):
         
     return np.concatenate(all_signals)
 
-def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16):
+def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16, save_path=None):
     """Hlavní asynchronní trénovací smyčka."""
     print(f"\n[BACKGROUND TASK] Startuji proces fine-tuningu na {len(file_paths)} souborech.")
     print(f"[BACKGROUND TASK] Zařízení: {DEVICE} | Epochy: {epochs} | Batch: {batch_size}")
@@ -154,15 +154,15 @@ def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16):
                 
             print(f"[BACKGROUND TASK] Epoch [{epoch+1}/{epochs}] dokončena. | L_r: {l_r.item():.4f} | L_tot: {total_loss.item():.4f}")
 
-        # 5. ULOŽENÍ VAH
-        os.makedirs(V2_MODEL_DIR, exist_ok=True)
+        # 5. ULOŽENÍ VAH (Změněno na dynamickou cestu)
+        target_dir = os.path.dirname(save_path) if save_path and save_path.endswith('.pth') else save_path
+        os.makedirs(target_dir, exist_ok=True)
         for idx in range(I):
-            torch.save(encoders[idx].state_dict(), f"{V2_MODEL_DIR}/encoder_final_{idx}.pth")
-            torch.save(decoders[idx].state_dict(), f"{V2_MODEL_DIR}/decoder_final_{idx}.pth")
-            torch.save(discriminators[idx].state_dict(), f"{V2_MODEL_DIR}/discriminator_final_{idx}.pth")
+            torch.save(encoders[idx].state_dict(), f"{target_dir}/encoder_final_{idx}.pth")
+            torch.save(decoders[idx].state_dict(), f"{target_dir}/decoder_final_{idx}.pth")
+            torch.save(discriminators[idx].state_dict(), f"{target_dir}/discriminator_final_{idx}.pth")
             
-        print(f"[BACKGROUND TASK] Modely v2 úspěšně uloženy do {V2_MODEL_DIR}.")
-
+        print(f"[BACKGROUND TASK] Modely AE_ANOWGAN úspěšně uloženy do {target_dir}.")
         # 6. ODESLÁNÍ ÚSPĚŠNÉHO WEBHOOKU
         try:
             if webhook_url.startswith("http"):

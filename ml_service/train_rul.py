@@ -23,7 +23,7 @@ def create_sequences(data, labels, window_size):
         y.append(labels[i + window_size - 1])
     return np.array(X), np.array(y)
 
-def run_rul_training_pipeline(category, file_paths, webhook_url, epochs=50, batch_size=32):
+def run_rul_training_pipeline(category, file_paths, webhook_url, epochs=50, batch_size=32, save_path=None):
     print(f"\n[BACKGROUND TASK] Startuji Bi-LSTM fine-tuning pro kategorii '{category}' ({len(file_paths)} souborů).")
     
     try:
@@ -86,11 +86,11 @@ def run_rul_training_pipeline(category, file_paths, webhook_url, epochs=50, batc
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 print(f"[BACKGROUND TASK] Bi-LSTM Epoch [{epoch+1}/{epochs}] | MSE Loss: {train_loss:.4f}")
 
-        # 8. Uložení
-        os.makedirs(V2_MODEL_DIR, exist_ok=True)
-        torch.save(model.state_dict(), f"{V2_MODEL_DIR}/bilstm_model_single_{category}.pth")
-        print(f"[BACKGROUND TASK] Model Bi-LSTM v2 uložen.")
-
+        # 8. Uložení (Změněno na dynamickou cestu)
+        target_dir = os.path.dirname(save_path) if save_path and save_path.endswith('.pth') else save_path
+        os.makedirs(target_dir, exist_ok=True)
+        torch.save(model.state_dict(), f"{target_dir}/bilstm_model_single_{category}.pth")
+        print(f"[BACKGROUND TASK] Model Bi-LSTM uložen do {target_dir}.")
         # 9. Webhook
         if webhook_url.startswith("http"):
             requests.post(webhook_url, json={"status": "success", "message": f"Bi-LSTM ({category}) připraven."}, timeout=10)

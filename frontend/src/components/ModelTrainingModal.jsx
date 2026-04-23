@@ -101,36 +101,38 @@ function ModelTrainingModal({ model, onClose }) {
     }
 
     setStep(2);
-    
-    if (model.name.includes('GAN')) {
-      setTrainingPhase('Příprava databáze: Stahuji vybrané RAW měření...');
-      await new Promise(r => setTimeout(r, 2000));
-      setTrainingPhase('Generuji CWT skalogramy ze zdravých měření...');
-      await new Promise(r => setTimeout(r, 2000));
-      setTrainingPhase('Trénuji WGAN Generátor a Diskriminátor (Epoch 1/50)...');
-      await new Promise(r => setTimeout(r, 3000));
-      setTrainingPhase('Učím Encoder mapovat latentní prostor...');
-      await new Promise(r => setTimeout(r, 2000));
-    } else if (model.name.includes('CNN')) {
-      setTrainingPhase('Příprava datasetu: Párování úseků s vašimi štítky...');
-      await new Promise(r => setTimeout(r, 1500));
-      setTrainingPhase('Počítám FFT spektra (Amplituda + Fáze)...');
-      await new Promise(r => setTimeout(r, 2000));
-      setTrainingPhase('Fine-tuning 1D CNN (Cross-Entropy Loss)...');
-      await new Promise(r => setTimeout(r, 3000));
-    } else {
-      // RUL - Bi-LSTM
-      setTrainingPhase('Stahuji data z DB a počítám lineární klesání RUL (1.0 -> 0.0)...');
-      await new Promise(r => setTimeout(r, 2000));
-      setTrainingPhase('Sestavuji sekvence oken (Timesteps = 10) pro LSTM síť...');
-      await new Promise(r => setTimeout(r, 2000));
-      setTrainingPhase('Optimalizuji váhy (MSE Loss) pro přesnější predikci zániku...');
-      await new Promise(r => setTimeout(r, 3000));
-    }
+    setTrainingPhase('Odesílám data na server a spouštím MLOps pipeline...');
 
-    setTrainingPhase('Ukládám nové váhy modelu (.pth) do databáze...');
-    await new Promise(r => setTimeout(r, 1500));
-    setStep(3);
+    try {
+      const headers = getAuthHeader();
+      
+      // Sestavení payloadu - musíme rozdělit náš React klíč 'id' zpět na id_machine a id_sensor
+      const payloadSegments = selectedSegments.map(seg => {
+        const [machineStr, sensorStr] = seg.id.split('_');
+        return {
+          id_machine: parseInt(machineStr),
+          id_sensor: parseInt(sensorStr),
+          dateFrom: seg.dateFrom,
+          dateTo: seg.dateTo,
+          label: seg.label || null // Label se pošle jen u CNN, u GAN/RUL bude null
+        };
+      });
+
+      // Reálné odeslání na backend
+      await axios.post(
+        `http://127.0.0.1:8000/models/${model.id_model}/fine-tune`,
+        { segments: payloadSegments },
+        { headers }
+      );
+
+      // Pokud backend odpoví 200/202, jdeme na krok 3
+      setStep(3);
+
+    } catch (error) {
+      console.error("Chyba při spouštění tréninku:", error);
+      alert("Nepodařilo se spustit trénink: " + (error.response?.data?.detail || error.message));
+      setStep(1); // Vrátíme uživatele zpět k výběru dat
+    }
   };
 
   // --- VYKRESLENÍ: HLEDÁNÍ A PŘIDÁVÁNÍ DATOVÝCH ÚSEKŮ ---
@@ -336,7 +338,7 @@ function ModelTrainingModal({ model, onClose }) {
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', borderBottom: '2px solid #e2e8f0', paddingBottom: '15px' }}>
           <h2 style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.5rem' }}>
-            {step === 3 ? '🎉 Trénink dokončen' : '⚙️ Přetrénování modelu'}
+            {step === 3 ? '🚀 Trénink spuštěn' : '⚙️ Přetrénování modelu'}
           </h2>
           <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: '1.5rem', cursor: 'pointer', color: '#94a3b8' }}>&times;</button>
         </div>
@@ -368,17 +370,18 @@ function ModelTrainingModal({ model, onClose }) {
         {step === 2 && (
           <div style={{ padding: '50px 0', textAlign: 'center' }}>
             <div style={{ width: '60px', height: '60px', border: '5px solid #e2e8f0', borderTop: '5px solid var(--vut-red)', borderRadius: '50%', animation: 'spin 1s linear infinite', margin: '0 auto 25px auto' }}></div>
-            <h3 style={{ color: 'var(--text-main)', fontSize: '1.4rem' }}>Probíhá učení sítě...</h3>
+            <h3 style={{ color: 'var(--text-main)', fontSize: '1.4rem' }}>Komunikuji s backendem...</h3>
             <p style={{ color: 'var(--br-orange)', fontWeight: 'bold', fontSize: '1.1rem', marginTop: '10px' }}>{trainingPhase}</p>
           </div>
         )}
 
         {step === 3 && (
           <div style={{ padding: '40px 0', textAlign: 'center' }}>
-            <div style={{ fontSize: '5rem', color: '#16a34a', marginBottom: '15px' }}>✓</div>
-            <h3 style={{ color: 'var(--text-main)', fontSize: '1.5rem', marginBottom: '10px' }}>Model byl úspěšně aktualizován!</h3>
+            <div style={{ fontSize: '5rem', color: '#16a34a', marginBottom: '15px' }}>🚀</div>
+            <h3 style={{ color: 'var(--text-main)', fontSize: '1.5rem', marginBottom: '10px' }}>Trénink byl spuštěn na pozadí!</h3>
             <p style={{ color: 'var(--text-muted)', marginBottom: '30px', fontSize: '1.1rem' }}>
-              Nové váhy byly uloženy do produkce. Systém od nynějška používá novou baseline.
+              Data byla předána ML servise. Stav modelu v databázi byl změněn na <strong>"TRAINING"</strong>. <br/>
+              Až bude proces dokončen, systém se automaticky aktualizuje.
             </p>
             <button className="btn-diagnose" onClick={onClose} style={{ width: '100%', maxWidth: '300px' }}>Zavřít a vrátit se do katalogu</button>
           </div>

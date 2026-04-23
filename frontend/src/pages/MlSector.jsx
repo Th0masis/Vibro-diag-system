@@ -11,33 +11,63 @@ function MlSector() {
   // Stav pro otevírání nového tréninkového wizardu
   const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
 
- useEffect(() => {
-    const fetchModels = async () => {
-      try {
-        setLoading(true);
-        // Získáme token
-        const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+  // Funkce vytažená ven z useEffect, abychom ji mohli volat po aktivaci nebo zavření modalu
+  const fetchModels = async () => {
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-        // Přidáme token do požadavku
-        const res = await axios.get('http://127.0.0.1:8000/ml-models', { headers });
-        
-        setModels(res.data);
-        if (res.data.length > 0) {
-          setSelectedModel(res.data[0]);
+      const res = await axios.get('http://127.0.0.1:8000/ml-models', { headers });
+      
+      setModels(res.data);
+      
+      // Pokud už máme nějaký model vybraný, aktualizujeme jeho data (aby se přepsal is_active apod.)
+      if (selectedModel) {
+        const updatedSelected = res.data.find(m => m.id_model === selectedModel.id_model);
+        if (updatedSelected) {
+          setSelectedModel(updatedSelected);
+        } else {
+          // Pokud model z nějakého důvodu zmizel, vybereme první
+          setSelectedModel(res.data.length > 0 ? res.data[0] : null);
         }
-      } catch (err) {
-        console.error("Chyba při načítání ML modelů", err);
-        setError("Nepodařilo se načíst modely ze serveru. Zkontrolujte přihlášení.");
-      } finally {
-        setLoading(false);
+      } else if (res.data.length > 0) {
+        setSelectedModel(res.data[0]);
       }
-    };
+    } catch (err) {
+      console.error("Chyba při načítání ML modelů", err);
+      setError("Nepodařilo se načíst modely ze serveru. Zkontrolujte přihlášení.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
+  useEffect(() => {
+    setLoading(true);
     fetchModels();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Funkce pro nasazení modelu do produkce
+  const handleActivateModel = async (id_model) => {
+    if (!window.confirm("Opravdu chcete nasadit tuto verzi modelu do produkce? Tímto krokem se nahradí aktuálně běžící model.")) {
+      return;
+    }
+    
+    try {
+      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      
+      await axios.put(`http://127.0.0.1:8000/models/${id_model}/activate`, {}, { headers });
+      
+      alert("Model byl úspěšně aktivován a je nyní v produkci.");
+      await fetchModels(); // Ihned po aktivaci stáhneme čerstvá data
+    } catch (err) {
+      console.error("Chyba při aktivaci modelu:", err);
+      alert("Nepodařilo se aktivovat model. Zkontrolujte spojení s backendem.");
+    }
+  };
   
-  if (loading) return <div className="main-content">Načítám Machine Learning sektor...</div>;
+  if (loading && models.length === 0) return <div className="main-content">Načítám Machine Learning sektor...</div>;
   if (error) return <div className="main-content" style={{ color: 'var(--vut-red)' }}>{error}</div>;
 
   return (
@@ -50,7 +80,7 @@ function MlSector() {
             <span style={{ color: 'var(--text-main)' }}>AI & ML Sektor</span>
           </h1>
           <div className="machine-meta">
-            Správa prediktivních modelů | Aktivních: {models.filter(m => m.is_active).length}
+            Správa prediktivních modelů | Aktivních v produkci: {models.filter(m => m.is_active).length}
           </div>
         </div>
       </div>
@@ -66,6 +96,16 @@ function MlSector() {
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             {models.map(model => {
               const isSelected = selectedModel?.id_model === model.id_model;
+              
+              // Rozhodnutí, jaký štítek ukážeme vlevo
+              let statusBadge;
+              if (model.training_status === 'training') {
+                statusBadge = <span className="role-badge" style={{ background: '#fef08a', color: '#854d0e', padding: '2px 8px', fontSize: '0.6rem' }}>TRÉNUJE SE ⏳</span>;
+              } else if (model.is_active) {
+                statusBadge = <span className="role-badge available" style={{ padding: '2px 8px', fontSize: '0.6rem' }}>AKTIVNÍ</span>;
+              } else {
+                statusBadge = <span className="role-badge STOPPED" style={{ padding: '2px 8px', fontSize: '0.6rem' }}>OFF</span>;
+              }
               
               return (
                 <button 
@@ -93,9 +133,7 @@ function MlSector() {
                         v{model.version}
                       </span>
                     </span>
-                    <span className={`role-badge ${model.is_active ? 'available' : 'STOPPED'}`} style={{ padding: '2px 8px', fontSize: '0.6rem' }}>
-                      {model.is_active ? 'AKTIVNÍ' : 'OFF'}
-                    </span>
+                    {statusBadge}
                   </div>
                   <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{model.type}</span>
                 </button>
@@ -126,10 +164,26 @@ function MlSector() {
                 </div>
                 <p style={{ margin: 0, opacity: 0.9, fontSize: '1.1rem', fontWeight: 500 }}>{selectedModel.type}</p>
               </div>
-              <div>
-                <span className={`role-badge ${selectedModel.is_active ? 'OK' : 'STOPPED'}`} style={{ fontSize: '0.85rem', padding: '6px 12px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
-                  {selectedModel.is_active ? 'PRODUKČNÍ NASAZENÍ' : 'ODSTAVENO'}
-                </span>
+              
+              {/* ZDE JE LOGIKA PŘEPÍNACÍHO TLAČÍTKA A ŠTÍTKŮ */}
+              <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '10px' }}>
+                {selectedModel.training_status === 'training' ? (
+                  <span className="role-badge" style={{ background: '#fef08a', color: '#854d0e', fontSize: '0.85rem', padding: '6px 12px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                    ⏳ TRÉNUJE SE (čeká se na dokončení)
+                  </span>
+                ) : selectedModel.is_active ? (
+                  <span className={`role-badge OK`} style={{ fontSize: '0.85rem', padding: '6px 12px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)' }}>
+                    PRODUKČNÍ NASAZENÍ ✓
+                  </span>
+                ) : (
+                  <button 
+                    className="btn-update" 
+                    onClick={() => handleActivateModel(selectedModel.id_model)}
+                    style={{ background: 'white', color: 'var(--br-orange)', borderColor: 'white', fontSize: '0.9rem', padding: '8px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontWeight: 'bold' }}
+                  >
+                    🚀 Aktivovat do produkce
+                  </button>
+                )}
               </div>
             </div>
 
@@ -151,10 +205,10 @@ function MlSector() {
                     Datum posledního tréninku
                   </label>
                   <div style={{ fontSize: '1.8rem', fontWeight: 'bold', color: 'var(--text-main)', marginTop: '15px' }}>
-                    {new Date(selectedModel.training_date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' })}
+                    {selectedModel.training_date ? new Date(selectedModel.training_date).toLocaleDateString('cs-CZ', { day: 'numeric', month: 'long', year: 'numeric' }) : 'Zatím netrénováno'}
                   </div>
                   <div style={{ fontSize: '1rem', color: 'var(--text-muted)', marginTop: '5px' }}>
-                    v {new Date(selectedModel.training_date).toLocaleTimeString('cs-CZ')}
+                    {selectedModel.training_date ? `v ${new Date(selectedModel.training_date).toLocaleTimeString('cs-CZ')}` : '-'}
                   </div>
                 </div>
               </div>
@@ -172,9 +226,10 @@ function MlSector() {
                 <button 
                   className="btn-diagnose" 
                   onClick={() => setIsTrainingModalOpen(true)}
-                  style={{ background: 'var(--vut-red)', padding: '12px 24px', fontSize: '1rem' }}
+                  disabled={selectedModel.training_status === 'training'}
+                  style={{ background: selectedModel.training_status === 'training' ? '#cbd5e1' : 'var(--vut-red)', padding: '12px 24px', fontSize: '1rem', cursor: selectedModel.training_status === 'training' ? 'not-allowed' : 'pointer' }}
                 >
-                  ⚙️ Spustit přetrénování modelu
+                  {selectedModel.training_status === 'training' ? 'Trénink právě probíhá...' : '⚙️ Spustit přetrénování modelu'}
                 </button>
               </div>
 
@@ -199,7 +254,7 @@ function MlSector() {
                       <tr>
                         <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Absolutní cesta k souboru</td>
                         <td>
-                          <code style={{ background: '#f1f5f9', padding: '6px 10px', borderRadius: '4px', color: 'var(--vut-red)', fontFamily: 'monospace', fontSize: '0.9rem' }}>
+                          <code style={{ background: '#f1f5f9', padding: '6px 10px', borderRadius: '4px', color: 'var(--vut-red)', fontFamily: 'monospace', fontSize: '0.9rem', wordBreak: 'break-all' }}>
                             {selectedModel.path_to_model}
                           </code>
                         </td>
@@ -230,7 +285,10 @@ function MlSector() {
       {isTrainingModalOpen && selectedModel && (
         <ModelTrainingModal 
           model={selectedModel} 
-          onClose={() => setIsTrainingModalOpen(false)} 
+          onClose={() => {
+            setIsTrainingModalOpen(false);
+            fetchModels(); // <- ZDE JE KLÍČ: po zavření modalu se nám obnoví data a vyskočí nový model "TRÉNUJE SE"
+          }} 
         />
       )}
 

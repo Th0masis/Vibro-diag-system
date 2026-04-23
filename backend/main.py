@@ -7,7 +7,8 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from auth import verify_password, create_access_token, get_password_hash
 from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
-from typing import Optional
+from typing import Optional, List
+from pydantic import BaseModel
 
 # Script FastAPI
 load_dotenv()
@@ -24,6 +25,21 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],    
 )
+
+# BaseModel pro požadavek z frontendu
+class TrainingSegmentFrontend(BaseModel):
+    id_machine: int
+    id_sensor: int
+    dateFrom: str
+    dateTo: str
+    label: Optional[str] = None
+
+class FineTuneStartRequest(BaseModel):
+    segments: List[TrainingSegmentFrontend]
+
+class WebhookPayload(BaseModel):
+    status: str             # "success" nebo "failed"
+    message: Optional[str] = None
 
 # Pripojeni k DB
 DB_URL = os.getenv("DATABASE_URL")
@@ -1396,6 +1412,265 @@ def get_latest_ai_results(machine_id: int, token: str = Depends(oauth2_scheme)):
             }
         }
 
+@app.post("/models/{model_id}/fine-tune")
+def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: str = Depends(oauth2_scheme)):
+    print(f"\n{'='*50}\n🚀 START FINE-TUNING Z BASE MODELU ID {model_id}")
+    
+    with engine.connect() as conn:
+        # 1. Načtení zdrojového modelu
+        query_model = text("SELECT name, version, type, description FROM ml_models WHERE id_model = :mid")
+        model_row = conn.execute(query_model, {"mid": model_id}).fetchone()
+        if not model_row:
+            raise HTTPException(status_code=404, detail="Zdrojový model nebyl nalezen.")
+        
+        model_name, current_version, model_type, description = model_row
+        
+        # 2. Generování nové verze (např. 1.0 -> 2.0 nebo 1.1)
+        try:
+            new_version = str(round(float(current_version) + 0.1, 1))
+        except ValueError:
+            new_version = f"{current_version}.1"
+            
+        # 3. Vygenerování cílové cesty pro nové váhy (save_path)
+        # Podle tvé struktury: models/1DCNN/v2/bearing_fault_model.pth
+        folder_name = "1DCNN" if "CNN" in model_name else model_name
+        save_dir = f"models/{folder_name}/v{new_version}"
+        save_path = f"{save_dir}/bearing_fault_model.pth"
 
+        # 4. Uložení nové verze do DB
+        insert_query = text("""
+            INSERT INTO ml_models 
+            (name, version, type, description, is_active, training_status, path_to_model) 
+            VALUES 
+            (:name, :ver, :type, :desc, False, 'training', :path)
+            RETURNING id_model
+        """)
+        new_model_id = conn.execute(insert_query, {
+            "name": model_name, "ver": new_version, "type": model_type,
+            "desc": f"{description} (Fine-tuned z v{current_version})",
+            "path": save_path
+        }).scalar()
+        
+        print(f"✅ Vytvořen model ID: {new_model_id} (v{new_version}) -> Bude uložen do: {save_path}")
+
+        # 5. EXTRAKCE REÁLNÝCH DAT Z DATABÁZE (SQL JOIN na measurements)
+        file_paths = []      # Pro GAN a LSTM
+        measurements_data = [] # Pro CNN (potřebuje i labely)
+        
+        for seg in payload.segments:
+            # Vytáhneme všechny cesty k souborům v daném časovém okně
+            data_query = text("""
+                SELECT raw_data_path FROM measurements 
+                WHERE id_sensor = :sensor_id 
+                  AND timestamp BETWEEN :d_from AND :d_to
+                ORDER BY timestamp ASC
+            """)
+            rows = conn.execute(data_query, {
+                "sensor_id": seg.id_sensor,
+                "d_from": seg.dateFrom,
+                "d_to": seg.dateTo
+            }).fetchall()
+            
+            for row in rows:
+                if row[0]: # Pokud cesta existuje
+                    file_paths.append(row[0])
+                    if "CNN" in model_name:
+                        # Pokud je to CNN, přibalíme i label, který přišel z frontendu
+                        measurements_data.append({
+                            "path": row[0],
+                            "label": int(seg.label) if seg.label else 0
+                        })
+        
+        conn.commit()
+
+        if not file_paths:
+            raise HTTPException(status_code=400, detail="V zadaných úsecích nebyla nalezena žádná surová data (raw_data_path).")
+
+        print(f"📦 Nasbíráno celkem {len(file_paths)} souborů pro trénink.")
+
+        # 6. REÁLNÉ ODESLÁNÍ DO ML SERVISY
+        webhook_url = f"http://127.0.0.1:8000/webhook/training-done/{new_model_id}"
+        
+        try:
+            if "GAN" in model_name:
+                ml_payload = {
+                    "file_paths": file_paths,
+                    "webhook_url": webhook_url,
+                    "save_path": save_path
+                }
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning", json=ml_payload)
+                
+            elif "CNN" in model_name:
+                ml_payload = {
+                    "measurements": measurements_data,
+                    "webhook_url": webhook_url,
+                    "save_path": save_path
+                }
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-1dcnn", json=ml_payload)
+                
+            elif "LSTM" in model_name:
+                # Pro RUL (bereme defaultně "O" jako kategorii, zjednodušeno)
+                ml_payload = {
+                    "category": "O", 
+                    "file_paths": file_paths,
+                    "webhook_url": webhook_url,
+                    "save_path": save_path
+                }
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-rul", json=ml_payload)
+
+            res.raise_for_status() # Zkontroluje, zda ML service neodpověděla chybou
+            print("🚀 Požadavek úspěšně předán ML servise!")
+            
+        except requests.exceptions.RequestException as e:
+            # Pokud ML Service nekomunikuje, musíme to vrátit v DB zpět (nebo nastavit na failed)
+            with engine.connect() as fail_conn:
+                fail_conn.execute(text("UPDATE ml_models SET training_status = 'failed' WHERE id_model = :mid"), {"mid": new_model_id})
+                fail_conn.commit()
+            raise HTTPException(status_code=503, detail=f"Nepodařilo se spojit s ML Servisou: {e}")
+
+    return {
+        "status": "accepted",
+        "message": f"Trénink modelu povýšen na v{new_version} byl spuštěn.",
+        "new_model_id": new_model_id
+    }
+
+@app.post("/webhook/training-done/{model_id}")
+def training_webhook(model_id: int, payload: WebhookPayload):
+    """
+    Endpoint, který volá ML servisa po dokončení nebo selhání tréninku.
+    """
+    print(f"\n{'='*50}")
+    print(f"🔔 WEBHOOK PŘIJAT PRO MODEL ID {model_id}")
+    print(f"Výsledek: {payload.status.upper()}")
+    if payload.message:
+        print(f"Zpráva: {payload.message}")
+        
+    with engine.connect() as conn:
+        if payload.status == "success":
+            # Trénink se povedl. Změníme stav na 'ready'.
+            # Pozn.: is_active necháváme False, abychom produkci nepřepnuli automaticky bez otestování.
+            update_query = text("UPDATE ml_models SET training_status = 'ready' WHERE id_model = :mid")
+            print("✅ Model je doučen a připraven k nasazení!")
+        else:
+            # Trénink selhal.
+            update_query = text("UPDATE ml_models SET training_status = 'failed' WHERE id_model = :mid")
+            print("❌ Trénink selhal. Zkontrolováno a zapsáno do DB.")
+            
+        conn.execute(update_query, {"mid": model_id})
+        conn.commit()
+        
+    print(f"{'='*50}\n")
+    return {"status": "acknowledged"}
+
+@app.post("/models/sync-active")
+def sync_active_models():
+    """
+    Tento endpoint volá ML servisa při startu.
+    Najde nejnovější 'ready' verze, aktivuje je a vrátí jejich cesty.
+    """
+    active_paths = {}
+    with engine.connect() as conn:
+        # 1. Všechny modely nastavíme jako neaktivní (reset)
+        conn.execute(text("UPDATE ml_models SET is_active = False"))
+        
+        # 2. Najdeme nejnovější (podle id_model) pro každý unikátní 'name', které jsou 'ready'
+        # DISTINCT ON (name) nám zaručí, že dostaneme jen 1 řádek pro každý název modelu.
+        query = text("""
+            SELECT DISTINCT ON (name) id_model, name, path_to_model 
+            FROM ml_models 
+            WHERE training_status = 'ready' 
+            ORDER BY name, id_model DESC
+        """)
+        latest_models = conn.execute(query).fetchall()
+        
+        for row in latest_models:
+            m_id, m_name, m_path = row
+            
+            # Nastavíme vybranému modelu, že je produkčně aktivní
+            conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": m_id})
+            
+            # Analýza cesty (AE a LSTM potřebují předat celou složku, CNN potřebuje přesný soubor)
+            m_dir = os.path.dirname(m_path) if m_path and m_path.endswith('.pth') else m_path
+            if not m_dir: 
+                m_dir = m_path # Fallback
+
+            if "GAN" in m_name:
+                active_paths["AE_ANOWGAN"] = m_dir
+            elif "CNN" in m_name:
+                active_paths["1D_CNN"] = m_path # Vracíme přesný soubor .pth
+            elif "LSTM" in m_name:
+                active_paths["Bi-LSTM"] = m_dir
+                
+        conn.commit()
+        
+    return active_paths
+
+@app.put("/models/{model_id}/activate")
+def activate_model_version(model_id: int):
+    """
+    Přepne is_active na True pro vybranou verzi a na False pro všechny ostatní verze stejného modelu.
+    Zároveň dá vědět ML servise, ať si znovu načte váhy!
+    """
+    with engine.connect() as conn:
+        # 1. Zjistíme jméno modelu, který chceme aktivovat
+        model_name_row = conn.execute(text("SELECT name FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
+        if not model_name_row:
+            raise HTTPException(status_code=404, detail="Model nebyl nalezen.")
+            
+        model_name = model_name_row[0]
+        
+        # 2. Deaktivujeme VŠECHNY modely se stejným jménem
+        conn.execute(text("UPDATE ml_models SET is_active = False WHERE name = :name"), {"name": model_name})
+        
+        # 3. Aktivujeme ten jeden konkrétní, na který uživatel klikl
+        conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": model_id})
+        conn.commit()
+
+        # 4. (Volitelné, ale doporučené) Zavoláme na ML Service, aby si aktualizovala modely
+        # Pokud si do ml_service přidáš /reload endpoint, frontendem to ihned propíšeš do inference
+        # try:
+        #     requests.post(f"{ML_SERVICE_URL}/reload", timeout=5)
+        # except Exception as e:
+        #     print(f"Nelze kontaktovat ML servisu pro reload: {e}")
+
+    return {"status": "success", "message": f"Verze modelu byla aktivována a nasazena do produkce."}
+
+@app.put("/models/{model_id}/activate")
+def activate_model_version(model_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    Aktivuje verzi v DB a nařídí ML Servise její okamžité načtení.
+    """
+    with engine.connect() as conn:
+        # 1. Najdeme jméno modelu
+        res = conn.execute(text("SELECT name FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
+        if not res:
+            raise HTTPException(status_code=404, detail="Model nenalezen.")
+        
+        model_name = res[0]
+
+        # 2. Transakční update (Vypnout staré, zapnout nový)
+        conn.execute(text("UPDATE ml_models SET is_active = False WHERE name = :name"), {"name": model_name})
+        conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": model_id})
+        conn.commit()
+        
+        print(f"✅ Model ID {model_id} ({model_name}) aktivován v databázi.")
+
+    # 3. NOTIFIKACE ML SERVISY (Klíčový krok)
+    try:
+        print(f"📡 Posílám signál k přenačtení na ML Servisu ({ML_SERVICE_URL}/reload)...")
+        # Voláme endpoint, který jsme vytvořili v kroku 1
+        reload_res = requests.post(f"{ML_SERVICE_URL}/reload", timeout=10)
+        reload_res.raise_for_status()
+        print("🚀 ML Servisa potvrdila úspěšné přenačtení modelů.")
+        
+    except Exception as e:
+        # Pokud ML servisa neběží, nevadí to pro DB, ale uživatel by měl dostat varování
+        print(f"⚠️ Varování: Nepodařilo se aktualizovat běžící ML servisu: {e}")
+        return {
+            "status": "partial_success", 
+            "message": "Model aktivován v DB, ale ML servisa neodpovídá. Změna se projeví po jejím restartu."
+        }
+
+    return {"status": "success", "message": "Model byl úspěšně nasazen do produkce."}
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
