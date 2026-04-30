@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
-import os, json, seed, requests, uvicorn
+import os, json, seed, requests, uvicorn, asyncio, aioftp, ssl, logging
+import pandas as pd
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
@@ -9,6 +10,9 @@ from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
 from typing import Optional, List
 from pydantic import BaseModel
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
+from asyncua import Client, ua
+from ftplib import FTP_TLS
 
 # Script FastAPI
 load_dotenv()
@@ -25,6 +29,13 @@ app.add_middleware(
     allow_methods=['*'],
     allow_headers=['*'],    
 )
+
+# Konfigurace PLC
+PLC_OPC_URL = "opc.tcp://10.24.137.37:4840"
+PLC_FTP_HOST = "10.24.137.37"
+PLC_FTP_USER = "admin"
+PLC_FTP_PASS = ".admin"
+FTP_DIR = "/C:/BufferData/"
 
 # BaseModel pro požadavek z frontendu
 class TrainingSegmentFrontend(BaseModel):
@@ -55,6 +66,7 @@ def get_current_user_role(token: str = Depends(oauth2_scheme)):
 def home():
     return {"massage":"Vibrodiagnosticky system bezi!"}
 
+# --- SEKCE DATA ---
 @app.get("/latest-data")
 def get_latest_data():
     """Vytahne posledni zaznam z databaze"""
@@ -95,7 +107,163 @@ def get_history(limit: int = 100):
             })
         # Vratime data 
         return history
+
+@app.on_event("startup")
+def start_scheduler():
+    scheduler = AsyncIOScheduler()
+    # Návrat k produkčnímu plánu: Každé 4 hodiny (02:00, 06:00, 10:00, 14:00, 18:00, 22:00)
+    scheduler.add_job(download_and_process_raw_data, 'cron', hour='2,6,10,14,18,22', minute=28)
+    scheduler.start()
+    print("Scheduler spuštěn v produkčním 4h režimu.")
+
+# Stažení RAW dat z PLC přes FTP
+async def download_and_process_raw_data():
+    print(f"[{datetime.now()}] Spouštím 4hodinovou rutinu pro sběr dat...")
     
+    # 1. KONTROLA, ZDA STROJ BĚŽÍ (Ochrana proti nočním směnám)
+    try:
+        with engine.connect() as conn:
+            # Zkontrolujeme RMS za poslední hodinu
+            query = text("SELECT AVG(rms_raw) FROM feature_data WHERE time >= NOW() - INTERVAL '1 hour'")
+            avg_rms = conn.execute(query).scalar()
+            
+            # Pokud je RMS příliš nízké nebo nejsou data, stroj pravděpodobně stojí
+            if avg_rms is None or avg_rms < 0.1: # Prahovou hodnotu si uprav
+                print("Stroj je pravděpodobně vypnutý (nízké RMS). Přeskakuji stahování.")
+                return
+    except Exception as e:
+        print(f"Chyba při ověřování běhu stroje: {e}")
+        # Můžeš se rozhodnout, jestli při chybě DB pokračovat, nebo return. Zde pokračujeme.
+
+    # Vygenerujeme unikátní ID pro tento sběr
+    work_id = f"meas_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+    # 2. KOMUNIKACE PŘES OPC UA
+    print(f"Připojuji se k OPC UA ({PLC_OPC_URL})...")
+    async with Client(url=PLC_OPC_URL) as client:
+        # Definice uzlů (NodeID formát ns=6;s=...)
+        # Pokud neznáš přesné NodeID, zkopíruj si ho z UaExpert z pole "NodeId" v pravém panelu
+        node_workid = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
+        node_buflen = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
+        node_start  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
+        node_reset  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+        
+        node_done   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
+        node_csv    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
+        
+        # Zápis parametrů - striktní definice typů pro B&R
+        dv_workid = ua.DataValue(ua.Variant(work_id, ua.VariantType.String))
+        dv_buflen = ua.DataValue(ua.Variant(1000, ua.VariantType.UInt32))
+        
+        await node_workid.write_value(dv_workid)
+        await node_buflen.write_value(dv_buflen)
+        
+        # Spuštění - explicitní Boolean
+        dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
+        dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
+        
+        await node_start.write_value(dv_true)
+        print("Povel k uložení dat odeslán.")
+        
+        # Čekání na dokončení (Polling)
+        while True:
+            is_done = await node_done.read_value()
+            if is_done:
+                break
+            await asyncio.sleep(2) # Zkontroluje stav každé 2 vteřiny
+            
+        csv_filename = await node_csv.read_value()
+        print(f"PLC hlásí uloženo: {csv_filename}")
+        
+        # Příprava na stažení (resetujeme Start příznak)
+        await node_start.write_value(dv_false)
+
+    # 3. STAŽENÍ SOUBORU PŘES FTP (pomocí robustního ftplib)
+    print("\n--- START FTP DEBUG (ftplib) ---")
+    local_filepath = f"./data/{csv_filename}"
+    os.makedirs("./data", exist_ok=True)
+    
+    def download_ftp_file():
+        # Vytvoření speciálního kontextu pro B&R
+        ctx = ssl.create_default_context()
+        ctx.check_hostname = False
+        ctx.verify_mode = ssl.CERT_NONE
+        ctx.minimum_version = ssl.TLSVersion.TLSv1
+        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        try:
+            ctx.set_ciphers('ALL:@SECLEVEL=0')
+        except:
+            pass
+
+        print(f">>> Připojuji se na FTP {PLC_FTP_HOST}...")
+        ftp = FTP_TLS(context=ctx)
+        
+        # Připojení a vyjednání TLS
+        ftp.connect(PLC_FTP_HOST, 21)
+        ftp.login(PLC_FTP_USER, PLC_FTP_PASS)
+        
+        # Šifrování i pro samotný přenos dat (důležité u FTPS!)
+        ftp.prot_p() 
+        
+        # Vynucení klasického pasivního módu (vyhýbá se chybám s EPSV)
+        ftp.set_pasv(True) 
+        
+        print(f">>> Stahuji soubor {csv_filename}...")
+        remote_path = f"C:/BufferData/{csv_filename}"
+        
+        # Otevřeme lokální soubor a stahujeme
+        with open(local_filepath, 'wb') as f:
+            # Příkaz RETR nevyžaduje MLST! PLC s ním nebude mít problém.
+            ftp.retrbinary(f"RETR {remote_path}", f.write)
+            
+        print("<<< Soubor úspěšně stažen.")
+        
+        print(f">>> Mažu soubor na PLC...")
+        ftp.delete(remote_path)
+        print("<<< Soubor smazán.")
+        
+        ftp.quit()
+
+    # Spuštění blokující FTP funkce v asynchronním vlákně
+    try:
+        await asyncio.to_thread(download_ftp_file)
+        print(f"Soubor bezpečně uložen do {local_filepath}")
+    except Exception as e:
+        print(f"\n[!!!] CHYBA PŘI FTP PŘENOSU: {e}")
+        
+    print("--- KONEC FTP DEBUG ---\n")
+
+    # 4. RESET PLC AUTOMATU
+    async with Client(url=PLC_OPC_URL) as client:
+        node_reset = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+        
+        dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
+        dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
+        
+        await node_reset.write_value(dv_true)
+        await asyncio.sleep(1)
+        await node_reset.write_value(dv_false)
+    # 5. ULOŽENÍ DO DATABÁZE
+    print("Zapisuji cestu k souboru do databáze...")
+    try:
+        with engine.connect() as conn:
+            query = text("""
+                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                VALUES (:sid, :ts, :path, :notes)
+            """)
+            conn.execute(query, {
+                "sid": 5, # Aktuálně natvrdo senzor 5
+                "ts": datetime.now(timezone.utc),
+                "path": local_filepath,
+                "notes": "Automatický 4h stahovací cyklus (B&R PLC)"
+            })
+            conn.commit()
+            print("Záznam úspěšně vložen do databáze.")
+    except Exception as e:
+        print(f"\n[!!!] Chyba při zápisu do databáze: {e}")
+        
+    print("Hotovo! Čekám na další interval.")
+
 # --- SEKCE UŽIVATELŮ ---
 
 @app.post("/login")
@@ -1672,5 +1840,6 @@ def activate_model_version(model_id: int, token: str = Depends(oauth2_scheme)):
         }
 
     return {"status": "success", "message": "Model byl úspěšně nasazen do produkce."}
+
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)
