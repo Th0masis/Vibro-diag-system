@@ -14,7 +14,7 @@ function Dashboard({ token }) {
     const fetchMachines = async () => {
       try {
         setLoading(true);
-        const res = await axios.get('http://127.0.0.1:8000/machines', {
+        const res = await axios.get('/machines', {
           headers: { Authorization: `Bearer ${token}` }
         });
         setMachines(res.data);

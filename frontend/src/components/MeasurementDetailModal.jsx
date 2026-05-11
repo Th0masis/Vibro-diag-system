@@ -26,11 +26,11 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
     try {
       setLoading(true);
       
-      const rawRes = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/raw`);
+      const rawRes = await axios.get(`/measurements/${measurementId}/raw`);
       
       let featResData = null;
       try {
-        const featRes = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/features`);
+        const featRes = await axios.get(`/measurements/${measurementId}/features`);
         featResData = featRes.data; 
       } catch (e) {
         console.log("Features zatím neexistují.");

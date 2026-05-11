@@ -21,7 +21,7 @@ function UserManagement() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await axios.get('http://127.0.0.1:8000/users');
+      const response = await axios.get('/users');
       setUsers(response.data);
     } catch (error) {
       console.error("Nelze načíst uživatele:", error);
@@ -40,7 +40,7 @@ function UserManagement() {
   const handleDelete = async () => {
     if (!userToDelete) return;
     try {
-      await axios.delete(`http://127.0.0.1:8000/users/${userToDelete}`);
+      await axios.delete(`/users/${userToDelete}`);
       // Po úspěšném smazání aktualizujeme seznam uživatelů
       setUsers(users.filter(u => u.id_user !== userToDelete));
       setUserToDelete(null); // Zavřít okno
@@ -53,7 +53,7 @@ function UserManagement() {
   const handleAddUser = async (e) => {
     e.preventDefault();
     try {
-      await axios.post('http://127.0.0.1:8000/users', newUser);
+      await axios.post('/users', newUser);
       setIsAddModalOpen(false);
       setNewUser({ username: '', password: '', email: '', role: 'user' }); // Reset
       fetchUsers(); // Znovu načíst tabulku
@@ -79,7 +79,7 @@ function UserManagement() {
         payload.password = editingUser.password;
       }
 
-      await axios.put(`http://127.0.0.1:8000/users/${editingUser.id_user}`, payload);
+      await axios.put(`/users/${editingUser.id_user}`, payload);
       setEditingUser(null);
       fetchUsers();
     } catch (error) {

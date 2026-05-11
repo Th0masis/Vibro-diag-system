@@ -23,7 +23,7 @@ function Machines() {
     const fetchMachines = async () => {
         try {
             setLoading(true);
-            const response = await axios.get('http://127.0.0.1:8000/machines');
+            const response = await axios.get('/machines');
             setMachines(response.data);
         } catch (error) {
             console.error("Couldn't load machines:", error);

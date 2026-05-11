@@ -28,8 +28,8 @@ function Sensors() {
     try {
       setLoading(true);
       const [sensorsRes, machinesRes] = await Promise.all([
-        axios.get('http://127.0.0.1:8000/sensors'),
-        axios.get('http://127.0.0.1:8000/machines')
+        axios.get('/sensors'),
+        axios.get('/machines')
       ]);
       setSensors(sensorsRes.data);
       setMachines(machinesRes.data);

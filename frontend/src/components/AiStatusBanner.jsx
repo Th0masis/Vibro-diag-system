@@ -11,7 +11,7 @@ function AiStatusBanner({ machineId }) {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
         
-        const res = await axios.get(`http://127.0.0.1:8000/machines/${machineId}/latest-ai`, { headers });
+        const res = await axios.get(`/machines/${machineId}/latest-ai`, { headers });
         setAiData(res.data);
       } catch (err) {
         console.error("Chyba při načítání AI dat pro stroj", machineId);

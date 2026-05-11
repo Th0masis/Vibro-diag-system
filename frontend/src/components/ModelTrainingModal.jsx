@@ -37,8 +37,8 @@ function ModelTrainingModal({ model, onClose }) {
       try {
         const headers = getAuthHeader();
         const [machRes, sensRes] = await Promise.all([
-          axios.get('http://127.0.0.1:8000/machines', { headers }),
-          axios.get('http://127.0.0.1:8000/sensors', { headers })
+          axios.get('/machines', { headers }),
+          axios.get('/sensors', { headers })
         ]);
         setAvailableMachines(machRes.data);
         setAllSensors(sensRes.data);

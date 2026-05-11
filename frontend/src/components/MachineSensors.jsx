@@ -10,7 +10,7 @@ function MachineSensors({ sensors, machineId, onRefresh }) {
   // Funkce pro odpojení senzoru
   const handleDetach = async () => {
     try {
-      await axios.post(`http://127.0.0.1:8000/machines/${machineId}/sensors/${sensorToDetach.id_sensor}/detach`);
+      await axios.post(`/machines/${machineId}/sensors/${sensorToDetach.id_sensor}/detach`);
       onRefresh(); // Aktualizuje data v rodiči (MachineDetail)
     } catch (error) {
       alert("Chyba při odpojování senzoru.");

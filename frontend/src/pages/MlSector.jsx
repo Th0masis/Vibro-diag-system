@@ -17,7 +17,7 @@ function MlSector() {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const res = await axios.get('http://127.0.0.1:8000/ml-models', { headers });
+      const res = await axios.get('/ml-models', { headers });
       
       setModels(res.data);
       

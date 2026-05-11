@@ -27,7 +27,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
     setAnomalyResult(null);
     try {
       const res = await axios.post(
-        `http://127.0.0.1:8000/machines/${machineId}/analyze-anomaly`,
+        `/machines/${machineId}/analyze-anomaly`,
         {}, 
         { headers: getAuthHeader() }
       );

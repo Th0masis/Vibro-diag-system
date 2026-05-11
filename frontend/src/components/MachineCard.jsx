@@ -19,7 +19,7 @@ function MachineCard({ machine, onOpenDetail }) {
   useEffect(() => {
     const fetchMiniGraph = async () => {
       try {
-        const res = await axios.get(`http://127.0.0.1:8000/machines/${machine.id_machine}/history`);
+        const res = await axios.get(`/machines/${machine.id_machine}/history`);
         const raw = res.data.filter(d => d.processed);
 
         const groupedMap = new Map();

@@ -24,7 +24,7 @@ function MachineDetail() {
 
   const fetchDetail = async () => {
     try {
-      const response = await axios.get(`http://127.0.0.1:8000/machines/${id}`);
+      const response = await axios.get(`/machines/${id}`);
       setData(response.data);
     } catch (error) {
       console.error("Chyba:", error);

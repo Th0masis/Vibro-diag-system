@@ -53,7 +53,7 @@ class WebhookPayload(BaseModel):
     message: Optional[str] = None
 
 # Pripojeni k DB
-DB_URL = os.getenv("DATABASE_URL")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
 engine = create_engine(DB_URL)
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")

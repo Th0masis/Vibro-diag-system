@@ -13,7 +13,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
 
   const fetchNotes = async () => { /* ... stejné jako dřív ... */
     try {
-        const res = await axios.get(`http://127.0.0.1:8000/machines/${machineId}/notes`);
+        const res = await axios.get(`/machines/${machineId}/notes`);
         setNotes(res.data);
     } catch (error) { console.error(error); } finally { setLoading(false); }
   };
@@ -23,7 +23,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
     e.preventDefault();
     if (!newNote.trim()) return;
     try {
-        await axios.post(`http://127.0.0.1:8000/machines/${machineId}/notes`, { content: newNote, severity });
+        await axios.post(`/machines/${machineId}/notes`, { content: newNote, severity });
         setNewNote(""); setSeverity("INFO"); fetchNotes(); 
         if (onNoteAdded) onNoteAdded();
     } catch (err) { alert("Chyba ukládání"); }
@@ -37,7 +37,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
   // 4. Skutečné smazání (volá se až z modálu)
   const performDelete = async () => {
     try {
-      await axios.delete(`http://127.0.0.1:8000/machines/${machineId}/notes/${noteToDelete}`);
+      await axios.delete(`/machines/${machineId}/notes/${noteToDelete}`);
       fetchNotes();
       if (onNoteAdded) onNoteAdded();
     } catch (error) {

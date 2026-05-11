@@ -32,7 +32,7 @@ function MachineGraphs({ machineId }) {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const res = await axios.get(`http://127.0.0.1:8000/machines/${machineId}/history`);
+        const res = await axios.get(`/machines/${machineId}/history`);
         setRawData(res.data);
       } catch (error) {
         console.error("Chyba načítání grafů:", error);
