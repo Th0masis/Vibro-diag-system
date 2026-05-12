@@ -7,6 +7,8 @@ import MeasurementsHistory from '../components/MeasurementsHistory';
 import MachineGraphs from '../components/MachineGraphs';
 import MachineSensors from '../components/MachineSensors';
 import MachineDiagnostics from '../components/MachineDiagnostics';
+// 1. PŘIDÁN IMPORT NOVÉ KOMPONENTY PRO NASTAVENÍ
+import MachineSettings from '../components/MachineSettings'; 
 
 function MachineDetail() {
   const { id } = useParams();
@@ -17,7 +19,7 @@ function MachineDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
 
-  // Stavy pro přiřazování senzoru (zkráceno pro přehlednost)
+  // Stavy pro přiřazování senzoru
   const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
   const [availableSensors, setAvailableSensors] = useState([]);
   const [assignForm, setAssignForm] = useState({ sensor_id: '', position: '' });
@@ -54,21 +56,22 @@ function MachineDetail() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
+
   // Funkce pro rychlé odpojení senzoru
   const handleDetachSensor = async (sensorId) => {
     if(!window.confirm("Opravdu odebrat tento senzor ze stroje?")) return;
     try {
-      await axios.post(`http://127.0.0.1:8000/machines/${id}/sensors/${sensorId}/detach`);
+      // Zde také využíváme výhody globálního nastavení axios (smazáno http://127.0.0.1:8000)
+      await axios.post(`/machines/${id}/sensors/${sensorId}/detach`);
       fetchDetail();
     } catch (error) {
       alert("Chyba při odpojování.");
     }
   };
 
-  // --- Zbytek logiky pro modál (stejné jako předtím) ---
   const openAssignModal = async () => {
     try {
-      const res = await axios.get('http://127.0.0.1:8000/sensors/available');
+      const res = await axios.get('/sensors/available');
       setAvailableSensors(res.data);
       setAssignForm({ sensor_id: '', position: '' });
       setIsAssignModalOpen(true);
@@ -78,7 +81,7 @@ function MachineDetail() {
   const handleAttachSensor = async (e) => {
     e.preventDefault();
     try {
-      await axios.post(`http://127.0.0.1:8000/machines/${id}/sensors`, assignForm);
+      await axios.post(`/machines/${id}/sensors`, assignForm);
       setIsAssignModalOpen(false);
       fetchDetail();
     } catch (error) { alert("Chyba přiřazení"); }
@@ -98,7 +101,7 @@ return (
           <h1>
             {info.name}
             {/* Status Badge přímo vedle nadpisu */}
-            <span className={`role-badge ${info.status}`} style={{ fontSize: '0.9rem', padding: '4px 12px', borderRadius: '20px', verticalAlign: 'middle' }}>
+            <span className={`role-badge ${info.status}`} style={{ fontSize: '0.9rem', padding: '4px 12px', borderRadius: '20px', verticalAlign: 'middle', marginLeft: '10px' }}>
                {info.status}
             </span>
           </h1>
@@ -120,7 +123,7 @@ return (
       {/* 2. HORNÍ GRID (3 BOXY) */}
       <div className="dashboard-grid-3">
         
-        {/* BOX 1: Technické údaje (Oranžový vrch) */}
+        {/* BOX 1: Technické údaje */}
         <div className="detail-card card-tech">
           <div className="card-title" style={{ color: 'var(--br-orange)' }}>Technické údaje</div>
           <div className="detail-grid" style={{ gap: '12px' }}>
@@ -133,7 +136,7 @@ return (
           </div>
         </div>
 
-        {/* BOX 2: Senzory (Modrý vrch) */}
+        {/* BOX 2: Senzory */}
         <div className="detail-card card-sensors">
           <div className="card-title">
              <span>Senzory ({sensors.length})</span>
@@ -162,7 +165,7 @@ return (
           </div>
         </div>
 
-        {/* BOX 3: Nejnovější poznámka (VUT Červený vrch) */}
+        {/* BOX 3: Nejnovější poznámka */}
         <div className="detail-card card-note" 
              style={{ 
                borderTopColor: last_note ? getSeverityStyles(last_note.severity).border : '#cbd5e1' 
@@ -184,7 +187,6 @@ return (
                     color: getSeverityStyles(last_note.severity).text,
                     marginBottom: '10px',
                     borderRadius: '0 4px 4px 0',
-                    // NOVÉ: Scrollování pro dlouhý text v náhledu
                     maxHeight: '120px', 
                     overflowY: 'auto'
                 }}>
@@ -193,7 +195,6 @@ return (
               </div>
               <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                 <span style={{ fontWeight: '600', color: '#475569' }}>👤 {last_note.author}</span>
-                {/* NOVÉ: Datum včetně času */}
                 <span>🕒 {new Date(last_note.timestamp).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
               </div>
             </div>
@@ -215,6 +216,8 @@ return (
           <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Deník údržby</button>
           <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Historie měření</button>
           <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>Senzory (Detail)</button>
+          {/* 2. PŘIDÁNO TLAČÍTKO PRO NOVOU ZÁLOŽKU */}
+          <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Nastavení</button>
         </div>
 
         <div className="tab-content">
@@ -224,15 +227,17 @@ return (
           {activeTab === 'history' && (<MeasurementsHistory machineId={info.id_machine} />)}
           {activeTab === 'sensors' && (
             <MachineSensors 
-                sensors={sensors}             // Předáváme seznam senzorů, které už máme načtené
-                machineId={info.id_machine}   // ID stroje pro případné API volání (detach)
-                onRefresh={fetchDetail}       // Funkce pro obnovení dat po změně
+                sensors={sensors}             
+                machineId={info.id_machine}   
+                onRefresh={fetchDetail}       
             />
           )}
+          {/* 3. PŘIDÁNO VYKRESLENÍ NOVÉ KOMPONENTY */}
+          {activeTab === 'settings' && (<MachineSettings machineId={info.id_machine} />)}
         </div>
       </div>
 
-      {/* ... ZDE VLOŽ MODÁL PRO PŘIŘAZENÍ (stejný kód jako předtím) ... */}
+      {/* MODÁL PRO PŘIŘAZENÍ SENZORU */}
        {isAssignModalOpen && (
         <div className="modal-overlay">
            <div className="modal-content add-user-modal">

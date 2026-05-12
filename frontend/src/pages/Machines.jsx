@@ -44,7 +44,7 @@ function Machines() {
     const handleAddMachine = async (e) => {
         e.preventDefault();
         try {
-            await axios.post('http://127.0.0.1:8000/machines', newMachine);
+            await axios.post('/machines', newMachine);
             
             // Reset formuláře a zavření modalu
             setIsAddModalOpen(false);

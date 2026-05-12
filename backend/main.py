@@ -52,6 +52,19 @@ class WebhookPayload(BaseModel):
     status: str             # "success" nebo "failed"
     message: Optional[str] = None
 
+class OpcUaSettings(BaseModel):
+    url: str
+
+class FtpSettings(BaseModel):
+    host: str
+    username: str
+    password: str
+    directory: str
+
+class MachineSettingsUpdate(BaseModel):
+    opc_ua: OpcUaSettings
+    ftp: FtpSettings
+
 # Pripojeni k DB
 DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
 engine = create_engine(DB_URL)
@@ -881,6 +894,123 @@ def get_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
     except Exception as e:
         print(f"Chyba RUL predikce: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+    
+@app.get("/machines/{machine_id}/settings")
+def get_machine_settings(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """Vrátí aktuální nastavení OPC UA a FTP pro daný stroj."""
+    with engine.connect() as conn:
+        query = text("""
+            SELECT opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
+            FROM machines 
+            WHERE id_machine = :mid
+        """)
+        result = conn.execute(query, {"mid": machine_id}).fetchone()
+        
+        if not result:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+            
+        return {
+            "opc_ua": {
+                "url": result[0] or ""
+            },
+            "ftp": {
+                "host": result[1] or "",
+                "username": result[2] or "",
+                "password": result[3] or "",
+                "directory": result[4] or ""
+            }
+        }
+
+@app.put("/machines/{machine_id}/settings")
+def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, role: str = Depends(get_current_user_role)):
+    """Uloží nové nastavení OPC UA a FTP pro stroj. (Pouze Admin/Operator)"""
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nemáte oprávnění měnit nastavení stroje.")
+        
+    with engine.connect() as conn:
+        query = text("""
+            UPDATE machines 
+            SET opc_ua_url = :opc_url,
+                ftp_host = :ftp_host,
+                ftp_user = :ftp_user,
+                ftp_password = :ftp_pass,
+                ftp_dir = :ftp_dir
+            WHERE id_machine = :mid
+        """)
+        
+        result = conn.execute(query, {
+            "opc_url": payload.opc_ua.url,
+            "ftp_host": payload.ftp.host,
+            "ftp_user": payload.ftp.username,
+            "ftp_pass": payload.ftp.password,
+            "ftp_dir": payload.ftp.directory,
+            "mid": machine_id
+        })
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+            
+        return {"message": "Nastavení stroje bylo úspěšně aktualizováno."}
+    
+
+@app.post("/machines/{machine_id}/test-connection")
+async def test_machine_connection(machine_id: int, type: str, payload: dict, role: str = Depends(get_current_user_role)):
+    """Otestuje spojení na OPC UA nebo FTP zadané v payloadu."""
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nemáte oprávnění testovat spojení.")
+
+    if type == "opc":
+        url = payload.get("url")
+        print(f"Pokus o připojení k OPC UA: {url}")
+        try:
+            # Vytvoření klienta pro B&R
+            client = Client(url=url)
+            # asynua samotná nemá parametr timeout na connect(), obalíme to přes asyncio
+            await asyncio.wait_for(client.connect(), timeout=3.0)
+            
+            # Pokud to prošlo, hned se zase odpojíme
+            await client.disconnect()
+            print("OPC UA spojení ÚSPĚŠNÉ.")
+            return {"status": "success", "message": "OPC UA spojení navázáno."}
+            
+        except asyncio.TimeoutError:
+            print("OPC UA Error: Vypršel časový limit (Timeout). Zařízení není v síti.")
+            raise HTTPException(status_code=400, detail="Vypršel časový limit. OPC server není dostupný.")
+        except Exception as e:
+            print(f"OPC UA Error: {e}")
+            raise HTTPException(status_code=400, detail=f"Chyba připojení: {str(e)}")
+
+    elif type == "ftp":
+        host = payload.get("host")
+        user = payload.get("username")
+        pwd = payload.get("password")
+        print(f"Pokus o připojení k FTP: {host} (Uživatel: {user})")
+        
+        try:
+            # Synchronní FTP kód obalíme do fce pro asynchronní zavolání
+            def try_ftp():
+                ctx = ssl.create_default_context()
+                ctx.check_hostname = False
+                ctx.verify_mode = ssl.CERT_NONE
+                ctx.minimum_version = ssl.TLSVersion.TLSv1
+                # Timeout 3 sekundy
+                ftp = FTP_TLS(context=ctx, timeout=3.0) 
+                ftp.connect(host, 21)
+                ftp.login(user, pwd)
+                ftp.quit()
+            
+            await asyncio.to_thread(try_ftp)
+            print("FTP spojení ÚSPĚŠNÉ.")
+            return {"status": "success", "message": "FTP spojení navázáno a ověřeno."}
+            
+        except Exception as e:
+            # FTP hází timeouty pod běžným Exception (TimeoutError nebo socket.timeout)
+            print(f"FTP Error: {e}")
+            raise HTTPException(status_code=400, detail=f"Chyba připojení FTP: {str(e)}")
+            
+    else:
+        raise HTTPException(status_code=400, detail="Neznámý typ testu.")
 
 # --- SEKCE SERVICE NOTES ---
 
