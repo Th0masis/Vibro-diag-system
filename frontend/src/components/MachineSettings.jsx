@@ -7,6 +7,7 @@ const MachineSettings = ({ machineId }) => {
   const [message, setMessage] = useState({ text: '', type: '' });
   
   // Stavy formulářů - odpovídají struktuře z backendu
+  const [isActiveCollection, setIsActiveCollection] = useState(false); // NOVÝ STAV PRO TOGGLE
   const [opcUa, setOpcUa] = useState({ url: '' });
   const [ftp, setFtp] = useState({ 
     host: '', 
@@ -21,6 +22,9 @@ const MachineSettings = ({ machineId }) => {
       try {
         setFetching(true);
         const response = await axios.get(`/machines/${machineId}/settings`);
+        
+        // Načtení nového flagu (pokud přijde null, nastaví se na false)
+        setIsActiveCollection(response.data.is_active_collection || false); 
         setOpcUa(response.data.opc_ua);
         setFtp(response.data.ftp);
       } catch (error) {
@@ -44,6 +48,7 @@ const MachineSettings = ({ machineId }) => {
 
     try {
       await axios.put(`/machines/${machineId}/settings`, {
+        is_active_collection: isActiveCollection, // PŘIDÁNO DO PAYLOADU
         opc_ua: opcUa,
         ftp: ftp
       });
@@ -61,16 +66,10 @@ const MachineSettings = ({ machineId }) => {
     setMessage({ text: `Testuji spojení s ${type.toUpperCase()} (čekejte cca 3s)...`, type: 'info' });
     
     try {
-      // Podle toho, které tlačítko uživatel stiskl, pošleme příslušná data z React state
       const payload = type === 'opc' ? opcUa : ftp;
-      
       const response = await axios.post(`/machines/${machineId}/test-connection?type=${type}`, payload);
-      
-      // Pokud to náhodou projde (když budeš na stejné síti)
       setMessage({ text: response.data.message, type: 'success' });
-      
     } catch (error) {
-      // Zde to zachytí ten Timeout Error z backendu a vypíše ti ho červeně
       const errorMsg = error.response?.data?.detail || `Spojení s ${type.toUpperCase()} selhalo.`;
       setMessage({ text: errorMsg, type: 'error' });
     }
@@ -103,6 +102,51 @@ const MachineSettings = ({ machineId }) => {
       )}
 
       <form onSubmit={handleSave}>
+        
+        {/* NOVÁ SEKCE: Hlavní přepínač sběru dat */}
+        <div style={{ 
+          display: 'flex', 
+          alignItems: 'center', 
+          justifyContent: 'space-between', 
+          padding: '20px', 
+          background: isActiveCollection ? '#f0fdf4' : '#f8fafc', 
+          border: isActiveCollection ? '1px solid #bbf7d0' : '1px solid #e2e8f0', 
+          borderRadius: '8px', 
+          marginBottom: '25px',
+          transition: 'all 0.3s ease'
+        }}>
+          <div>
+            <div style={{ fontWeight: 'bold', color: isActiveCollection ? '#166534' : '#475569', fontSize: '1.1rem', marginBottom: '4px' }}>
+              {isActiveCollection ? 'Automatický sběr dat je AKTIVNÍ' : 'Automatický sběr dat je VYPNUTÝ'}
+            </div>
+            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
+              Určuje, zda bude backend v pravidelných intervalech (4h) stahovat RAW data a hodnoty přes OPC UA.
+            </div>
+          </div>
+          
+          {/* CSS Toggle Switch */}
+          <label style={{ position: 'relative', display: 'inline-block', width: '54px', height: '28px', cursor: 'pointer' }}>
+            <input 
+              type="checkbox" 
+              checked={isActiveCollection} 
+              onChange={(e) => setIsActiveCollection(e.target.checked)} 
+              style={{ opacity: 0, width: 0, height: 0 }} 
+            />
+            <span style={{ 
+              position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
+              backgroundColor: isActiveCollection ? 'var(--br-orange, #ea580c)' : '#cbd5e1', 
+              transition: '.3s', borderRadius: '34px' 
+            }}>
+              <span style={{ 
+                position: 'absolute', content: '""', height: '20px', width: '20px', 
+                left: isActiveCollection ? '30px' : '4px', bottom: '4px', 
+                backgroundColor: 'white', transition: '.3s', borderRadius: '50%',
+                boxShadow: '0 2px 4px rgba(0,0,0,0.2)'
+              }}></span>
+            </span>
+          </label>
+        </div>
+
         {/* Grid pro dvě sekce nastavení */}
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px', marginBottom: '30px' }}>
           
@@ -110,7 +154,7 @@ const MachineSettings = ({ machineId }) => {
           <div className="detail-card card-tech">
             <div className="card-title">OPC UA Komunikace</div>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px' }}>
-              Parametry pro živé vyčítání charakteristik (RMS, Kurtosis, atd.) z PLC.
+              Parametry pro živé vyčítání charakteristik z PLC.
             </p>
 
             <div className="add-user-modal" style={{ maxWidth: '100%', padding: 0, boxShadow: 'none' }}>

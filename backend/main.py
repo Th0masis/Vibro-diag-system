@@ -30,12 +30,6 @@ app.add_middleware(
     allow_headers=['*'],    
 )
 
-# Konfigurace PLC
-PLC_OPC_URL = "opc.tcp://10.24.137.37:4840"
-PLC_FTP_HOST = "10.24.137.37"
-PLC_FTP_USER = "admin"
-PLC_FTP_PASS = ".admin"
-FTP_DIR = "/C:/BufferData/"
 
 # BaseModel pro požadavek z frontendu
 class TrainingSegmentFrontend(BaseModel):
@@ -52,18 +46,19 @@ class WebhookPayload(BaseModel):
     status: str             # "success" nebo "failed"
     message: Optional[str] = None
 
-class OpcUaSettings(BaseModel):
-    url: str
+class OPCSettings(BaseModel):
+    url: Optional[str] = ""
 
-class FtpSettings(BaseModel):
-    host: str
-    username: str
-    password: str
-    directory: str
+class FTPSettings(BaseModel):
+    host: Optional[str] = ""
+    username: Optional[str] = ""
+    password: Optional[str] = ""
+    directory: Optional[str] = ""
 
 class MachineSettingsUpdate(BaseModel):
-    opc_ua: OpcUaSettings
-    ftp: FtpSettings
+    is_active_collection: bool  # PŘIDÁNO: Toto očekáváme z přepínače v Reactu
+    opc_ua: OPCSettings
+    ftp: FTPSettings
 
 # Pripojeni k DB
 DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
@@ -133,149 +128,177 @@ def start_scheduler():
 async def download_and_process_raw_data():
     print(f"[{datetime.now()}] Spouštím 4hodinovou rutinu pro sběr dat...")
     
-    # 1. KONTROLA, ZDA STROJ BĚŽÍ (Ochrana proti nočním směnám)
+    # 1. NAČTENÍ AKTIVNÍCH STROJŮ A JEJICH KONFIGURACE Z TABULKY MACHINES
     try:
         with engine.connect() as conn:
-            # Zkontrolujeme RMS za poslední hodinu
-            query = text("SELECT AVG(rms_raw) FROM feature_data WHERE time >= NOW() - INTERVAL '1 hour'")
-            avg_rms = conn.execute(query).scalar()
+            # Vytáhneme pouze stroje, které mají zapnutý flag pro stahování dat
+            # Používáme přesné názvy sloupců podle tvého obrázku z pgAdminu
+            query_machines = text("""
+                SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
+                FROM machines 
+                WHERE is_active_collection = TRUE
+            """)
+            active_machines = conn.execute(query_machines).fetchall()
             
-            # Pokud je RMS příliš nízké nebo nejsou data, stroj pravděpodobně stojí
-            if avg_rms is None or avg_rms < 0.1: # Prahovou hodnotu si uprav
-                print("Stroj je pravděpodobně vypnutý (nízké RMS). Přeskakuji stahování.")
+            if not active_machines:
+                print("Žádný stroj nemá aktuálně povolený sběr dat (is_active_collection = FALSE).")
                 return
+                
     except Exception as e:
-        print(f"Chyba při ověřování běhu stroje: {e}")
-        # Můžeš se rozhodnout, jestli při chybě DB pokračovat, nebo return. Zde pokračujeme.
+        print(f"Chyba při dotazu na aktivní stroje: {e}")
+        return
 
-    # Vygenerujeme unikátní ID pro tento sběr
-    work_id = f"meas_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    # HLAVNÍ SMYČKA: Projdeme všechny stroje, které mají zapnutý sběr
+    for machine in active_machines:
+        mach_id = machine.id_machine
+        plc_opc_url = machine.opc_ua_url
+        plc_ftp_host = machine.ftp_host
+        plc_ftp_user = machine.ftp_user
+        plc_ftp_pass = machine.ftp_password
+        plc_remote_dir = machine.ftp_dir or "C:/BufferData"
+        
+        # Ochrana proti nevyplněným údajům
+        if not all([plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass]):
+            print(f"[VAROVÁNÍ] Stroj ID {mach_id} má zapnutý sběr, ale chybí mu přihlašovací údaje. Přeskakuji.")
+            continue
 
-    # 2. KOMUNIKACE PŘES OPC UA
-    print(f"Připojuji se k OPC UA ({PLC_OPC_URL})...")
-    async with Client(url=PLC_OPC_URL) as client:
-        # Definice uzlů (NodeID formát ns=6;s=...)
-        # Pokud neznáš přesné NodeID, zkopíruj si ho z UaExpert z pole "NodeId" v pravém panelu
-        node_workid = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
-        node_buflen = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
-        node_start  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
-        node_reset  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+        print(f"\n=======================================================")
+        print(f"Zpracovávám stroj ID: {mach_id} (OPC UA: {plc_opc_url})")
         
-        node_done   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
-        node_csv    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
-        
-        # Zápis parametrů - striktní definice typů pro B&R
-        dv_workid = ua.DataValue(ua.Variant(work_id, ua.VariantType.String))
-        dv_buflen = ua.DataValue(ua.Variant(1000, ua.VariantType.UInt32))
-        
-        await node_workid.write_value(dv_workid)
-        await node_buflen.write_value(dv_buflen)
-        
-        # Spuštění - explicitní Boolean
-        dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
-        dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
-        
-        await node_start.write_value(dv_true)
-        print("Povel k uložení dat odeslán.")
-        
-        # Čekání na dokončení (Polling)
-        while True:
-            is_done = await node_done.read_value()
-            if is_done:
-                break
-            await asyncio.sleep(2) # Zkontroluje stav každé 2 vteřiny
-            
-        csv_filename = await node_csv.read_value()
-        print(f"PLC hlásí uloženo: {csv_filename}")
-        
-        # Příprava na stažení (resetujeme Start příznak)
-        await node_start.write_value(dv_false)
-
-    # 3. STAŽENÍ SOUBORU PŘES FTP (pomocí robustního ftplib)
-    print("\n--- START FTP DEBUG (ftplib) ---")
-    local_filepath = f"./data/{csv_filename}"
-    os.makedirs("./data", exist_ok=True)
-    
-    def download_ftp_file():
-        # Vytvoření speciálního kontextu pro B&R
-        ctx = ssl.create_default_context()
-        ctx.check_hostname = False
-        ctx.verify_mode = ssl.CERT_NONE
-        ctx.minimum_version = ssl.TLSVersion.TLSv1
-        ctx.maximum_version = ssl.TLSVersion.TLSv1_2
+        # 2. KONTROLA BĚHU STROJE (Ochrana proti sběru dat v klidu)
         try:
-            ctx.set_ciphers('ALL:@SECLEVEL=0')
+            with engine.connect() as conn:
+                query_rms = text(f"SELECT AVG(rms_raw) FROM feature_data WHERE id_machine = {mach_id} AND time >= NOW() - INTERVAL '1 hour'")
+                avg_rms = conn.execute(query_rms).scalar()
+                
+                if avg_rms is None or avg_rms < 0.1:
+                    print(f"Stroj {mach_id} pravděpodobně stojí (AVG RMS: {avg_rms}). Přeskakuji stahování.")
+                    continue
+        except Exception as e:
+            print(f"Chyba při ověřování běhu stroje {mach_id}: {e}")
+            continue
+
+        # Vygenerujeme unikátní ID pro tento sběr, které obsahuje i ID stroje!
+        work_id = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+
+        # 3. KOMUNIKACE PŘES OPC UA
+        try:
+            print(f"[{mach_id}] Připojuji se k OPC UA...")
+            async with Client(url=plc_opc_url) as client:
+                node_workid = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
+                node_buflen = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
+                node_start  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
+                node_done   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
+                
+                # Zápis parametrů - 8192 vzorků
+                await node_workid.write_value(ua.DataValue(ua.Variant(work_id, ua.VariantType.String)))
+                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
+                
+                dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
+                dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
+                
+                await node_start.write_value(dv_true)
+                print(f"[{mach_id}] Povel odeslán. Čekám na dokončení 4 kanálů na PLC...")
+                
+                # Polling
+                timeout_counter = 0
+                while True:
+                    if await node_done.read_value():
+                        break
+                    await asyncio.sleep(2)
+                    timeout_counter += 2
+                    if timeout_counter > 60: # Ochrana proti zaseknutí (timeout po 60s)
+                        print(f"[{mach_id}] Timeout při čekání na PLC!")
+                        break
+                    
+                await node_start.write_value(dv_false)
+        except Exception as e:
+            print(f"[{mach_id}] Chyba OPC UA komunikace: {e}")
+            continue
+
+        # 4. FTP PULL
+        print(f"[{mach_id}] --- START FTP PULL ---")
+        os.makedirs(f"./data/mach{mach_id}", exist_ok=True) # Složky dělené podle strojů
+        downloaded_files = [] 
+        
+        def download_ftp_files():
+            ctx = ssl.create_default_context()
+            ctx.check_hostname = False
+            ctx.verify_mode = ssl.CERT_NONE
+            try:
+                ctx.set_ciphers('ALL:@SECLEVEL=0')
+            except:
+                pass
+
+            ftp = FTP_TLS(context=ctx)
+            # Defaultní port je 21, jelikož ho v DB nemáš
+            ftp.connect(plc_ftp_host, 21) 
+            ftp.login(plc_ftp_user, plc_ftp_pass)
+            ftp.prot_p() 
+            ftp.set_pasv(True) 
+            
+            for ch in range(1, 5):
+                csv_filename = f"{work_id}_CH{ch}.csv"
+                # Vyčištění případných přebytečných lomítek z DB
+                clean_remote_dir = plc_remote_dir.rstrip('/')
+                remote_path = f"{clean_remote_dir}/{csv_filename}"
+                local_filepath = f"./data/mach{mach_id}/{csv_filename}"
+                
+                print(f"[{mach_id}] >>> Stahuji {csv_filename}...")
+                with open(local_filepath, 'wb') as f:
+                    ftp.retrbinary(f"RETR {remote_path}", f.write)
+                    
+                ftp.delete(remote_path)
+                downloaded_files.append({"channel": ch, "path": local_filepath})
+                
+            ftp.quit()
+            return downloaded_files
+
+        try:
+            downloaded_files = await asyncio.to_thread(download_ftp_files)
+        except Exception as e:
+            print(f"[{mach_id}] Chyba při FTP: {e}")
+            # Zkusíme aspoň resetovat PLC automat i přes FTP chybu
+            pass 
+            
+        # 5. RESET PLC AUTOMATU
+        try:
+            async with Client(url=plc_opc_url) as client:
+                node_reset = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+                await node_reset.write_value(dv_true)
+                await asyncio.sleep(1)
+                await node_reset.write_value(dv_false)
         except:
             pass
 
-        print(f">>> Připojuji se na FTP {PLC_FTP_HOST}...")
-        ftp = FTP_TLS(context=ctx)
-        
-        # Připojení a vyjednání TLS
-        ftp.connect(PLC_FTP_HOST, 21)
-        ftp.login(PLC_FTP_USER, PLC_FTP_PASS)
-        
-        # Šifrování i pro samotný přenos dat (důležité u FTPS!)
-        ftp.prot_p() 
-        
-        # Vynucení klasického pasivního módu (vyhýbá se chybám s EPSV)
-        ftp.set_pasv(True) 
-        
-        print(f">>> Stahuji soubor {csv_filename}...")
-        remote_path = f"C:/BufferData/{csv_filename}"
-        
-        # Otevřeme lokální soubor a stahujeme
-        with open(local_filepath, 'wb') as f:
-            # Příkaz RETR nevyžaduje MLST! PLC s ním nebude mít problém.
-            ftp.retrbinary(f"RETR {remote_path}", f.write)
-            
-        print("<<< Soubor úspěšně stažen.")
-        
-        print(f">>> Mažu soubor na PLC...")
-        ftp.delete(remote_path)
-        print("<<< Soubor smazán.")
-        
-        ftp.quit()
+        # 6. ZÁPIS DO POSTGRESQL
+        if downloaded_files:
+            print(f"[{mach_id}] Finalizuji zápis do databáze...")
+            try:
+                with engine.connect() as conn:
+                    # Najdeme ID senzorů pro tento konkrétní stroj!
+                    query_sensors = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC LIMIT 4")
+                    sensors = conn.execute(query_sensors).scalars().all()
+                    
+                    ts_now = datetime.now(timezone.utc)
+                    for file_info in downloaded_files:
+                        ch_idx = file_info["channel"] - 1
+                        if ch_idx < len(sensors):
+                            conn.execute(text("""
+                                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                                VALUES (:sid, :ts, :path, :notes)
+                            """), {
+                                "sid": sensors[ch_idx],
+                                "ts": ts_now,
+                                "path": file_info["path"],
+                                "notes": f"Batch: {work_id} | Channel {file_info['channel']}"
+                            })
+                    conn.commit()
+                    print(f"[{mach_id}] Záznamy pro 4 senzory byly úspěšně uloženy.")
+            except Exception as e:
+                print(f"[{mach_id}] Chyba zápisu do DB: {e}")
 
-    # Spuštění blokující FTP funkce v asynchronním vlákně
-    try:
-        await asyncio.to_thread(download_ftp_file)
-        print(f"Soubor bezpečně uložen do {local_filepath}")
-    except Exception as e:
-        print(f"\n[!!!] CHYBA PŘI FTP PŘENOSU: {e}")
-        
-    print("--- KONEC FTP DEBUG ---\n")
-
-    # 4. RESET PLC AUTOMATU
-    async with Client(url=PLC_OPC_URL) as client:
-        node_reset = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
-        
-        dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
-        dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
-        
-        await node_reset.write_value(dv_true)
-        await asyncio.sleep(1)
-        await node_reset.write_value(dv_false)
-    # 5. ULOŽENÍ DO DATABÁZE
-    print("Zapisuji cestu k souboru do databáze...")
-    try:
-        with engine.connect() as conn:
-            query = text("""
-                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
-                VALUES (:sid, :ts, :path, :notes)
-            """)
-            conn.execute(query, {
-                "sid": 5, # Aktuálně natvrdo senzor 5
-                "ts": datetime.now(timezone.utc),
-                "path": local_filepath,
-                "notes": "Automatický 4h stahovací cyklus (B&R PLC)"
-            })
-            conn.commit()
-            print("Záznam úspěšně vložen do databáze.")
-    except Exception as e:
-        print(f"\n[!!!] Chyba při zápisu do databáze: {e}")
-        
-    print("Hotovo! Čekám na další interval.")
+    print(f"\n[{datetime.now()}] 4hodinová rutina pro všechny aktivní stroje dokončena.")
 
 # --- SEKCE UŽIVATELŮ ---
 
@@ -897,10 +920,10 @@ def get_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
     
 @app.get("/machines/{machine_id}/settings")
 def get_machine_settings(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """Vrátí aktuální nastavení OPC UA a FTP pro daný stroj."""
+    """Vrátí aktuální nastavení OPC UA, FTP a stav sběru dat pro daný stroj."""
     with engine.connect() as conn:
         query = text("""
-            SELECT opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
+            SELECT is_active_collection, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
             FROM machines 
             WHERE id_machine = :mid
         """)
@@ -910,27 +933,30 @@ def get_machine_settings(machine_id: int, token: str = Depends(oauth2_scheme)):
             raise HTTPException(status_code=404, detail="Stroj nenalezen")
             
         return {
+            # Ošetření None hodnoty pro případ, že by ve sloupci ještě nebylo nic zapsáno
+            "is_active_collection": bool(result[0]) if result[0] is not None else False,
             "opc_ua": {
-                "url": result[0] or ""
+                "url": result[1] or ""
             },
             "ftp": {
-                "host": result[1] or "",
-                "username": result[2] or "",
-                "password": result[3] or "",
-                "directory": result[4] or ""
+                "host": result[2] or "",
+                "username": result[3] or "",
+                "password": result[4] or "",
+                "directory": result[5] or ""
             }
         }
 
 @app.put("/machines/{machine_id}/settings")
 def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, role: str = Depends(get_current_user_role)):
-    """Uloží nové nastavení OPC UA a FTP pro stroj. (Pouze Admin/Operator)"""
+    """Uloží nové nastavení OPC UA, FTP a stav sběru dat pro stroj. (Pouze Admin/Operator)"""
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nemáte oprávnění měnit nastavení stroje.")
         
     with engine.connect() as conn:
         query = text("""
             UPDATE machines 
-            SET opc_ua_url = :opc_url,
+            SET is_active_collection = :is_active,
+                opc_ua_url = :opc_url,
                 ftp_host = :ftp_host,
                 ftp_user = :ftp_user,
                 ftp_password = :ftp_pass,
@@ -939,6 +965,7 @@ def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, rol
         """)
         
         result = conn.execute(query, {
+            "is_active": payload.is_active_collection,
             "opc_url": payload.opc_ua.url,
             "ftp_host": payload.ftp.host,
             "ftp_user": payload.ftp.username,
@@ -951,8 +978,7 @@ def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, rol
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Stroj nenalezen")
             
-        return {"message": "Nastavení stroje bylo úspěšně aktualizováno."}
-    
+        return {"message": "Nastavení stroje bylo úspěšně aktualizováno."}   
 
 @app.post("/machines/{machine_id}/test-connection")
 async def test_machine_connection(machine_id: int, type: str, payload: dict, role: str = Depends(get_current_user_role)):
