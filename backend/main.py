@@ -124,182 +124,156 @@ def start_scheduler():
     scheduler.start()
     print("Scheduler spuštěn v produkčním 4h režimu.")
 
-# Stažení RAW dat z PLC přes FTP
+# Stažení RAW dat z PLC přes FTP (Master-Slave řízení přes Python)
 async def download_and_process_raw_data():
-    print(f"[{datetime.now()}] Spouštím 4hodinovou rutinu pro sběr dat...")
+    print(f"[{datetime.now()}] Spouštím rutinu pro sběr dat...")
     
-    # 1. NAČTENÍ AKTIVNÍCH STROJŮ A JEJICH KONFIGURACE Z TABULKY MACHINES
+    # 1. NAČTENÍ AKTIVNÍCH STROJŮ A JEJICH KONFIGURACE Z DATABÁZE
     try:
         with engine.connect() as conn:
-            # Vytáhneme pouze stroje, které mají zapnutý flag pro stahování dat
-            # Používáme přesné názvy sloupců podle tvého obrázku z pgAdminu
-            query_machines = text("""
-                SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
-                FROM machines 
-                WHERE is_active_collection = TRUE
-            """)
-            active_machines = conn.execute(query_machines).fetchall()
+            query = text("SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir FROM machines WHERE is_active_collection = TRUE")
+            active_machines = conn.execute(query).fetchall()
             
             if not active_machines:
-                print("Žádný stroj nemá aktuálně povolený sběr dat (is_active_collection = FALSE).")
+                print("Žádný stroj nemá povolený automatický sběr dat.")
                 return
-                
     except Exception as e:
-        print(f"Chyba při dotazu na aktivní stroje: {e}")
+        print(f"Chyba databáze při načítání strojů: {e}")
         return
 
-    # HLAVNÍ SMYČKA: Projdeme všechny stroje, které mají zapnutý sběr
+    # Projdeme všechny aktivní stroje
     for machine in active_machines:
-        mach_id = machine.id_machine
-        plc_opc_url = machine.opc_ua_url
-        plc_ftp_host = machine.ftp_host
-        plc_ftp_user = machine.ftp_user
-        plc_ftp_pass = machine.ftp_password
-        plc_remote_dir = machine.ftp_dir or "C:/BufferData"
+        mach_id, plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass, plc_remote_dir = machine
+        plc_remote_dir = plc_remote_dir or "C:/BufferData"
         
-        # Ochrana proti nevyplněným údajům
-        if not all([plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass]):
-            print(f"[VAROVÁNÍ] Stroj ID {mach_id} má zapnutý sběr, ale chybí mu přihlašovací údaje. Přeskakuji.")
-            continue
-
-        print(f"\n=======================================================")
-        print(f"Zpracovávám stroj ID: {mach_id} (OPC UA: {plc_opc_url})")
-        
-        # 2. KONTROLA BĚHU STROJE (Ochrana proti sběru dat v klidu)
+        # Ochrana proti stahování, když stroj stojí (volitelné)
         try:
             with engine.connect() as conn:
                 query_rms = text(f"SELECT AVG(rms_raw) FROM feature_data WHERE id_machine = {mach_id} AND time >= NOW() - INTERVAL '1 hour'")
                 avg_rms = conn.execute(query_rms).scalar()
-                
                 if avg_rms is None or avg_rms < 0.1:
-                    print(f"Stroj {mach_id} pravděpodobně stojí (AVG RMS: {avg_rms}). Přeskakuji stahování.")
+                    print(f"Stroj {mach_id} pravděpodobně stojí (RMS < 0.1). Přeskakuji.")
                     continue
         except Exception as e:
-            print(f"Chyba při ověřování běhu stroje {mach_id}: {e}")
+            print(f"Chyba při ověřování běhu stroje: {e}")
             continue
-
-        # Vygenerujeme unikátní ID pro tento sběr, které obsahuje i ID stroje!
-        work_id = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-
-        # 3. KOMUNIKACE PŘES OPC UA
-        try:
-            print(f"[{mach_id}] Připojuji se k OPC UA...")
-            async with Client(url=plc_opc_url) as client:
-                node_workid = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
-                node_buflen = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
-                node_start  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
-                node_done   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
-                
-                # Zápis parametrů - 8192 vzorků
-                await node_workid.write_value(ua.DataValue(ua.Variant(work_id, ua.VariantType.String)))
-                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
-                
-                dv_true = ua.DataValue(ua.Variant(True, ua.VariantType.Boolean))
-                dv_false = ua.DataValue(ua.Variant(False, ua.VariantType.Boolean))
-                
-                await node_start.write_value(dv_true)
-                print(f"[{mach_id}] Povel odeslán. Čekám na dokončení 4 kanálů na PLC...")
-                
-                # Polling
-                timeout_counter = 0
-                while True:
-                    if await node_done.read_value():
-                        break
-                    await asyncio.sleep(2)
-                    timeout_counter += 2
-                    if timeout_counter > 60: # Ochrana proti zaseknutí (timeout po 60s)
-                        print(f"[{mach_id}] Timeout při čekání na PLC!")
-                        break
-                    
-                await node_start.write_value(dv_false)
-        except Exception as e:
-            print(f"[{mach_id}] Chyba OPC UA komunikace: {e}")
-            continue
-
-        # 4. FTP PULL
-        print(f"[{mach_id}] --- START FTP PULL ---")
-        os.makedirs(f"./data/mach{mach_id}", exist_ok=True) # Složky dělené podle strojů
-        downloaded_files = [] 
+            
+        work_id_prefix = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
         
-        def download_ftp_files():
-            ctx = ssl.create_default_context()
-            ctx.check_hostname = False
-            ctx.verify_mode = ssl.CERT_NONE
-            try:
-                ctx.set_ciphers('ALL:@SECLEVEL=0')
-            except:
-                pass
-
-            ftp = FTP_TLS(context=ctx)
-            # Defaultní port je 21, jelikož ho v DB nemáš
-            ftp.connect(plc_ftp_host, 21) 
-            ftp.login(plc_ftp_user, plc_ftp_pass)
-            ftp.prot_p() 
-            ftp.set_pasv(True) 
-            
-            for ch in range(1, 5):
-                csv_filename = f"{work_id}_CH{ch}.csv"
-                # Vyčištění případných přebytečných lomítek z DB
-                clean_remote_dir = plc_remote_dir.rstrip('/')
-                remote_path = f"{clean_remote_dir}/{csv_filename}"
-                local_filepath = f"./data/mach{mach_id}/{csv_filename}"
-                
-                print(f"[{mach_id}] >>> Stahuji {csv_filename}...")
-                with open(local_filepath, 'wb') as f:
-                    ftp.retrbinary(f"RETR {remote_path}", f.write)
-                    
-                ftp.delete(remote_path)
-                downloaded_files.append({"channel": ch, "path": local_filepath})
-                
-            ftp.quit()
-            return downloaded_files
+        # Slovník pro tvé mapování kanálů a čísel bufferů
+        buffer_mapping = {
+            1: 9,   # Kanál 1
+            2: 11,  # Kanál 2
+            3: 13,  # Kanál 3
+            4: 15   # Kanál 4
+        }
 
         try:
-            downloaded_files = await asyncio.to_thread(download_ftp_files)
-        except Exception as e:
-            print(f"[{mach_id}] Chyba při FTP: {e}")
-            # Zkusíme aspoň resetovat PLC automat i přes FTP chybu
-            pass 
-            
-        # 5. RESET PLC AUTOMATU
-        try:
+            print(f"[{mach_id}] Připojuji se k OPC UA ({plc_opc_url})...")
             async with Client(url=plc_opc_url) as client:
-                node_reset = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
-                await node_reset.write_value(dv_true)
-                await asyncio.sleep(1)
-                await node_reset.write_value(dv_false)
-        except:
-            pass
+                
+                # Načtení všech uzlů, jak jsi je definoval
+                node_workid  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
+                node_buflen  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
+                node_bufnum  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferNumber") # TVŮJ NOVÝ UZEL
+                node_start   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
+                node_done    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
+                node_csv     = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
+                node_reset   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
 
-        # 6. ZÁPIS DO POSTGRESQL
-        if downloaded_files:
-            print(f"[{mach_id}] Finalizuji zápis do databáze...")
-            try:
-                with engine.connect() as conn:
-                    # Najdeme ID senzorů pro tento konkrétní stroj!
-                    query_sensors = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC LIMIT 4")
-                    sensors = conn.execute(query_sensors).scalars().all()
+                # Buffer length je fixní (8192), stačí nastavit jednou
+                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
+
+                # Postupně projíždíme tvůj proces pro každý kanál z buffer_mapping
+                for channel, buffer_number in buffer_mapping.items():
+                    print(f"[{mach_id}] === Zpracovávám Kanál {channel} (Buffer ID: {buffer_number}) ===")
                     
-                    ts_now = datetime.now(timezone.utc)
-                    for file_info in downloaded_files:
-                        ch_idx = file_info["channel"] - 1
-                        if ch_idx < len(sensors):
-                            conn.execute(text("""
-                                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
-                                VALUES (:sid, :ts, :path, :notes)
-                            """), {
-                                "sid": sensors[ch_idx],
-                                "ts": ts_now,
-                                "path": file_info["path"],
-                                "notes": f"Batch: {work_id} | Channel {file_info['channel']}"
-                            })
-                    conn.commit()
-                    print(f"[{mach_id}] Záznamy pro 4 senzory byly úspěšně uloženy.")
-            except Exception as e:
-                print(f"[{mach_id}] Chyba zápisu do DB: {e}")
+                    # 1. ZADÁNÍ WorkID a BufferNumber
+                    current_work_id = f"{work_id_prefix}_CH{channel}"
+                    await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
+                    # U B&R bývá datový typ pro tyto indexy standardně UINT (což je v OPC UA UInt16)
+                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.UInt16)))
+                    
+                    # 2. SPUŠTĚNÍ (START)
+                    await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+                    
+                    # 3. ČEKÁNÍ NA DONE
+                    timeout = 0
+                    while True:
+                        if await node_done.read_value():
+                            break
+                        await asyncio.sleep(1)
+                        timeout += 1
+                        if timeout > 45:
+                            print(f"[{mach_id}] Timeout na PLC u kanálu {channel}!")
+                            break
+                    
+                    # 4. ZÍSKÁNÍ JMÉNA SOUBORU
+                    csv_filename = await node_csv.read_value()
+                    
+                    # 5. UKONČENÍ A RESET
+                    # Bezpečností shození Startu a trigger Resetu
+                    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+                    await asyncio.sleep(0.5) # Krátká pauza, aby to PLC stihlo zaregistrovat
+                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    
+                    # 6. FTP STAŽENÍ A SMAZÁNÍ
+                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
+                    os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
+                    
+                    def download_and_delete_ftp():
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        ctx.set_ciphers('ALL:@SECLEVEL=0')
+                        
+                        ftp = FTP_TLS(context=ctx)
+                        ftp.connect(plc_ftp_host, 21)
+                        ftp.login(plc_ftp_user, plc_ftp_pass)
+                        ftp.prot_p()
+                        ftp.set_pasv(True)
+                        
+                        remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
+                        
+                        # Stažení
+                        with open(local_filepath, 'wb') as f:
+                            ftp.retrbinary(f"RETR {remote_path}", f.write)
+                        
+                        # Vymazání z PLC
+                        ftp.delete(remote_path)
+                        ftp.quit()
+                        
+                    try:
+                        await asyncio.to_thread(download_and_delete_ftp)
+                        print(f"[{mach_id}] Soubor stažen a smazán z PLC: {csv_filename}")
+                        
+                        # 7. ZÁPIS DO DATABÁZE (Provede se jen po úspěšném FTP stažení)
+                        with engine.connect() as conn:
+                            # Najdeme odpovídající ID senzoru z DB pro tento kanál
+                            query_sensor = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC OFFSET {channel - 1} LIMIT 1")
+                            sensor_id = conn.execute(query_sensor).scalar()
+                            
+                            if sensor_id:
+                                conn.execute(text("""
+                                    INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                                    VALUES (:sid, :ts, :path, :notes)
+                                """), {
+                                    "sid": sensor_id,
+                                    "ts": datetime.now(timezone.utc),
+                                    "path": local_filepath,
+                                    "notes": f"Batch: {work_id_prefix} | Kanál {channel}"
+                                })
+                                conn.commit()
+                                print(f"[{mach_id}] Kanál {channel} uložen do DB pro senzor ID {sensor_id}.")
+                            
+                    except Exception as e:
+                        print(f"[{mach_id}] Chyba FTP přenosu nebo DB u kanálu {channel}: {e}")
+                        
+        except Exception as e:
+            print(f"[{mach_id}] Kritická chyba OPC UA: {e}")
 
-    print(f"\n[{datetime.now()}] 4hodinová rutina pro všechny aktivní stroje dokončena.")
-
+    print(f"[{datetime.now()}] Rutina pro sběr dat dokončena.")
 # --- SEKCE UŽIVATELŮ ---
 
 @app.post("/login")
