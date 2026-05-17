@@ -18,33 +18,41 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
   const [loadingViz, setLoadingViz] = useState(false);
 
   // XJTU-SY sampling parameters
-  const SAMPLING_FREQ = 25600; 
+  const SAMPLING_FREQ = 12800; 
   const DOWNSAMPLE_STEP = 16;  
 
-  // 1. Načtení základu (Časový signál + Vypočtené parametry)
+  // 1. Načtení základu (Nejprve features, pokud jsou, tak i raw data)
   const fetchDetail = async () => {
     try {
       setLoading(true);
-      
-      const rawRes = await axios.get(`/measurements/${measurementId}/raw`);
       
       let featResData = null;
       try {
         const featRes = await axios.get(`/measurements/${measurementId}/features`);
         featResData = featRes.data; 
+        setDetails(featResData);
       } catch (e) {
-        console.log("Features zatím neexistují.");
+        console.log("Měření zatím nemá vypočtené parametry.");
+        setDetails(null);
       }
 
-      const signalData = Array.isArray(rawRes.data) ? rawRes.data : rawRes.data.signal;
-      
-      const formattedRaw = signalData.map((val, idx) => ({
-        time: ((idx * DOWNSAMPLE_STEP) / SAMPLING_FREQ * 1000).toFixed(1), 
-        v: val
-      }));
-      
-      setRawData(formattedRaw);
-      setDetails(featResData);
+      // Pokud jsou data zpracována (mají rms_raw), načteme i surový signál pro graf
+      if (featResData && featResData.rms_raw) {
+        const rawRes = await axios.get(`/measurements/${measurementId}/raw`);
+        const signalData = Array.isArray(rawRes.data) ? rawRes.data : (rawRes.data?.signal || []);
+        
+        if (signalData.length === 0) {
+          setRawData([]);
+        } else {
+          const formattedRaw = signalData.map((val, idx) => ({
+            time: ((idx * DOWNSAMPLE_STEP) / SAMPLING_FREQ * 1000).toFixed(1), 
+            v: val
+          }));
+          setRawData(formattedRaw);
+        }
+      } else {
+        setRawData([]); // Vyčistíme data, pokud není zpracováno
+      }
       
     } catch (error) {
       console.error("Chyba detailu:", error);
@@ -62,8 +70,11 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
     const fetchAdvancedViz = async () => {
       setLoadingViz(true);
       try {
+        // Voláme pouze pokud jsou data už zpracovaná
+        if (!details || !details.rms_raw) return;
+
         if (activeTab === 'fft' && fftData.length === 0) {
-          const res = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/fft`);
+          const res = await axios.get(`/measurements/${measurementId}/fft`);
           const formattedFft = res.data.frequencies.map((freq, i) => ({
             freq: freq,
             amp: res.data.amplitudes[i]
@@ -71,7 +82,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
           setFftData(formattedFft);
         } 
         else if (activeTab === 'cwt' && !cwtImage) {
-          const res = await axios.get(`http://127.0.0.1:8000/measurements/${measurementId}/cwt`);
+          const res = await axios.get(`/measurements/${measurementId}/cwt`);
           setCwtImage(res.data.cwt_image);
         }
       } catch (err) {
@@ -81,16 +92,14 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
       }
     };
 
-    if (activeTab !== 'time') {
-      fetchAdvancedViz();
-    }
-  }, [activeTab, measurementId, fftData.length, cwtImage]);
+    if (activeTab !== 'time') fetchAdvancedViz();
+  }, [activeTab, measurementId, fftData.length, cwtImage, details]);
 
-
+  // 3. Spuštění analýzy
   const handleProcess = async () => {
     setIsProcessing(true);
     try {
-      await axios.post(`http://127.0.0.1:8000/measurements/${measurementId}/process`);
+      await axios.post(`/measurements/${measurementId}/process`);
       await fetchDetail(); 
       if (onProcessed) onProcessed(); 
     } catch (error) {
@@ -99,6 +108,8 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
       setIsProcessing(false);
     }
   };
+
+  const isProcessed = details && details.rms_raw;
 
   if (!measurementId) return null;
 
@@ -117,22 +128,23 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
         }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
             <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Detail měření #{measurementId}</h2>
+            {/* JEDINÉ TLAČÍTKO PRO ZPRACOVÁNÍ */}
             <button 
               onClick={handleProcess}
-              disabled={!!details || isProcessing}
+              disabled={isProcessed || isProcessing}
               style={{
-                background: details ? 'rgba(255,255,255,0.2)' : 'white',
-                color: details ? '#eee' : '#cd3808',
+                background: isProcessed ? 'rgba(255,255,255,0.2)' : 'white',
+                color: isProcessed ? '#eee' : '#cd3808',
                 border: 'none',
                 padding: '6px 16px',
                 borderRadius: '4px',
                 fontWeight: 'bold',
-                cursor: details ? 'default' : 'pointer',
+                cursor: isProcessed ? 'default' : 'pointer',
                 fontSize: '0.9rem',
                 display: 'flex', alignItems: 'center', gap: '8px'
               }}
             >
-              {isProcessing ? '⚡ Počítám...' : details ? '✅ Zpracováno' : '⚙️ Spustit analýzu'}
+              {isProcessing ? '⚡ Počítám...' : isProcessed ? '✅ Zpracováno' : '⚙️ Spustit analýzu'}
             </button>
           </div>
           <button 
@@ -154,7 +166,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
                 {/* ZÁLOŽKY */}
                 <div className="viz-tabs">
                   <button className={`viz-tab ${activeTab === 'time' ? 'active' : ''}`} onClick={() => setActiveTab('time')}>
-                    Časový průběh (1.28 s)
+                    Časový průběh (0.64 s)
                   </button>
                   <button className={`viz-tab ${activeTab === 'fft' ? 'active' : ''}`} onClick={() => setActiveTab('fft')}>
                     Frekvenční spektrum (FFT)
@@ -167,7 +179,17 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
                 {/* PLÁTNO GRAFU */}
                 <div style={{ padding: '20px', width: '100%', height: '450px', position: 'relative' }}>
                   
-                  {loadingViz ? (
+                  {!isProcessed ? (
+                    // Prázdný stav, pokud data nejsou zpracována (Bez tlačítka)
+                    <div style={{ 
+                      height: '100%', display: 'flex', flexDirection: 'column', 
+                      alignItems: 'center', justifyContent: 'center', color: '#94a3b8' 
+                    }}>
+                      <span style={{ fontSize: '3rem', marginBottom: '10px' }}>📊</span>
+                      <p style={{ fontSize: '1.1rem', fontWeight: '500' }}>Nejprve data zpracujte</p>
+                      <p style={{ fontSize: '0.85rem', marginTop: '5px' }}>Použijte tlačítko 'Spustit analýzu' vpravo nahoře.</p>
+                    </div>
+                  ) : loadingViz ? (
                     <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                       Generuji {activeTab.toUpperCase()}...
                     </div>
@@ -229,7 +251,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
                             <Line 
                               type="monotone" 
                               dataKey="amp" 
-                              stroke="#0284c7" /* Modrá barva pro odlišení */
+                              stroke="#0284c7" 
                               strokeWidth={1.5} 
                               dot={false} 
                               isAnimationActive={false} 
@@ -253,30 +275,24 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
                 </div>
               </div>
 
-              {/* PRAVÝ SLOUPEC: HODNOTY (Nezměněno) */}
+              {/* PRAVÝ SLOUPEC: HODNOTY */}
               <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
                 <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', background: '#fff7ed' }}>
                   <h4 style={{ margin: 0, color: '#9a3412' }}>Vypočtené parametry</h4>
                 </div>
                 
                 <div style={{ padding: '20px', flex: 1 }}>
-                  {details ? (
+                  {isProcessed ? (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
                       
                       <FeatureRow label="RMS (Efektivní h.)" value={details.rms_raw?.toFixed(4)} unit="g" highlight />
                       <FeatureRow label="Peak (Špička)" value={details.peak_raw?.toFixed(4)} unit="g" />
-                      <FeatureRow label="Peak-to-Peak" value={(details.max_val - details.min_val)?.toFixed(4)} unit="g" />
                       
                       <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
                       
-                      <FeatureRow label="Max hodnota" value={details.max_val?.toFixed(3)} unit="g" small />
-                      <FeatureRow label="Min hodnota" value={details.min_val?.toFixed(3)} unit="g" small />
+                      <FeatureRow label="Skewness (Šikmost)" value={details.skewness_raw?.toFixed(3)} unit="-" small />
+                      <FeatureRow label="Kurtosis (Špičatost)" value={details.kurtosis_raw?.toFixed(3)} unit="-" small />
                       
-                      <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
-                      
-                      <FeatureRow label="Kurtosis" value={details.kurtosis_raw?.toFixed(3)} unit="-" />
-                      <FeatureRow label="Crest Factor" value={details.crest_factor?.toFixed(3)} unit="-" />
-
                       <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
                         <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Zdrojový soubor:</label>
                         <div style={{ 
@@ -291,22 +307,16 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
                           {details.raw_data_path}
                         </div>
                         <div style={{ marginTop: '5px', fontSize: '0.7rem', color: '#94a3b8' }}>
-                          Analyzováno: {new Date(details.time || Date.now()).toLocaleString('cs-CZ')}
+                          Analyzováno: {new Date(details.timestamp || details.time || Date.now()).toLocaleString('cs-CZ')}
                         </div>
                       </div>
 
                     </div>
                   ) : (
+                    // Prázdný stav pro pravý sloupec (Bez tlačítka)
                     <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '50px' }}>
                       <p>Data nebyla zpracována.</p>
-                      <button 
-                        onClick={handleProcess} 
-                        className="btn-diagnose"
-                        disabled={isProcessing}
-                        style={{ marginTop: '10px', width: '100%' }}
-                      >
-                        {isProcessing ? 'Pracuji...' : 'Spustit výpočet'}
-                      </button>
+                      <p style={{ fontSize: '0.8rem', marginTop: '10px' }}>Hodnoty se zobrazí po spuštění analýzy.</p>
                     </div>
                   )}
                 </div>
@@ -329,7 +339,7 @@ const FeatureRow = ({ label, value, unit, highlight, small }) => (
       fontSize: highlight ? '1.2rem' : (small ? '0.9rem' : '1.1rem'), 
       color: highlight ? '#cd3808' : '#1e293b' 
     }}>
-      {value} <span style={{ fontSize: '0.7em', color: '#94a3b8', fontWeight: 'normal' }}>{unit}</span>
+      {value || '-'} <span style={{ fontSize: '0.7em', color: '#94a3b8', fontWeight: 'normal' }}>{unit}</span>
     </span>
   </div>
 );

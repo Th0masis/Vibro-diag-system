@@ -5,6 +5,7 @@ from torch.utils.data import Dataset
 import torch.nn.functional as F
 from scipy.stats import kurtosis, skew
 import pandas as pd
+from scipy.signal import detrend
 
 # --- KONFIGURACE ---
 # POZOR: Nastav správnou FS podle toho, jaká data ti chodí z databáze!
@@ -79,7 +80,6 @@ class DatabaseFinetuneDataset(Dataset):
         tfr_tensor = process_signal_to_tensor(frame)
         return tfr_tensor
     
-# --- Přidat do utils.py ---
 
 def process_signal_to_fft_tensor(signal_window):
     """
@@ -131,7 +131,65 @@ class Database1DCNNDataset(Dataset):
         tensor_fft = process_signal_to_fft_tensor(self.samples[idx])
         label = torch.tensor(self.labels[idx], dtype=torch.long)
         return tensor_fft, label
+
+# ==========================================
+# NOVÁ FUNKCE PRO ČIŠTĚNÍ DAT A VÝPOČET PŘÍZNAKŮ
+# ==========================================
+def clean_and_overwrite_csv(path):
+    """
+    Načte surové CSV, odstraní DC offset (vycentruje signál kolem nuly),
+    přepíše původní soubor na disku a vrátí vypočtené diagnostické příznaky.
+    """
+    df = pd.read_csv(path)
     
+    # 1. Identifikace sloupce s amplitudou
+    col_name = 'yAxis' if 'yAxis' in df.columns else df.columns[0]
+    
+    # 2. Cílené odstranění řádků (smaže řádek JEN POKUD chybí samotný signál)
+    df = df.dropna(subset=[col_name])
+    
+    signal = df[col_name].values
+        
+    # Převedení na bezpečné číselné pole
+    signal = pd.to_numeric(signal, errors='coerce')
+    signal = np.nan_to_num(signal, nan=0.0)
+    
+    # 3. OCHRANA: Pokud je signál po vyčištění úplně prázdný (délka 0)
+    if len(signal) == 0:
+        return {
+            "rms_raw": 0.0, "kurtosis_raw": 0.0, "peak_raw": 0.0,
+            "rms_acl_env": 0.0, "dif_kt_raw": 0.0, "skewness_raw": 0.0,
+            "act_speed": 1480.0
+        }
+        
+    # Odstranění lineárního trendu (náklonu) i DC offsetu současně
+    clean_signal = detrend(signal, type='linear')
+    
+    # Přepsání původních hodnot v DataFrame a uložení na disk
+    df[col_name] = clean_signal
+    df.to_csv(path, index=False)
+    
+    # Výpočet reálných charakteristik
+    rms = np.sqrt(np.mean(clean_signal**2))
+    kurt = kurtosis(clean_signal)
+    peak = np.max(np.abs(clean_signal))
+    skewness_val = skew(clean_signal)
+    
+    def safe_float(val):
+        if pd.isna(val) or np.isnan(val) or np.isinf(val):
+            return 0.0
+        return float(val)
+    
+    return {
+        "rms_raw": safe_float(rms),
+        "kurtosis_raw": safe_float(kurt),
+        "peak_raw": safe_float(peak),
+        "rms_acl_env": 0.0,       
+        "dif_kt_raw": 0.0,        
+        "skewness_raw": safe_float(skewness_val),
+        "act_speed": 1480.0       
+    }
+
 def extract_14_features(path):
     """Extrahuje 14 statistických příznaků z H a V signálu v CSV."""
     try:
@@ -143,12 +201,12 @@ def extract_14_features(path):
             if len(signal) == 0: return [0]*7
             rms = np.sqrt(np.mean(signal**2))
             var = np.var(signal)
-            skewness = skew(signal)
+            skewness_val = skew(signal)
             kurt = kurtosis(signal)
             peak = np.max(np.abs(signal))
             p2p = np.max(signal) - np.min(signal)
             crest = peak / rms if rms > 0 else 0
-            return [rms, var, skewness, kurt, peak, p2p, crest]
+            return [rms, var, skewness_val, kurt, peak, p2p, crest]
             
         h_feats = calc_7_features(h_sig)
         v_feats = calc_7_features(v_sig)

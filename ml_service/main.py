@@ -18,7 +18,7 @@ import requests
 from models import Encoder, Generator as Decoder, Discriminator
 from models import BearingFault1DCNN
 from models import BiLSTM_RUL
-from utils import extract_14_features
+from utils import extract_14_features, clean_and_overwrite_csv
 from train_aeanowgan import run_training_pipeline
 from train_1dcnn import run_1dcnn_training_pipeline
 from train_rul import run_rul_training_pipeline
@@ -335,105 +335,121 @@ def predict_rul(payload: dict):
 # ==========================================
 @app.post("/process-features")
 def process_features(payload: dict):
+    print("Požadavek na zpracování features dorazil do ml_service")
     path = payload.get("path")
+    
+    if not path:
+        raise HTTPException(status_code=400, detail="V požadavku chybí cesta k souboru 'path'")
+        
     try:
-        df = pd.read_csv(path)
-        signal = df.iloc[:, 0].values 
+        # Zavoláme čistící pipeline, která přepíše soubor a vrátí statistiky
+        features = clean_and_overwrite_csv(path)
+        print(f"Soubor {path} byl úspěšně vyčištěn od DC offsetu a přepsán.")
+        return features
         
-        rms = np.sqrt(np.mean(signal**2))
-        kurt = kurtosis(signal)
-        peak = np.max(np.abs(signal))
-        max_v = np.max(signal)
-        min_v = np.min(signal)
-        crest = peak / rms if rms != 0 else 0
-        
-        return {
-            "rms_raw": float(rms),
-            "kurtosis_raw": float(kurt),
-            "peak_raw": float(peak),
-            "max_val": float(max_v),
-            "min_val": float(min_v),
-            "crest_factor": float(crest)
-        }
     except Exception as e:
+        print(f"Kritická chyba při zpracování signálu v ML službě: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/get-raw-data")
 def get_raw_data(payload: dict):
     path = payload.get("path")
-    step = payload.get("step", 16) 
+    step = payload.get("step", 16) # Vezme každý 16. vzorek pro rychlejší vykreslení
+    
+    if not path:
+        raise HTTPException(status_code=400, detail="Chybí cesta k souboru")
+        
     try:
         df = pd.read_csv(path)
-        signal = df.iloc[::step, 0].tolist() 
-        return signal
+        col_name = 'yAxis' if 'yAxis' in df.columns else df.columns[0]
+        
+        # Převedeme data na list (FastAPI to samo zabalí do JSON)
+        # Provádíme rovnou downsampling
+        signal_list = df[col_name].iloc[::step].tolist()
+        
+        return {"signal": signal_list}
+        
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))   
-    
+        print(f"Chyba při čtení raw data v ML službě: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @app.post("/get-fft")
 def get_fft(payload: dict):
     path = payload.get("path")
-    fs = payload.get("fs", 25600)
-    
+    if not path:
+        raise HTTPException(status_code=400, detail="Chybí cesta")
+        
     try:
         df = pd.read_csv(path)
-        signal = df.iloc[:, 0].values
-        signal = signal - np.mean(signal)
+        col_name = 'yAxis' if 'yAxis' in df.columns else df.columns[0]
+        signal = df[col_name].values
+        
+        if len(signal) == 0:
+            return {"frequencies": [], "amplitudes": []}
+
+        fs = 12800 # Tvoje reálná vzorkovací frekvence
         n = len(signal)
         
-        yf = np.abs(rfft(signal)) / n * 2 
-        xf = rfftfreq(n, 1 / fs)
-        step = max(1, len(xf) // 2000)
-        
+        # 1. Výpočet FFT
+        fft_result = np.fft.fft(signal)
+        freqs = np.fft.fftfreq(n, d=1/fs)
+
+        # 2. Odříznutí zrcadlové (záporné) poloviny
+        half_n = n // 2
+        pos_freqs = freqs[:half_n]
+        # Normalizace amplitudy (aby odpovídala reálným 'g')
+        pos_amps = (2.0 / n) * np.abs(fft_result[:half_n])
+
+        # Aby se React při vykreslování grafu nezasekl, pošleme každý 2. bod (pro 8192 vzorků zbyde krásných 2048 bodů v grafu)
+        step = 2
         return {
-            "frequencies": xf[::step].tolist(),
-            "amplitudes": yf[::step].tolist()
+            "frequencies": pos_freqs[::step].tolist(),
+            "amplitudes": pos_amps[::step].tolist()
         }
     except Exception as e:
-        print(f"Chyba při výpočtu FFT: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 @app.post("/get-cwt")
 def get_cwt(payload: dict):
     path = payload.get("path")
-    fs = payload.get("fs", 25600) 
-    
+    if not path:
+        raise HTTPException(status_code=400, detail="Chybí cesta")
+        
     try:
         df = pd.read_csv(path)
-        signal = df.iloc[:, 0].values
-        signal = signal - np.mean(signal)
-
-        factor = max(1, len(signal) // 2000) 
-        signal_reduced = signal[::factor]
-        fs_reduced = fs / factor 
-
-        frequencies = np.linspace(50, 6500, IMG_SIZE)
-        scales = pywt.frequency2scale(WAVELET, frequencies / fs_reduced)
+        col_name = 'yAxis' if 'yAxis' in df.columns else df.columns[0]
         
-        coeffs, _ = pywt.cwt(signal_reduced, scales, WAVELET)
+        # Pro CWT vezmeme každý 2. vzorek, urychlí to výpočet na desetinu vteřiny a pro vizualizaci to bohatě stačí
+        signal = df[col_name].values[::2] 
+        fs = 12800 / 2 
+        
+        # Wavelet transformace
+        wavelet = 'cmor1.5-1.0'
+        frequencies = np.linspace(50, fs/2, 128) # Frekvence od 50 Hz do Nyquistovy
+        scales = pywt.frequency2scale(wavelet, frequencies / fs)
+        
+        coeffs, _ = pywt.cwt(signal, scales, wavelet)
         amplitude = np.abs(coeffs)
         
+        # Vykreslení do virtuálního plátna
         fig, ax = plt.subplots(figsize=(6, 4))
-        time_extent = len(signal) / fs 
-        
-        ax.imshow(amplitude, cmap='jet', aspect='auto', origin='lower', 
-                  extent=[0, time_extent, 50, 6500])
-        
-        ax.set_ylabel("Frekvence (Hz)", fontsize=10)
-        ax.set_xlabel("Čas (s)", fontsize=10)
+        time_max = len(signal) / fs
+        ax.imshow(amplitude, extent=[0, time_max, frequencies[-1], frequencies[0]], 
+                  aspect='auto', cmap='jet')
+        ax.invert_yaxis() # Nízké frekvence chceme dole
+        ax.set_ylabel("Frekvence [Hz]")
+        ax.set_xlabel("Čas [s]")
         plt.tight_layout()
         
+        # Uložení obrázku do paměti a převod do Base64 textu
         buf = io.BytesIO()
         plt.savefig(buf, format='png', dpi=100)
         plt.close(fig)
-        
         buf.seek(0)
-        base64_str = base64.b64encode(buf.read()).decode('utf-8')
-        img_data_url = f"data:image/png;base64,{base64_str}"
+        encoded = base64.b64encode(buf.read()).decode('utf-8')
         
-        return {"cwt_image": img_data_url}
-
+        return {"cwt_image": f"data:image/png;base64,{encoded}"}
     except Exception as e:
-        print(f"Chyba při výpočtu CWT: {e}")
         raise HTTPException(status_code=500, detail=str(e))
     
 # ==========================================

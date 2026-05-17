@@ -1164,48 +1164,61 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
     return {"message": result["message"], "simulated_fault": result.get("fault")}
 
 @app.get("/machines/{machine_id}/history")
-def get_machine_history(machine_id: int, role: str = Depends(get_current_user_role)):
+def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(get_current_user_role)):
     with engine.connect() as conn:
-        # PŘIDÁNO: f.min_val, f.max_val
+        # Přidán výběr ID a odstraněno filtrování IS NOT NULL u surových dat
         query = text("""
-            SELECT 
-                m.id_measurement, 
-                m.timestamp, 
-                m.raw_data_path, 
-                m.notes,
-                s.serial_number as sensor_name,
-                f.rms_raw, 
-                f.kurtosis_raw,
-                f.peak_raw,
-                f.crest_factor,
-                f.min_val,
-                f.max_val,
-                f.id_featureset
-            FROM measurements m
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            LEFT JOIN feature_data f ON m.id_measurement = f.id_measurement
-            WHERE s.id_machine = :mid
-            ORDER BY m.timestamp ASC
+            (
+                SELECT 
+                    fd.id_featureset as id_record,
+                    fd.time as timestamp, 
+                    s.serial_number as sensor_name,
+                    s.position,
+                    fd.rms_raw, fd.peak_raw, fd.kurtosis_raw, fd.rms_acl_env, 
+                    fd.dif_kt_raw, fd.skewness_raw, fd.act_speed,
+                    'iiot_connector' as source,
+                    NULL as raw_path
+                FROM feature_data fd
+                JOIN sensors s ON fd.id_sensor = s.id_sensor
+                WHERE s.id_machine = :mid
+            )
+            UNION ALL
+            (
+                SELECT 
+                    m.id_measurement as id_record,
+                    m.timestamp, 
+                    s.serial_number as sensor_name,
+                    s.position,
+                    m.rms_raw, m.peak_raw, m.kurtosis_raw, m.rms_acl_env, 
+                    m.dif_kt_raw, m.skewness_raw, m.act_speed,
+                    'raw_analysis' as source,
+                    m.raw_data_path as raw_path
+                FROM measurements m
+                JOIN sensors s ON m.id_sensor = s.id_sensor
+                WHERE s.id_machine = :mid
+            )
+            ORDER BY timestamp DESC
+            LIMIT :lim
         """)
         
-        result = conn.execute(query, {"mid": machine_id}).fetchall()
+        result = conn.execute(query, {"mid": machine_id, "lim": limit}).fetchall()
         
         history = []
         for row in result:
             history.append({
-                "id_measurement": row[0],
+                "id_measurement": row[0],  # Nyní se správně předává ID záznamu
                 "timestamp": row[1],
-                "raw_data_path": row[2],
-                "notes": row[3],
-                "sensor_name": row[4],
-                "rms": row[5],
+                "sensor_name": row[2],
+                "position": row[3],
+                "rms": row[4],
+                "peak": row[5],
                 "kurtosis": row[6],
-                "peak": row[7],
-                "crest_factor": row[8],
-                # Nové položky (indexy se posunuly)
-                "min_val": row[9],
-                "max_val": row[10],
-                "processed": row[11] is not None
+                "rms_acl_env": row[7],
+                "dif_kt_raw": row[8],
+                "skewness": row[9],
+                "act_speed": row[10],
+                "source": row[11],
+                "raw_data_path": row[12]
             })
             
         return history
@@ -1216,21 +1229,20 @@ def process_measurement_data(id_measurement: int, role: str = Depends(get_curren
         raise HTTPException(status_code=403, detail="Nedostatečná oprávnění")
 
     with engine.connect() as conn:
-        # OPRAVENÝ SQL DOTAZ: id_machine bereme z tabulky sensors (s)
+        # 1. Získáme pouze cestu k surovému souboru
         query_path = text("""
-            SELECT m.raw_data_path, s.id_machine 
-            FROM measurements m
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE m.id_measurement = :id
+            SELECT raw_data_path 
+            FROM measurements 
+            WHERE id_measurement = :id
         """)
         
         res = conn.execute(query_path, {"id": id_measurement}).fetchone()
-        if not res: 
-            raise HTTPException(status_code=404, detail="Měření nebylo nalezeno")
+        if not res or not res[0]: 
+            raise HTTPException(status_code=404, detail="Měření nebo soubor nebyl nalezen")
         
-        path, machine_id = res
+        path = res[0]
         
-        # Volání ML Service (zůstává stejné)
+        # 2. Volání ML Service pro vyčištění souboru a výpočet (zůstává strukturálně stejné)
         try:
             ml_res = requests.post(f"{ML_SERVICE_URL}/process-features", json={"path": path})
             if ml_res.status_code != 200:
@@ -1240,47 +1252,72 @@ def process_measurement_data(id_measurement: int, role: str = Depends(get_curren
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Nepodařilo se spojit s ML Service: {e}")
         
-        # Uložení do feature_data (zůstává stejné)
-        query_insert = text("""
-            INSERT INTO feature_data (id_measurement, id_machine, rms_raw, kurtosis_raw, peak_raw, max_val, min_val, crest_factor, time)
-            VALUES (:mid, :mach, :rms, :kurt, :peak, :maxv, :minv, :crest, NOW())
+        # 3. Zápis výsledků: UPDATE stávajícího záznamu v tabulce measurements
+        query_update = text("""
+            UPDATE measurements 
+            SET rms_raw = :rms, 
+                kurtosis_raw = :kurt, 
+                peak_raw = :peak,
+                rms_acl_env = :env,
+                dif_kt_raw = :dif,
+                skewness_raw = :skew,
+                act_speed = :speed
+            WHERE id_measurement = :mid
         """)
         
         try:
-            conn.execute(query_insert, {
-                "mid": id_measurement, "mach": machine_id,
-                "rms": features['rms_raw'], "kurt": features['kurtosis_raw'],
-                "peak": features['peak_raw'], "maxv": features['max_val'],
-                "minv": features['min_val'], "crest": features['crest_factor']
+            conn.execute(query_update, {
+                "mid": id_measurement,
+                "rms": features.get('rms_raw'), 
+                "kurt": features.get('kurtosis_raw'),
+                "peak": features.get('peak_raw'), 
+                "env": features.get('rms_acl_env', 0.0),   # Ošetření, pokud by hodnota chyběla
+                "dif": features.get('dif_kt_raw', 0.0),
+                "skew": features.get('skewness_raw', 0.0),
+                "speed": features.get('act_speed', 1480.0)
             })
             conn.commit()
         except Exception as e:
-            print(f"Chyba při insertu features: {e}")
+            print(f"Chyba při update features: {e}")
             raise HTTPException(status_code=500, detail="Chyba při zápisu výsledků do databáze")
         
-    return {"message": "Data úspěšně zpracována", "id_measurement": id_measurement}
+    return {"message": "Data úspěšně zpracována a uložena", "id_measurement": id_measurement}
 
 @app.get("/measurements/{id_measurement}/raw")
 def proxy_raw_data(id_measurement: int):
     with engine.connect() as conn:
         res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
-        if not res: raise HTTPException(status_code=404)
         
-        ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": res[0], "step": 16})
-        return ml_res.json()
+        if not res or not res[0]: 
+            raise HTTPException(status_code=404, detail="Cesta nenalezena")
+        
+        path = res[0]
+        
+        try:
+            # Zavoláme ML službu o surová data pro graf
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": path, "step": 16})
+            
+            # Kontrola, zda ML služba nevrátila chybu (jinak by spadl .json() parser)
+            if ml_res.status_code != 200:
+                print(f"Chyba z ML Service: {ml_res.text}")
+                raise HTTPException(status_code=500, detail="ML Service nedokázala načíst data")
+                
+            return ml_res.json()
+            
+        except requests.exceptions.RequestException as e:
+            print(f"Selhalo spojení s ML Service: {e}")
+            raise HTTPException(status_code=500, detail="Nelze se spojit s ML Service")
 
 @app.get("/measurements/{id_measurement}/features")
 def get_measurement_features(id_measurement: int):
     with engine.connect() as conn:
-        query = text("""
-            SELECT f.*, m.raw_data_path 
-            FROM feature_data f 
-            JOIN measurements m ON f.id_measurement = m.id_measurement 
-            WHERE f.id_measurement = :id
-        """)
+        # Data z raw měření se nyní updatují přímo v tabulce measurements
+        query = text("SELECT * FROM measurements WHERE id_measurement = :id")
         row = conn.execute(query, {"id": id_measurement}).fetchone()
-        if not row: return None
-        # Převedeme na dict pro frontend
+        
+        if not row: 
+            return None
+            
         return dict(row._mapping)
 
 @app.get("/measurements/{id_measurement}/fft")

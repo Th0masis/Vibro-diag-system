@@ -20,7 +20,7 @@ function MachineCard({ machine, onOpenDetail }) {
     const fetchMiniGraph = async () => {
       try {
         const res = await axios.get(`/machines/${machine.id_machine}/history`);
-        const raw = res.data.filter(d => d.processed);
+        const raw = res.data.filter(d => d.rms != null);
 
         const groupedMap = new Map();
         const foundSensors = new Set();
@@ -39,6 +39,7 @@ function MachineCard({ machine, onOpenDetail }) {
            const entry = groupedMap.get(timeKey);
            entry[item.sensor_name] = item.rms; 
            entry[`${item.sensor_name}_id`] = item.id_measurement; // ID pro proklik
+           entry[`${item.sensor_name}_source`] = item.source; // PŘIDÁNO: Zdroj dat pro alert
            foundSensors.add(item.sensor_name);
         });
 
@@ -76,7 +77,7 @@ function MachineCard({ machine, onOpenDetail }) {
         <span style={{ 
           background: statusBg, color: statusText, 
           padding: '2px 8px', borderRadius: '6px', 
-          fontSize: '0.7rem', fontWeight: 'bold', textTransform: 'uppercase' 
+          fontSize: '1.2rem', fontWeight: 'bold', textTransform: 'uppercase' 
         }}>
           {machine.status}
         </span>
@@ -110,14 +111,20 @@ function MachineCard({ machine, onOpenDetail }) {
                         strokeWidth={2} 
                         dot={false} 
                         connectNulls={true}
-                        
-                        // ZMĚNA: Voláme funkci od rodiče
                         activeDot={{ 
                           r: 5, 
                           cursor: 'pointer',
                           onClick: (e, payload) => {
                             const measId = payload.payload[`${sensorName}_id`];
-                            if (measId) onOpenDetail(measId); // <--- TADY VOLÁME RODIČE
+                            const source = payload.payload[`${sensorName}_source`];
+                            
+                            if (measId) {
+                              if (source === 'raw_analysis') {
+                                onOpenDetail(measId); 
+                              } else {
+                                alert("Tento bod pochází z průběžného měření (IIoT Connector) a neobsahuje zdrojový soubor s vysokofrekvenčním záznamem pro detailní analýzu.");
+                              }
+                            }
                           }
                         }}
                      />
