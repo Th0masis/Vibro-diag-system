@@ -45,7 +45,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
     setClassResult(null);
     try {
       const res = await axios.post(
-        `http://127.0.0.1:8000/machines/${machineId}/classify-fault`,
+        `/machines/${machineId}/classify-fault`,
         {}, 
         { headers: getAuthHeader() }
       );
@@ -63,7 +63,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
     setRulResult(null);
     try {
       const res = await axios.post(
-        `http://127.0.0.1:8000/machines/${machineId}/predict-rul`,
+        `/machines/${machineId}/predict-rul`,
         {},
         { headers: getAuthHeader() }
       );
@@ -77,10 +77,10 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
   };
 
   return (
-    <div style={{ maxWidth: '900px', margin: '0 auto', display: 'flex', flexDirection: 'column', gap: '25px' }}>
+    <div style={{ width: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'start' }}>
       
       {/* =====================================================================
-          SEKCE 1: DETEKCE ANOMÁLIÍ (AE_ANOWGAN)
+         SEKCE 1: DETEKCE ANOMÁLIÍ (AE_ANOWGAN)
          ===================================================================== */}
       <div className="detail-card card-sensors" style={{ borderTop: '4px solid var(--br-orange)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -125,7 +125,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       </div>
 
       {/* =====================================================================
-          SEKCE 2: KLASIFIKACE PORUCH (1D_CNNwWGN)
+         SEKCE 2: KLASIFIKACE PORUCH (1D_CNNwWGN)
          ===================================================================== */}
       <div className="detail-card card-tech" style={{ borderTop: '4px solid var(--vut-red)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
@@ -168,7 +168,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       </div>
 
       {/* =====================================================================
-          SEKCE 3: PREDIKCE RUL (Bi-LSTM)
+         SEKCE 3: PREDIKCE RUL (Bi-LSTM)
          ===================================================================== */}
       <div className="detail-card card-note" style={{ borderTop: '4px solid var(--blue-primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>

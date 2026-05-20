@@ -1,37 +1,45 @@
-from datetime import datetime, timezone
-import os, json, seed, requests, uvicorn, asyncio, aioftp, ssl, logging
+import os
+import json
+import ssl
+import logging
+import asyncio
+import requests
+import uvicorn
+import aioftp
 import pandas as pd
+from datetime import datetime, timezone
+from typing import Optional, List
+from contextlib import asynccontextmanager
 from dotenv import load_dotenv
+
 from fastapi import FastAPI, HTTPException, status, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
-from auth import verify_password, create_access_token, get_password_hash
-from sqlalchemy import create_engine, text
 from jose import JWTError, jwt
-from typing import Optional, List
 from pydantic import BaseModel
+from sqlalchemy import create_engine, text
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from asyncua import Client, ua
 from ftplib import FTP_TLS
 
-# Script FastAPI
+from auth import verify_password, create_access_token, get_password_hash
+import seed
+
+# Načtení konfigurace z prostředí
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
+DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
 
-app = FastAPI(title="VibroDiag API")
+# Inicializace databázového jádra (Synchronní SQLAlchemy běžící ve vláknech FastAPI)
+engine = create_engine(DB_URL)
 
-# Nastaveni Cross-Origin Resource Sharing
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=['*'],
-    allow_methods=['*'],
-    allow_headers=['*'],    
-)
+# Konfigurace zabezpečení JWT OAuth2
+oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
+# --- PYDANTIC DATOVÉ MODELY (DTOs) ---
 
-# BaseModel pro požadavek z frontendu
 class TrainingSegmentFrontend(BaseModel):
     id_machine: int
     id_sensor: int
@@ -43,7 +51,7 @@ class FineTuneStartRequest(BaseModel):
     segments: List[TrainingSegmentFrontend]
 
 class WebhookPayload(BaseModel):
-    status: str             # "success" nebo "failed"
+    status: str             # "success" / "failed"
     message: Optional[str] = None
 
 class OPCSettings(BaseModel):
@@ -56,265 +64,138 @@ class FTPSettings(BaseModel):
     directory: Optional[str] = ""
 
 class MachineSettingsUpdate(BaseModel):
-    is_active_collection: bool  # PŘIDÁNO: Toto očekáváme z přepínače v Reactu
+    is_active_collection: bool
     opc_ua: OPCSettings
     ftp: FTPSettings
 
-# Pripojeni k DB
-DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
-engine = create_engine(DB_URL)
+# --- ASYNCHRONNÍ SPRÁVA ŽIVOTNÍHO CYKLU (LIFESPAN) ---
 
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Správce životního cyklu aplikace. Nahrazuje zastaralý app.on_event.
+    Při startu inicializuje a spustí asynchronní plánovač úloh pro sběr dat.
+    """
+    scheduler = AsyncIOScheduler()
+    # Produkční plán: Sběr dat každé 4 hodiny v minutě 28 (02:28, 06:28, 10:28, 14:28, 18:28, 22:28)
+    scheduler.add_job(download_and_process_raw_data, 'cron', hour='2,6,10,14,18,22', minute=28)
+    scheduler.start()
+    print("Asynchronní scheduler úloh spuštěn v produkčním režimu.")
+    
+    yield  # Zde aplikace běží a obsluhuje požadavky
+    
+    # Logika při ukončení aplikace
+    scheduler.shutdown()
+    print("Asynchronní scheduler úloh byl bezpečně ukončen.")
+
+# Inicializace FastAPI aplikace s definovaným lifespan kontextem
+app = FastAPI(title="VibroDiag API", lifespan=lifespan)
+
+# Nastavení Cross-Origin Resource Sharing (CORS) pro komunikaci s React frontendem
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=['*'],
+    allow_methods=['*'],
+    allow_headers=['*'],    
+)
+
+# --- POMOCNÉ FUNKCE AUTENTIZACE ---
 
 def get_current_user_role(token: str = Depends(oauth2_scheme)):
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-    return payload.get("role")
+    """
+    Dekóduje JWT token z hlavičky požadavku a extrahuje roli přihlášeného uživatele.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        role: str = payload.get("role")
+        if role is None:
+            raise HTTPException(status_code=401, detail="Token neobsahuje uživatelskou roli.")
+        return role
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Neplatný nebo expirovaný přístupový token.")
+
+# --- ZÁKLADNÍ TRASY ---
 
 @app.get("/")
 def home():
-    return {"massage":"Vibrodiagnosticky system bezi!"}
+    """Veřejný testovací endpoint pro ověření stavu běžícího backendu."""
+    return {"message": "Vibrodiagnosticky system bezi!"}
 
-# --- SEKCE DATA ---
-@app.get("/latest-data")
-def get_latest_data():
-    """Vytahne posledni zaznam z databaze"""
-    with engine.connect() as conn:
-        query = text("SELECT * FROM feature_data ORDER BY time DESC LIMIT 1")
-        result = conn.execute(query).fetchone()
-        # Pokud v DB nic neni
-        if not result:
-            return {"massage":"Zadna data nebyla nalezena"}
-        # Prevedeni vysledku na JSON slovnik
-        data = {
-            "time": result[0],
-            "rms_raw": result[11],
-            "peak_raw": result[6],
-            "kurtosis": result[9],
-            "asset_id": result[1]    
-        }
-        return data
+
+# ==========================================
+# --- SEKCE DATA (HISTORIE A MONITORING) ---
+# ==========================================
 
 @app.get("/history")
-def get_history(limit: int = 100):
-    """Vrati poslednich 'limit' zaznamu z databaze pro grafy"""
+def get_history(limit: int = 100, token: str = Depends(oauth2_scheme)):
+    """
+    Vrátí pole posledních 'limit' záznamů z databáze pro globální vizualizaci.
+    (Opraveno pro explicitní názvy sloupců kvůli změně struktury init.sql)
+    """
     with engine.connect() as conn:
-        query = text("SELECT * FROM feature_data ORDER BY time DESC LIMIT :limit")
-        result = conn.execute(query, {"limit":limit}).fetchall()
-        # Pokud v DB nic neni
+        # Přesně specifikujeme sloupce, ať se nespoléháme na jejich pořadí v DB
+        query = text("SELECT time, id_machine, peak_raw, kurtosis_raw, rms_raw FROM feature_data ORDER BY time DESC LIMIT :limit")
+        result = conn.execute(query, {"limit": limit}).fetchall()
+        
         if not result:
-            return {"massage":"Zadna data nebyla nalezena"}
-        # Prevedeni vysledku na JSON slovnik
+            return {"message": "Žádná data nebyla nalezena"}
+            
         history = []
         for row in result:
             history.append({
                 "time": row[0],
                 "asset_id": row[1],
-                "peak_raw": row[6],
-                "kurtosis": row[9],
-                "rms_raw": row[11]  
+                "peak_raw": row[2],
+                "kurtosis": row[3],
+                "rms_raw": row[4]  
             })
-        # Vratime data 
         return history
 
-@app.on_event("startup")
-def start_scheduler():
-    scheduler = AsyncIOScheduler()
-    # Návrat k produkčnímu plánu: Každé 4 hodiny (02:00, 06:00, 10:00, 14:00, 18:00, 22:00)
-    scheduler.add_job(download_and_process_raw_data, 'cron', hour='2,6,10,14,18,22', minute=28)
-    scheduler.start()
-    print("Scheduler spuštěn v produkčním 4h režimu.")
-
-# Stažení RAW dat z PLC přes FTP (Master-Slave řízení přes Python)
-async def download_and_process_raw_data():
-    print(f"[{datetime.now()}] Spouštím rutinu pro sběr dat...")
-    
-    # 1. NAČTENÍ AKTIVNÍCH STROJŮ A JEJICH KONFIGURACE Z DATABÁZE
-    try:
-        with engine.connect() as conn:
-            query = text("SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir FROM machines WHERE is_active_collection = TRUE")
-            active_machines = conn.execute(query).fetchall()
-            
-            if not active_machines:
-                print("Žádný stroj nemá povolený automatický sběr dat.")
-                return
-    except Exception as e:
-        print(f"Chyba databáze při načítání strojů: {e}")
-        return
-
-    # Projdeme všechny aktivní stroje
-    for machine in active_machines:
-        mach_id, plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass, plc_remote_dir = machine
-        plc_remote_dir = plc_remote_dir or "C:/BufferData"
-        
-        # Ochrana proti stahování, když stroj stojí (volitelné)
-        try:
-            with engine.connect() as conn:
-                query_rms = text(f"SELECT AVG(rms_raw) FROM feature_data WHERE id_machine = {mach_id} AND time >= NOW() - INTERVAL '1 hour'")
-                avg_rms = conn.execute(query_rms).scalar()
-                if avg_rms is None or avg_rms < 0.1:
-                    print(f"Stroj {mach_id} pravděpodobně stojí (RMS < 0.1). Přeskakuji.")
-                    continue
-        except Exception as e:
-            print(f"Chyba při ověřování běhu stroje: {e}")
-            continue
-            
-        work_id_prefix = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        
-        # Slovník pro tvé mapování kanálů a čísel bufferů
-        buffer_mapping = {
-            1: 9,   # Kanál 1
-            2: 11,  # Kanál 2
-            3: 13,  # Kanál 3
-            4: 15   # Kanál 4
-        }
-
-        try:
-            print(f"[{mach_id}] Připojuji se k OPC UA ({plc_opc_url})...")
-            async with Client(url=plc_opc_url) as client:
-                
-                # Načtení všech uzlů, jak jsi je definoval
-                node_workid  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
-                node_buflen  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
-                node_bufnum  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferNumber") # TVŮJ NOVÝ UZEL
-                node_start   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
-                node_done    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
-                node_csv     = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
-                node_reset   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
-
-                # Buffer length je fixní (8192), stačí nastavit jednou
-                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
-
-                # Postupně projíždíme tvůj proces pro každý kanál z buffer_mapping
-                for channel, buffer_number in buffer_mapping.items():
-                    print(f"[{mach_id}] === Zpracovávám Kanál {channel} (Buffer ID: {buffer_number}) ===")
-                    
-                    # 1. ZADÁNÍ WorkID a BufferNumber
-                    current_work_id = f"{work_id_prefix}_CH{channel}"
-                    await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
-                    # U B&R bývá datový typ pro tyto indexy standardně UINT (což je v OPC UA UInt16)
-                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.UInt16)))
-                    
-                    # 2. SPUŠTĚNÍ (START)
-                    await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
-                    
-                    # 3. ČEKÁNÍ NA DONE
-                    timeout = 0
-                    while True:
-                        if await node_done.read_value():
-                            break
-                        await asyncio.sleep(1)
-                        timeout += 1
-                        if timeout > 45:
-                            print(f"[{mach_id}] Timeout na PLC u kanálu {channel}!")
-                            break
-                    
-                    # 4. ZÍSKÁNÍ JMÉNA SOUBORU
-                    csv_filename = await node_csv.read_value()
-                    
-                    # 5. UKONČENÍ A RESET
-                    # Bezpečností shození Startu a trigger Resetu
-                    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
-                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
-                    await asyncio.sleep(0.5) # Krátká pauza, aby to PLC stihlo zaregistrovat
-                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
-                    
-                    # 6. FTP STAŽENÍ A SMAZÁNÍ
-                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
-                    os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
-                    
-                    def download_and_delete_ftp():
-                        ctx = ssl.create_default_context()
-                        ctx.check_hostname = False
-                        ctx.verify_mode = ssl.CERT_NONE
-                        ctx.set_ciphers('ALL:@SECLEVEL=0')
-                        
-                        ftp = FTP_TLS(context=ctx)
-                        ftp.connect(plc_ftp_host, 21)
-                        ftp.login(plc_ftp_user, plc_ftp_pass)
-                        ftp.prot_p()
-                        ftp.set_pasv(True)
-                        
-                        remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
-                        
-                        # Stažení
-                        with open(local_filepath, 'wb') as f:
-                            ftp.retrbinary(f"RETR {remote_path}", f.write)
-                        
-                        # Vymazání z PLC
-                        ftp.delete(remote_path)
-                        ftp.quit()
-                        
-                    try:
-                        await asyncio.to_thread(download_and_delete_ftp)
-                        print(f"[{mach_id}] Soubor stažen a smazán z PLC: {csv_filename}")
-                        
-                        # 7. ZÁPIS DO DATABÁZE (Provede se jen po úspěšném FTP stažení)
-                        with engine.connect() as conn:
-                            # Najdeme odpovídající ID senzoru z DB pro tento kanál
-                            query_sensor = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC OFFSET {channel - 1} LIMIT 1")
-                            sensor_id = conn.execute(query_sensor).scalar()
-                            
-                            if sensor_id:
-                                conn.execute(text("""
-                                    INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
-                                    VALUES (:sid, :ts, :path, :notes)
-                                """), {
-                                    "sid": sensor_id,
-                                    "ts": datetime.now(timezone.utc),
-                                    "path": local_filepath,
-                                    "notes": f"Batch: {work_id_prefix} | Kanál {channel}"
-                                })
-                                conn.commit()
-                                print(f"[{mach_id}] Kanál {channel} uložen do DB pro senzor ID {sensor_id}.")
-                            
-                    except Exception as e:
-                        print(f"[{mach_id}] Chyba FTP přenosu nebo DB u kanálu {channel}: {e}")
-                        
-        except Exception as e:
-            print(f"[{mach_id}] Kritická chyba OPC UA: {e}")
-
-    print(f"[{datetime.now()}] Rutina pro sběr dat dokončena.")
-# --- SEKCE UŽIVATELŮ ---
+# ==========================================
+# --- SEKCE UŽIVATELŮ (AUTHENTICATION) ---
+# ==========================================
 
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends()):
+    """
+    Ověří uživatelské jméno a heslo oproti DB a vygeneruje přístupový JWT token.
+    Aktualizuje čas posledního přihlášení uživatele v DB.
+    """
     with engine.connect() as conn:
-        # 1. Ujisti se, že id_user je PRVNÍ (index 0)
         query = text("SELECT id_user, username, hashed_password, role FROM users WHERE username = :user")
         user_record = conn.execute(query, {"user": form_data.username}).fetchone()
 
         if not user_record:
             raise HTTPException(status_code=401, detail="Uživatel neexistuje")
 
-        # 2. Ověření hesla - teď je to index [2], protože heslo je v SELECTu třetí
         if not verify_password(form_data.password, user_record[2]):
             raise HTTPException(status_code=401, detail="Nesprávné heslo")
 
-        # 3. UPDATE - uid musí být integer (user_record[0])
+        # Aktualizace timestampu přihlášení (id_user je index 0)
         update_query = text("UPDATE users SET last_login = :now WHERE id_user = :uid")
         conn.execute(update_query, {
             "now": datetime.now(timezone.utc), 
-            "uid": user_record[0]  # Toto musí být to číslo ID
+            "uid": user_record[0]
         })
         conn.commit()
 
-        # 4. Token - sub je jméno (index 1), role je index 3
+        # Generování JWT (sub = username na indexu 1, role na indexu 3)
         access_token = create_access_token(
             data={"sub": user_record[1], "role": user_record[3]}
         )
         
         return {"access_token": access_token, "token_type": "bearer", "role": user_record[3]}
     
-# Seznam uzivatelu
 @app.get("/users")
 def get_all_users(token: str = Depends(oauth2_scheme)):
-    """Vrátí seznam všech uživatelů (pouze pro přihlášené)"""
+    """
+    Vrátí kompletní seznam registrovaných uživatelů v systému.
+    """
     with engine.connect() as conn:
-        # Přidali jsme email, creation_time a last_login
         query = text("SELECT id_user, username, email, role, creation_time, last_login FROM users ORDER BY id_user ASC")
         result = conn.execute(query).fetchall()
         
-        users_list = [
+        return [
             {
                 "id_user": row[0], 
                 "username": row[1], 
@@ -325,34 +206,15 @@ def get_all_users(token: str = Depends(oauth2_scheme)):
             } 
             for row in result
         ]
-        return users_list
     
-# Odstranění uživatele
-@app.delete("/users/{user_id}")
-def delete_user(user_id: int, role: str = Depends(get_current_user_role)):
-    if role != "admin":
-        raise HTTPException(status_code=403, detail="Pouze administrátor může mazat uživatele")
-    with engine.connect() as conn:
-        # Kontrola, aby admin nesmazal sám sebe (volitelné, ale doporučené)
-        # 1. Zjistíme username z tokenu (sub) a ID smazaného uživatele
-        
-        delete_query = text("DELETE FROM users WHERE id_user = :uid")
-        result = conn.execute(delete_query, {"uid": user_id})
-        conn.commit()
-        
-        if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Uživatel nenalezen")
-            
-        return {"message": f"Uživatel s ID {user_id} byl úspěšně smazán"}
-
-# Přidání uživatele
 @app.post("/users")
 def create_user(user_data: dict, token: str = Depends(oauth2_scheme)):
-    # user_data bude obsahovat: username, password, email, role
+    """
+    Vytvoří a zaregistruje nového uživatele se zahešovaným heslem.
+    """
     hashed_pwd = get_password_hash(user_data['password'])
     
     with engine.connect() as conn:
-        # Kontrola, zda uživatel již neexistuje
         check_query = text("SELECT username FROM users WHERE username = :user")
         if conn.execute(check_query, {"user": user_data['username']}).fetchone():
             raise HTTPException(status_code=400, detail="Uživatel s tímto jménem již existuje")
@@ -370,12 +232,13 @@ def create_user(user_data: dict, token: str = Depends(oauth2_scheme)):
         })
         conn.commit()
         return {"message": "Uživatel vytvořen"}
-    
-# Úprava uživatele
+
 @app.put("/users/{user_id}")
 def update_user(user_id: int, updated_data: dict, token: str = Depends(oauth2_scheme)):
+    """
+    Aktualizuje údaje uživatele (email, role, volitelně heslo) na základě jeho ID.
+    """
     with engine.connect() as conn:
-        # Základní SQL příkaz pro email a roli
         sql_text = "UPDATE users SET email = :email, role = :role"
         params = {
             "email": updated_data['email'],
@@ -383,7 +246,6 @@ def update_user(user_id: int, updated_data: dict, token: str = Depends(oauth2_sc
             "uid": user_id
         }
 
-        # Pokud přišlo i heslo, přidáme ho do UPDATE příkazu
         if updated_data.get('password'):
             hashed_pwd = get_password_hash(updated_data['password'])
             sql_text += ", hashed_password = :pwd"
@@ -398,14 +260,36 @@ def update_user(user_id: int, updated_data: dict, token: str = Depends(oauth2_sc
             raise HTTPException(status_code=404, detail="Uživatel nenalezen")
             
         return {"message": "Uživatel byl aktualizován"}   
-    
-# --- SEKCE SENZORY ---
+
+@app.delete("/users/{user_id}")
+def delete_user(user_id: int, role: str = Depends(get_current_user_role)):
+    """
+    Odstraní uživatele ze systému. Striktně vyžaduje roli administrátora.
+    """
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může mazat uživatele")
+        
+    with engine.connect() as conn:
+        delete_query = text("DELETE FROM users WHERE id_user = :uid")
+        result = conn.execute(delete_query, {"uid": user_id})
+        conn.commit()
+        
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Uživatel nenalezen")
+            
+        return {"message": f"Uživatel s ID {user_id} byl úspěšně smazán"}
+
+
+# ==========================================
+# --- SEKCE SENZORY (HW MANAGEMENT) ---
+# ==========================================
 
 @app.get("/sensors")
 def get_all_sensors(token: str = Depends(oauth2_scheme)):
-    """Vrátí seznam všech senzorů včetně informace o přiřazeném stroji"""
+    """
+    Vrátí přehled všech fyzických senzorů evidovaných v systému.
+    """
     with engine.connect() as conn:
-        # LEFT JOIN nám umožní vidět i senzory, které zatím nejsou na žádném stroji
         query = text("""
             SELECT s.id_sensor, s.serial_number, s.description, s.status, 
                    s.id_machine, s.position, s.sampling_rate, s.calibration_date
@@ -430,22 +314,19 @@ def get_all_sensors(token: str = Depends(oauth2_scheme)):
 
 @app.post("/sensors")
 def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role)):
-    """Registrace nového senzoru. Možnost rovnou přiřadit ke stroji."""
+    """
+    Zaregistruje nový senzor do inventáře. Vyžaduje roli admin.
+    Pokud je rovnou vybrán cílový stroj, stav se automaticky upraví na 'active'.
+    """
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může registrovat senzory")
     
-    # Validace: Pokud je vybrán stroj, status musí být 'active'
     status = sensor_data.get('status', 'available')
     machine_id = sensor_data.get('id_machine')
     position = sensor_data.get('position')
 
-    # Pokud uživatel vybral stroj, ale nechal status 'available', backend to opraví nebo vyčistí
     if machine_id and status == 'available':
-        # Zde jsou dvě možnosti: buď vyhodit chybu, nebo automaticky nastavit active.
-        # Zvolíme variantu: Pokud je stroj, status se stane 'active'.
         status = 'active'
-    
-    # Pokud není stroj, status nemůže být 'active' (pokud to tak uživatel omylem poslal)
     if not machine_id and status == 'active':
         status = 'available'
 
@@ -466,19 +347,19 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
             })
             conn.commit()
         except Exception as e:
-            # Ošetření chyby, např. duplicitní sériové číslo
             raise HTTPException(status_code=400, detail=str(e))
             
         return {"message": "Senzor byl úspěšně zaregistrován"}
 
 @app.put("/sensors/{sensor_id}")
 def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_current_user_role)):
-    """Aktualizace údajů senzoru. Pokud se změní status na 'available' nebo 'maintenance', senzor se odpojí od stroje."""
+    """
+    Aktualizuje parametry a stav senzoru. Pokud je senzor přepnut do stavu
+    mimo provoz ('available', 'maintenance'), automaticky se zruší jeho vazba na stroj.
+    """
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může upravovat senzory")
 
-    # LOGIKA ODPOJENÍ:
-    # Pokud senzor není aktivní, nesmí být na stroji.
     new_status = updated_data.get('status')
     machine_id = updated_data.get('id_machine')
     position = updated_data.get('position')
@@ -502,8 +383,8 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
             "desc": updated_data['description'],
             "status": new_status,
             "machine_id": machine_id,
-            "position": position, # Pozor, v SQL mám parametr :pos, ale tady posílám klíč
-            "pos": position,      # Pro jistotu, aby sedělo jméno parametru
+            "position": position,
+            "pos": position,      
             "rate": updated_data.get('sampling_rate'),
             "cal": updated_data.get('calibration_date'),
             "sid": sensor_id
@@ -517,7 +398,7 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
 
 @app.delete("/sensors/{sensor_id}")
 def delete_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
-    """Odstranění senzoru z evidence"""
+    """Odstraní senzor z databáze systému. Pouze pro administrátory."""
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může mazat senzory")
     
@@ -529,11 +410,10 @@ def delete_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
             raise HTTPException(status_code=404, detail="Senzor nenalezen")
         return {"message": "Senzor byl odstraněn"}
 
-# Získání pouze VOLNÝCH senzorů pro dropdown menu
 @app.get("/sensors/available")
 def get_available_sensors(token: str = Depends(oauth2_scheme)):
+    """Vrátí seznam dosud nepřiřazených (volných) senzorů pro osazení na stroje."""
     with engine.connect() as conn:
-        # Vybereme jen ty, co jsou 'available' (skladem)
         query = text("SELECT id_sensor, serial_number, description FROM sensors WHERE status = 'available'")
         result = conn.execute(query).fetchall()
         
@@ -542,15 +422,12 @@ def get_available_sensors(token: str = Depends(oauth2_scheme)):
             for row in result
         ]
 
-# Samotné přiřazení senzoru ke stroji
 @app.post("/machines/{machine_id}/sensors")
 def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_scheme)):
     """
-    Payload očekává: { "sensor_id": int, "position": str }
+    Montáž a logické přiřazení senzoru ke konkrétnímu stroji na specifikovanou pozici.
     """
     with engine.connect() as conn:
-        # 1. Zkontrolujeme, zda senzor existuje a je volný (volitelné, ale bezpečné)
-        # 2. Provedeme UPDATE: přiřadíme stroj, pozici a změníme stav na ACTIVE
         query = text("""
             UPDATE sensors 
             SET id_machine = :mid, 
@@ -558,7 +435,6 @@ def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_sc
                 status = 'active' 
             WHERE id_sensor = :sid
         """)
-        
         result = conn.execute(query, {
             "mid": machine_id,
             "pos": payload['position'],
@@ -567,15 +443,16 @@ def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_sc
         conn.commit()
         
         if result.rowcount == 0:
-            raise HTTPException(status_code=404, detail="Senzor nenalezen nebo se nepodařilo aktualizovat")
+            raise HTTPException(status_code=404, detail="Senzor se nepodařilo aktualizovat")
             
         return {"message": "Senzor byl úspěšně namontován"}
 
-# 1. Nový endpoint pro rychlé odpojení senzoru (tlačítko "X")
 @app.post("/machines/{machine_id}/sensors/{sensor_id}/detach")
 def detach_sensor_from_machine(machine_id: int, sensor_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    Rychlé odpojení senzoru od stroje, uvolnění měřící pozice a návrat HW do stavu 'available'.
+    """
     with engine.connect() as conn:
-        # Nastavíme senzor zpět na 'available' a vymažeme vazby
         query = text("""
             UPDATE sensors 
             SET id_machine = NULL, position = NULL, status = 'available' 
@@ -589,27 +466,25 @@ def detach_sensor_from_machine(machine_id: int, sensor_id: int, token: str = Dep
             
         return {"message": "Senzor byl odpojen"}
 
-# --- SEKCE MACHINES ---
+
+# ==========================================
+# --- SEKCE MACHINES (ASSET MONITORING) ---
+# ==========================================
 
 @app.get("/machines")
 def get_machines(token: str = Depends(oauth2_scheme)):
-    """Vrátí seznam strojů včetně detailů poslední poznámky a jejího autora"""
+    """
+    Načte přehled všech výrobních strojů včetně agregačních poddotazů pro získání
+    poslední servisní poznámky, její závažnosti a autora.
+    """
     with engine.connect() as conn:
         query = text("""
             SELECT 
-                m.id_machine, 
-                m.name, 
-                m.type, 
-                m.location, 
-                m.status,
-                -- Obsah poznámky
+                m.id_machine, m.name, m.type, m.location, m.status,
                 (SELECT content FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note,
-                -- Severity
                 (SELECT severity FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_severity,
-                -- Autor (JOIN přímo v subquery)
                 (SELECT u.username FROM service_notes sn JOIN users u ON sn.id_user = u.id_user 
                  WHERE sn.id_machine = m.id_machine ORDER BY sn.timestamp DESC LIMIT 1) as last_note_author,
-                -- Čas (převedeme na ISO formát string pro JS)
                 (SELECT to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM service_notes 
                  WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_time
             FROM machines m
@@ -635,65 +510,51 @@ def get_machines(token: str = Depends(oauth2_scheme)):
 @app.post("/machines")
 def create_machine(machine_data: dict, role: str = Depends(get_current_user_role)):
     """
-    Registrace nového stroje.
-    Vyžaduje roli 'admin'.
+    Registruje nový stroj do monitorovacího systému. Vyžaduje roli admin.
     """
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může přidávat stroje")
     
-    # Validace povinných polí
     name = machine_data.get('name')
     if not name:
         raise HTTPException(status_code=400, detail="Název stroje je povinný údaj.")
 
-    # Extrakce dalších dat s defaultními hodnotami
     description = machine_data.get('description', '')
     m_type = machine_data.get('type', '')
     location = machine_data.get('location', '')
-    status = machine_data.get('status', 'OFFLINE') # Pokud neuvedeno, začínáme jako OFFLINE
+    status = machine_data.get('status', 'OFFLINE')
 
-
-    # Ověření, zda je status validní (volitelné, ale doporučené)
     valid_statuses = ['OK', 'WARNING', 'CRITICAL', 'OFFLINE']
     if status not in valid_statuses:
         status = 'OFFLINE'
 
     with engine.connect() as conn:
-        # SQL dotaz pro vložení
         query = text("""
             INSERT INTO machines (name, description, type, location, status)
             VALUES (:name, :description, :type, :loc, :status)
         """)
-        
         try:
-            conn.execute(query, {
-                "name": name,
-                "description": description,
-                "type": m_type,
-                "loc": location,
-                "status": status
-            })
+            conn.execute(query, {"name": name, "description": description, "type": m_type, "loc": location, "status": status})
             conn.commit()
-        except Exception as e:
-            # Nejčastější chyba bude UniqueConstraint na jméno stroje (pokud ho máš v DB nastavený)
-            print(f"Chyba při vytváření stroje: {e}")
-            raise HTTPException(status_code=400, detail="Nepodařilo se vytvořit stroj. Ověřte, zda název již neexistuje.")
+        except Exception:
+            raise HTTPException(status_code=400, detail="Nepodařilo se vytvořit stroj. Název již existuje.")
             
     return {"message": "Stroj byl úspěšně přidán"}
 
 @app.get("/machines/{machine_id}")
 def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """
+    Vrátí komplexní detail stroje: jeho konfiguraci, osazené senzory a poslední servisní záznam.
+    """
     with engine.connect() as conn:
-        # A) Info o stroji
         query_machine = text("SELECT * FROM machines WHERE id_machine = :mid")
         machine = conn.execute(query_machine, {"mid": machine_id}).fetchone()
-        if not machine: raise HTTPException(status_code=404, detail="Stroj nenalezen")
+        if not machine: 
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
 
-        # B) Senzory
         query_sensors = text("SELECT * FROM sensors WHERE id_machine = :mid")
         sensors = [dict(row._mapping) for row in conn.execute(query_sensors, {"mid": machine_id}).fetchall()]
 
-        # C) NOVÉ: Poslední poznámka (Latest Note)
         query_note = text("""
             SELECT content, timestamp, severity, username 
             FROM service_notes sn
@@ -714,204 +575,49 @@ def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
             }
 
         return {
-            "info": dict(machine._mapping), # Převede SQLAlchemy row na dict
+            "info": dict(machine._mapping),
             "sensors": sensors,
             "last_note": last_note_data
         }
 
 @app.get("/machines/{machine_id}/measurements")
 def get_machine_measurements(machine_id: int, limit: int = 50, token: str = Depends(oauth2_scheme)):
-    """Vrátí historii naměřených dat (Feature Data) pro tabulku historie"""
+    """
+    Vrátí historii vypočtených deskriptorů (RMS, Peak, ISO normy) pro konkrétní stroj.
+    """
     with engine.connect() as conn:
         query = text("""
-            SELECT 
-                fd.time, 
-                s.description as sensor_name,
-                s.position,
-                fd.rms_raw,
-                fd.peak_raw,
-                fd.iso_10816
+            SELECT fd.time, s.description as sensor_name, s.position, fd.rms_raw, fd.peak_raw, fd.iso_10816
             FROM feature_data fd
             JOIN measurements m ON fd.id_measurement = m.id_measurement
             JOIN sensors s ON m.id_sensor = s.id_sensor
             WHERE fd.id_machine = :mid
-            ORDER BY fd.time DESC
-            LIMIT :lim
+            ORDER BY fd.time DESC LIMIT :lim
         """)
         result = conn.execute(query, {"mid": machine_id, "lim": limit}).fetchall()
         
         return [
-            {
-                "time": row[0],
-                "sensor": row[1],
-                "position": row[2],
-                "rms": row[3],
-                "peak": row[4],
-                "iso": row[5]
-            }
+            {"time": row[0], "sensor": row[1], "position": row[2], "rms": row[3], "peak": row[4], "iso": row[5]}
             for row in result
         ]
 
-@app.post("/machines/{machine_id}/diagnose")
-def run_machine_diagnostics(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """
-    1. Načte poslední naměřená data stroje z DB.
-    2. Odešle je do ML Service (port 8001).
-    3. Zpracuje výsledek a aktualizuje stav stroje.
-    """
-    
-    # 1. Získání posledních dat z DB
-    with engine.connect() as conn:
-        # Potřebujeme RMS, Peak (jako PTP) a Kurtosis
-        # Pozor: V seed.py jsi ukládal 'kurtosis_raw', v GET /latest-data čteš index 9.
-        # Ujistíme se, že čteme správné sloupce.
-        query_data = text("""
-            SELECT rms_raw, peak_raw, kurtosis_raw 
-            FROM feature_data 
-            WHERE id_machine = :mid 
-            ORDER BY time DESC 
-            LIMIT 1
-        """)
-        last_measurement = conn.execute(query_data, {"mid": machine_id}).fetchone()
-        
-        if not last_measurement:
-            raise HTTPException(status_code=400, detail="Nedostatek dat. Nejdříve proveďte měření (Simulaci).")
-            
-        # Mapování DB sloupců na vstup ML modelu (VibrationData)
-        # DB: (rms_raw, peak_raw, kurtosis_raw)
-        ml_payload = {
-            "rms": float(last_measurement[0]),
-            "ptp": float(last_measurement[1]),       # Použijeme Peak jako PTP
-            "kurtosis": float(last_measurement[2])
-        }
-
-        # 2. Volání ML Service
-        ml_service_url = "http://127.0.0.1:8001/predict"
-        
-        try:
-            print(f"Odesílám do ML: {ml_payload}") # Debug log
-            response = requests.post(ml_service_url, json=ml_payload)
-            response.raise_for_status()
-            ml_result = response.json()
-        except requests.exceptions.ConnectionError:
-            raise HTTPException(status_code=503, detail="ML Service (port 8001) neodpovídá.")
-        except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Chyba ML predikce: {str(e)}")
-
-        # 3. Překlad výsledku pro naši aplikaci
-        # ML vrací: "status": "PORUCHA" nebo "V POŘÁDKU"
-        # My chceme: "FAULT" nebo "OK"
-        
-        app_status = "OK"
-        if ml_result["status"] == "PORUCHA":
-            app_status = "FAULT"
-            
-        # Vytvoření popisu pro frontend
-        description = "Vibrační hodnoty jsou v normě."
-        recommendation = "Žádná akce není nutná."
-        
-        if app_status == "FAULT":
-            description = f"Model detekoval anomálii! (Jistota: {ml_result['confidence']*100:.1f}%)"
-            recommendation = "Doporučena okamžitá kontrola ložisek."
-
-        # Update statusu stroje v DB
-        conn.execute(text("UPDATE machines SET status = :st WHERE id_machine = :mid"), 
-                     {"st": app_status, "mid": machine_id})
-        conn.commit()
-
-    # Vrátíme formát, který očekává naše React komponenta MachineDiagnostics.jsx
-    return {
-        "status": app_status,             # OK / FAULT
-        "prediction": ml_result["status"], # "V POŘÁDKU" / "PORUCHA" (text z ML)
-        "confidence": ml_result["confidence"],
-        "description": description,
-        "recommendation": recommendation,
-        "model_version": "Mafalda Joblib Model v1"
-    }
-
-@app.get("/machines/{machine_id}/rul")
-def get_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """
-    1. Vytáhne historii RMS z databáze.
-    2. Pošle ji do ML Service.
-    3. Vrátí predikci RUL.
-    """
-    with engine.connect() as conn:
-        # 1. Kontrola, zda stroj existuje a má senzor
-        # Pro zjednodušení bereme data z prvního aktivního senzoru
-        sensor_query = text("SELECT id_sensor FROM sensors WHERE id_machine = :mid LIMIT 1")
-        sensor = conn.execute(sensor_query, {"mid": machine_id}).fetchone()
-        
-        if not sensor:
-             raise HTTPException(status_code=404, detail="Stroj nemá senzory.")
-        sensor_id = sensor[0]
-
-        # 2. Načtení historie RMS (seřazené od nejstarší po nejnovější)
-        # Omezíme to třeba na posledních 500 měření, ať neposíláme tuny dat
-        history_query = text("""
-            SELECT rms_raw 
-            FROM feature_data 
-            JOIN measurements ON feature_data.id_measurement = measurements.id_measurement
-            WHERE measurements.id_sensor = :sid
-            ORDER BY measurements.timestamp ASC
-            LIMIT 500
-        """)
-        
-        result = conn.execute(history_query, {"sid": sensor_id}).fetchall()
-        
-        # Převedeme výsledek SQL na obyčejný list floatů [0.5, 0.6, ...]
-        rms_history = [row[0] for row in result]
-        
-        if len(rms_history) < 10:
-             return {"status": "warning", "message": "Nedostatek dat pro predikci (min 10)."}
-
-    # 3. Volání ML Service
-    try:
-        payload = {
-            "history": rms_history,
-            "limit": 10.0 # ISO limit, můžeme to v budoucnu tahat z nastavení stroje
-        }
-        
-        # Odeslání požadavku na ML mikroslužbu
-        response = requests.post(f"{ML_SERVICE_URL}/predict-rul", json=payload, timeout=5)
-        
-        if response.status_code == 200:
-            return response.json()
-        else:
-            raise HTTPException(status_code=503, detail=f"ML Service error: {response.text}")
-            
-    except requests.exceptions.ConnectionError:
-        # Pokud ML service neběží, nechceme shodit backend, vrátíme info
-        return {
-            "models": None,
-            "recommended_model": "none",
-            "final_prediction_days": None,
-            "error": "ML Service is offline"
-        }
-    except Exception as e:
-        print(f"Chyba RUL predikce: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-    
 @app.get("/machines/{machine_id}/settings")
 def get_machine_settings(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """Vrátí aktuální nastavení OPC UA, FTP a stav sběru dat pro daný stroj."""
+    """
+    Načte průmyslové komunikační nastavení stroje (OPC UA uzly, FTP přihlášení a aktivitu sběru).
+    """
     with engine.connect() as conn:
         query = text("""
             SELECT is_active_collection, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir 
-            FROM machines 
-            WHERE id_machine = :mid
+            FROM machines WHERE id_machine = :mid
         """)
         result = conn.execute(query, {"mid": machine_id}).fetchone()
-        
         if not result:
             raise HTTPException(status_code=404, detail="Stroj nenalezen")
             
         return {
-            # Ošetření None hodnoty pro případ, že by ve sloupci ještě nebylo nic zapsáno
             "is_active_collection": bool(result[0]) if result[0] is not None else False,
-            "opc_ua": {
-                "url": result[1] or ""
-            },
+            "opc_ua": {"url": result[1] or ""},
             "ftp": {
                 "host": result[2] or "",
                 "username": result[3] or "",
@@ -922,30 +628,23 @@ def get_machine_settings(machine_id: int, token: str = Depends(oauth2_scheme)):
 
 @app.put("/machines/{machine_id}/settings")
 def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, role: str = Depends(get_current_user_role)):
-    """Uloží nové nastavení OPC UA, FTP a stav sběru dat pro stroj. (Pouze Admin/Operator)"""
+    """
+    Uloží novou průmyslovou konfiguraci pro automatizovaný sběr dat. (Admin/Operator)
+    """
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nemáte oprávnění měnit nastavení stroje.")
         
     with engine.connect() as conn:
         query = text("""
             UPDATE machines 
-            SET is_active_collection = :is_active,
-                opc_ua_url = :opc_url,
-                ftp_host = :ftp_host,
-                ftp_user = :ftp_user,
-                ftp_password = :ftp_pass,
-                ftp_dir = :ftp_dir
+            SET is_active_collection = :is_active, opc_ua_url = :opc_url, ftp_host = :ftp_host,
+                ftp_user = :ftp_user, ftp_password = :ftp_pass, ftp_dir = :ftp_dir
             WHERE id_machine = :mid
         """)
-        
         result = conn.execute(query, {
-            "is_active": payload.is_active_collection,
-            "opc_url": payload.opc_ua.url,
-            "ftp_host": payload.ftp.host,
-            "ftp_user": payload.ftp.username,
-            "ftp_pass": payload.ftp.password,
-            "ftp_dir": payload.ftp.directory,
-            "mid": machine_id
+            "is_active": payload.is_active_collection, "opc_url": payload.opc_ua.url,
+            "ftp_host": payload.ftp.host, "ftp_user": payload.ftp.username,
+            "ftp_pass": payload.ftp.password, "ftp_dir": payload.ftp.directory, "mid": machine_id
         })
         conn.commit()
         
@@ -956,129 +655,95 @@ def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, rol
 
 @app.post("/machines/{machine_id}/test-connection")
 async def test_machine_connection(machine_id: int, type: str, payload: dict, role: str = Depends(get_current_user_role)):
-    """Otestuje spojení na OPC UA nebo FTP zadané v payloadu."""
+    """
+    Asynchronní test konektivity k síťovému rozhraní PLC (buď test OPC UA handshake, nebo FTP TLS login).
+    """
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nemáte oprávnění testovat spojení.")
 
     if type == "opc":
         url = payload.get("url")
-        print(f"Pokus o připojení k OPC UA: {url}")
         try:
-            # Vytvoření klienta pro B&R
             client = Client(url=url)
-            # asynua samotná nemá parametr timeout na connect(), obalíme to přes asyncio
             await asyncio.wait_for(client.connect(), timeout=3.0)
-            
-            # Pokud to prošlo, hned se zase odpojíme
             await client.disconnect()
-            print("OPC UA spojení ÚSPĚŠNÉ.")
             return {"status": "success", "message": "OPC UA spojení navázáno."}
-            
         except asyncio.TimeoutError:
-            print("OPC UA Error: Vypršel časový limit (Timeout). Zařízení není v síti.")
             raise HTTPException(status_code=400, detail="Vypršel časový limit. OPC server není dostupný.")
         except Exception as e:
-            print(f"OPC UA Error: {e}")
             raise HTTPException(status_code=400, detail=f"Chyba připojení: {str(e)}")
 
     elif type == "ftp":
         host = payload.get("host")
         user = payload.get("username")
         pwd = payload.get("password")
-        print(f"Pokus o připojení k FTP: {host} (Uživatel: {user})")
-        
         try:
-            # Synchronní FTP kód obalíme do fce pro asynchronní zavolání
             def try_ftp():
                 ctx = ssl.create_default_context()
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
                 ctx.minimum_version = ssl.TLSVersion.TLSv1
-                # Timeout 3 sekundy
                 ftp = FTP_TLS(context=ctx, timeout=3.0) 
                 ftp.connect(host, 21)
                 ftp.login(user, pwd)
                 ftp.quit()
             
             await asyncio.to_thread(try_ftp)
-            print("FTP spojení ÚSPĚŠNÉ.")
             return {"status": "success", "message": "FTP spojení navázáno a ověřeno."}
-            
         except Exception as e:
-            # FTP hází timeouty pod běžným Exception (TimeoutError nebo socket.timeout)
-            print(f"FTP Error: {e}")
             raise HTTPException(status_code=400, detail=f"Chyba připojení FTP: {str(e)}")
-            
     else:
         raise HTTPException(status_code=400, detail="Neznámý typ testu.")
 
-# --- SEKCE SERVICE NOTES ---
+
+# ==========================================
+# --- SEKCE SERVISNÍ POZNÁMKY (LOGS) ---
+# ==========================================
 
 @app.get("/machines/{machine_id}/notes")
 def get_machine_notes(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """Vrátí historii poznámek pro daný stroj"""
+    """Vrátí chronologický přehled servisních zásahů a poznámek u stroje."""
     with engine.connect() as conn:
         query = text("""
             SELECT sn.id_note, sn.content, sn.severity, sn.timestamp, u.username
-            FROM service_notes sn
-            JOIN users u ON sn.id_user = u.id_user
-            WHERE sn.id_machine = :mid
-            ORDER BY sn.timestamp DESC
+            FROM service_notes sn JOIN users u ON sn.id_user = u.id_user
+            WHERE sn.id_machine = :mid ORDER BY sn.timestamp DESC
         """)
         result = conn.execute(query, {"mid": machine_id}).fetchall()
         
         return [
-            {
-                "id_note": row[0],
-                "content": row[1],
-                "severity": row[2],
-                "timestamp": row[3],
-                "author": row[4]
-            }
+            {"id_note": row[0], "content": row[1], "severity": row[2], "timestamp": row[3], "author": row[4]}
             for row in result
         ]
 
 @app.post("/machines/{machine_id}/notes")
 def add_service_note(machine_id: int, note: dict, token: str = Depends(oauth2_scheme)):
-    """Přidání nové servisní poznámky (autor se bere z tokenu)"""
-    # Získáme ID přihlášeného uživatele
-    user = get_current_user_role(token) # Musíme najít ID uživatele podle username
+    """
+    Uloží novou provozní/servisní poznámku ke stroji. Autor se automaticky páruje přes sub z JWT.
+    """
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    username = payload.get("sub")
     
     with engine.connect() as conn:
-        # Nejdřív zjistíme ID usera (pokud get_current_user vrací jen jméno/objekt)
-        # Předpokládám, že ve tvém auth.py get_current_user vrací username. 
-        # Rychlý fix: dotaz na ID podle jména v tokenu (sub)
-        
-        # 1. Dekodování tokenu pro získání username (pokud nemáš pomocnou fci co vrací ID)
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username = payload.get("sub")
-        
         user_query = text("SELECT id_user FROM users WHERE username = :name")
         user_id = conn.execute(user_query, {"name": username}).scalar()
-
         if not user_id:
              raise HTTPException(status_code=401, detail="Neznámý uživatel")
 
-        # 2. Vložení poznámky
         query = text("""
             INSERT INTO service_notes (id_machine, id_user, content, severity, timestamp)
             VALUES (:mid, :uid, :content, :severity, :now)
         """)
         conn.execute(query, {
-            "mid": machine_id,
-            "uid": user_id,
-            "content": note['content'],
-            "severity": note.get('severity', 'INFO'),
-            "now": datetime.now(timezone.utc)
+            "mid": machine_id, "uid": user_id, "content": note['content'],
+            "severity": note.get('severity', 'INFO'), "now": datetime.now(timezone.utc)
         })
         conn.commit()
-        
         return {"message": "Poznámka uložena"}
 
 @app.delete("/machines/{machine_id}/notes/{note_id}")
 def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oauth2_scheme)):
-    """Smazání servisní poznámky"""
-    # Zde by se dalo přidat ověření, že mazat může jen admin nebo autor
+    """Smaže vybranou servisní poznámku na základě ID."""
     with engine.connect() as conn:
         query = text("DELETE FROM service_notes WHERE id_note = :nid AND id_machine = :mid")
         result = conn.execute(query, {"nid": note_id, "mid": machine_id})
@@ -1086,26 +751,25 @@ def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oaut
         
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Poznámka nenalezena")
-            
         return {"message": "Poznámka smazána"}
 
-# --- SEKCE MEASUREMENTS (DATA) ---
+
+# ==========================================
+# --- SEKCE MĚŘENÍ (RAW DATA PIPELINE) ---
+# ==========================================
 
 @app.post("/measurements")
 def create_measurement(measurement_data: dict, role: str = Depends(get_current_user_role)):
     """
-    Vytvoří nový záznam o měření (registruje raw soubor).
-    Vrací ID nového měření.
+    Vytvoří nový záznam o provedeném měření (registrace cesty k surovému souboru).
+    Používáno především automatizovanými skripty.
     """
-    # 1. Kontrola role (pokud chceš omezit zápis)
-    # Pro účely skriptů to můžeš nechat volnější, nebo vyžadovat 'admin'
     if role not in ["admin", "operator"]:
          raise HTTPException(status_code=403, detail="Nemáte oprávnění přidávat měření.")
 
-    # 2. Manuální validace povinných polí
     id_sensor = measurement_data.get('id_sensor')
     raw_data_path = measurement_data.get('raw_data_path')
-    timestamp_str = measurement_data.get('timestamp') # Přijde jako string!
+    timestamp_str = measurement_data.get('timestamp') 
 
     if not id_sensor or not raw_data_path or not timestamp_str:
         raise HTTPException(status_code=400, detail="Chybí povinné pole (id_sensor, raw_data_path nebo timestamp).")
@@ -1114,53 +778,29 @@ def create_measurement(measurement_data: dict, role: str = Depends(get_current_u
 
     with engine.connect() as conn:
         try:
-            # 3. Kontrola, zda senzor existuje
-            sensor_exists = conn.execute(
-                text("SELECT id_sensor FROM sensors WHERE id_sensor = :id"),
-                {"id": id_sensor}
-            ).fetchone()
-            
+            sensor_exists = conn.execute(text("SELECT id_sensor FROM sensors WHERE id_sensor = :id"), {"id": id_sensor}).fetchone()
             if not sensor_exists:
                 raise HTTPException(status_code=404, detail=f"Senzor s ID {id_sensor} neexistuje.")
 
-            # 4. Vložení záznamu
-            # Poznámka: Postgres je chytrý a obvykle umí převést ISO string na timestamp sám.
-            # Pokud by to padalo, museli bychom použít: datetime.fromisoformat(timestamp_str)
             query = text("""
                 INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
-                VALUES (:sid, :ts, :path, :notes)
-                RETURNING id_measurement
+                VALUES (:sid, :ts, :path, :notes) RETURNING id_measurement
             """)
-            
-            result = conn.execute(query, {
-                "sid": id_sensor,
-                "ts": timestamp_str,
-                "path": raw_data_path,
-                "notes": notes
-            })
+            result = conn.execute(query, {"sid": id_sensor, "ts": timestamp_str, "path": raw_data_path, "notes": notes})
             conn.commit()
             
-            new_id = result.scalar()
-            return {
-                "message": "Measurement created", 
-                "id_measurement": new_id
-            }
-
+            return {"message": "Záznam měření úspěšně vytvořen", "id_measurement": result.scalar()}
         except Exception as e:
-            print(f"Chyba při ukládání měření: {e}")
             raise HTTPException(status_code=500, detail=str(e))
 
 @app.post("/machines/{machine_id}/simulate")
 def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_scheme)):
     """
-    Spustí generátor dat ze souboru seed.py.
+    Spustí generátor syntetických dat ze seed.py (simulace běhu a poruchy pro testování).
     """
-    # Zavoláme funkci ze seed.py
     result = seed.simulate_machine_data(machine_id)
-    
     if result["status"] == "error":
         raise HTTPException(status_code=400, detail=result["message"])
-        
     return {"message": result["message"], "simulated_fault": result.get("fault")}
 
 @app.get("/machines/{machine_id}/history")
@@ -1222,7 +862,7 @@ def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(ge
             })
             
         return history
-
+    
 @app.post("/measurements/{id_measurement}/process")
 def process_measurement_data(id_measurement: int, role: str = Depends(get_current_user_role)):
     if role not in ["admin", "operator"]:
@@ -1319,233 +959,156 @@ def get_measurement_features(id_measurement: int):
             return None
             
         return dict(row._mapping)
-
+    
 @app.get("/measurements/{id_measurement}/fft")
 def proxy_fft_data(id_measurement: int):
     with engine.connect() as conn:
         res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
-        if not res: 
-            raise HTTPException(status_code=404, detail="Měření nenalezeno")
-        
+        if not res or not res[0]: 
+            raise HTTPException(status_code=404, detail="Cesta nenalezena")
+            
         try:
-            # Zavolá ML service pro výpočet FFT
             ml_res = requests.post(f"{ML_SERVICE_URL}/get-fft", json={"path": res[0]})
-            ml_res.raise_for_status() # Vyhodí výjimku, pokud ML service vrátí 500
+            if ml_res.status_code != 200:
+                raise HTTPException(status_code=500, detail="Chyba výpočtu FFT v ML službě")
             return ml_res.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
-
+            raise HTTPException(status_code=500, detail=str(e))
+        
 @app.get("/measurements/{id_measurement}/cwt")
 def proxy_cwt_data(id_measurement: int):
     with engine.connect() as conn:
         res = conn.execute(text("SELECT raw_data_path FROM measurements WHERE id_measurement = :id"), {"id": id_measurement}).fetchone()
-        if not res: 
-            raise HTTPException(status_code=404, detail="Měření nenalezeno")
-        
+        if not res or not res[0]: 
+            raise HTTPException(status_code=404, detail="Cesta nenalezena")
+            
         try:
-            # Zavolá ML service pro vygenerování CWT obrázku
             ml_res = requests.post(f"{ML_SERVICE_URL}/get-cwt", json={"path": res[0]})
-            ml_res.raise_for_status()
+            if ml_res.status_code != 200:
+                raise HTTPException(status_code=500, detail="Chyba výpočtu CWT v ML službě")
             return ml_res.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
+            raise HTTPException(status_code=500, detail=str(e))
 
-# --- SEKCE MACHINE LEARNING ---
+# ==========================================
+# --- SEKCE MACHINE LEARNING (INFERENCE) ---
+# ==========================================
+
 @app.get("/ml-models")
 def get_ml_models(role: str = Depends(get_current_user_role)):
-    """
-    Vrátí seznam všech ML modelů zaregistrovaných v systému.
-    """
-    # Můžeš omezit přístup jen pro admina, nebo nechat i pro operátora,
-    # aby viděl, jaké modely systém používá k diagnostice.
+    """Vrátí přehled všech ML modelů, jejich verzí, úspěšnosti a stavu trénování."""
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nemáte oprávnění k zobrazení modelů.")
 
     with engine.connect() as conn:
         try:
-            # Vytáhneme všechny modely, seřazené např. podle ID nebo typu
             query = text("""
-                SELECT 
-                    id_model, 
-                    name, 
-                    version, 
-                    type, 
-                    path_to_model, 
-                    accuracy, 
-                    training_date, 
-                    description, 
-                    is_active
-                FROM ml_models
-                ORDER BY id_model ASC
+                SELECT id_model, name, version, type, path_to_model, accuracy, training_date, description, is_active
+                FROM ml_models ORDER BY id_model ASC
             """)
-            
             result = conn.execute(query).fetchall()
-            
-            # Převedeme výsledky na seznam slovníků
-            models = []
-            for row in result:
-                # Použijeme ._mapping pro bezpečný převod řádku na dictionary
-                models.append(dict(row._mapping))
-                
-            return models
-
-        except Exception as e:
-            print(f"Chyba při načítání ML modelů: {e}")
+            return [dict(row._mapping) for row in result]
+        except Exception:
             raise HTTPException(status_code=500, detail="Chyba databáze při načítání modelů.")
 
 @app.post("/machines/{machine_id}/analyze-anomaly")
-def analyze_machine_anomaly(machine_id: int):
-    """
-    Spustí detekci anomálií (AE_ANOWGAN) na nejnovějším měření daného stroje.
-    """
+def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)):
+    """Spustí na pozadí detekci anomálií pomocí generativního rekonstrukčního modelu AE-AnoWGAN na posledním staženém měření stroje a zapíše skóre do DB."""
     with engine.connect() as conn:
-        # 1. Najít nejnovější měření pro daný stroj
         query_meas = text("""
-            SELECT m.id_measurement, m.raw_data_path 
-            FROM measurements m
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE s.id_machine = :mid
-            ORDER BY m.timestamp DESC
-            LIMIT 1
+            SELECT m.id_measurement, m.raw_data_path FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid
+            ORDER BY m.timestamp DESC LIMIT 1
         """)
         meas = conn.execute(query_meas, {"mid": machine_id}).fetchone()
-        
         if not meas:
             raise HTTPException(status_code=404, detail="Pro tento stroj nebylo nalezeno žádné měření.")
             
         id_measurement, raw_data_path = meas
         
-        # 2. Najít ID aktivního modelu AE_ANOWGAN
-        query_model = text("""
-            SELECT id_model FROM ml_models 
-            WHERE name = 'AE_ANOWGAN' AND is_active = true 
-            LIMIT 1
-        """)
+        query_model = text("SELECT id_model FROM ml_models WHERE name = 'AE_ANOWGAN' AND is_active = true LIMIT 1")
         model = conn.execute(query_model).fetchone()
-        
         if not model:
             raise HTTPException(status_code=500, detail="Aktivní model AE_ANOWGAN nebyl nalezen v databázi.")
         id_model = model[0]
         
-        # 3. Přeposlání požadavku na ML Service
         try:
-            ml_payload = {"path": raw_data_path}
-            # Předpokládáme, že ML_SERVICE_URL máš definované nahoře v souboru
-            ml_res = requests.post(f"{ML_SERVICE_URL}/analyze-anomaly", json=ml_payload)
+            ml_res = requests.post(f"{ML_SERVICE_URL}/analyze-anomaly", json={"path": raw_data_path})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
-            # Očekáváme JSON: { "anomaly_score": 0.025, "is_anomaly": true/false }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Chyba při komunikaci s ML Service: {e}")
             
         anomaly_score = ml_data.get("anomaly_score")
         is_anomaly = ml_data.get("is_anomaly")
+        label = "Zjištěna anomálie" if is_anomaly else "Zdravý chod"
         
-        # Nastavení textového štítku podle výsledku
-        label = "Zjištěna anomálie" if is_anomaly else "Zdrávý chod"
-        
-        # 4. Uložení výsledku do tabulky analysis_results
         query_insert = text("""
-            INSERT INTO analysis_results 
-            (id_measurement, id_model, prediction_type, prediction_value, prediction_label, confidence, timestamp)
+            INSERT INTO analysis_results (id_measurement, id_model, prediction_type, prediction_value, prediction_label, confidence, timestamp)
             VALUES (:mid, :modid, 'Anomaly Score', :val, :label, :conf, NOW())
         """)
         try:
-            conn.execute(query_insert, {
-                "mid": id_measurement,
-                "modid": id_model,
-                "val": anomaly_score,
-                "label": label,
-                "conf": 1.0 # GAN klasicky nevrací pravděpodobnost (0-1), u anomálie můžeme dát 1.0 nebo přepočítat
-            })
+            conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "val": anomaly_score, "label": label, "conf": 1.0})
             conn.commit()
-        except Exception as e:
-            print(f"Chyba při ukládání výsledku: {e}")
+        except Exception:
             raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek analýzy do databáze.")
             
-        return {
-            "anomaly_score": anomaly_score,
-            "is_anomaly": is_anomaly,
-            "message": "Analýza úspěšně dokončena"
-        }
+        return {"anomaly_score": anomaly_score, "is_anomaly": is_anomaly, "message": "Analýza úspěšně dokončena"}
 
 @app.post("/machines/{machine_id}/classify-fault")
-def classify_machine_fault(machine_id: int):
+def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme)):
     """
-    Spustí klasifikaci poruchy (1D_CNNwWGN) na nejnovějším měření.
+    Vyvolá klasifikaci typu lokalizované vady ložiska pomocí hluboké konvoluční sítě 1D-CNN.
     """
     with engine.connect() as conn:
-        # 1. Najít nejnovější měření pro daný stroj
         query_meas = text("""
-            SELECT m.id_measurement, m.raw_data_path 
-            FROM measurements m
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE s.id_machine = :mid
-            ORDER BY m.timestamp DESC
-            LIMIT 1
+            SELECT m.id_measurement, m.raw_data_path FROM measurements m
+            JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid
+            ORDER BY m.timestamp DESC LIMIT 1
         """)
         meas = conn.execute(query_meas, {"mid": machine_id}).fetchone()
-        
         if not meas:
             raise HTTPException(status_code=404, detail="Žádné měření nenalezeno.")
             
         id_measurement, raw_data_path = meas
         
-        # 2. Najít ID modelu pro klasifikaci
-        query_model = text("""
-            SELECT id_model FROM ml_models 
-            WHERE name = '1D_CNNwWGN' AND is_active = true 
-            LIMIT 1
-        """)
+        query_model = text("SELECT id_model FROM ml_models WHERE name = '1D_CNNwWGN' AND is_active = true LIMIT 1")
         model = conn.execute(query_model).fetchone()
-        
         if not model:
             raise HTTPException(status_code=500, detail="Aktivní model 1D_CNNwWGN nebyl nalezen.")
         id_model = model[0]
         
-        # 3. Komunikace s ML Service
         try:
-            ml_payload = {"path": raw_data_path}
-            ml_res = requests.post(f"{ML_SERVICE_URL}/classify-fault", json=ml_payload)
+            ml_res = requests.post(f"{ML_SERVICE_URL}/classify-fault", json={"path": raw_data_path})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
-            # Očekáváme JSON: { "fault_type": "Porucha vnějšího kroužku", "confidence": 0.985 }
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Chyba komunikace s ML Service: {e}")
             
         fault_type = ml_data.get("fault_type")
         confidence = ml_data.get("confidence")
         
-        # 4. Uložení výsledku
         query_insert = text("""
-            INSERT INTO analysis_results 
-            (id_measurement, id_model, prediction_type, prediction_label, confidence, timestamp)
+            INSERT INTO analysis_results (id_measurement, id_model, prediction_type, prediction_label, confidence, timestamp)
             VALUES (:mid, :modid, 'Fault Classification', :label, :conf, NOW())
         """)
         try:
-            conn.execute(query_insert, {
-                "mid": id_measurement,
-                "modid": id_model,
-                "label": fault_type,
-                "conf": confidence
-            })
+            conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "label": fault_type, "conf": confidence})
             conn.commit()
-        except Exception as e:
-            print(f"Chyba při ukládání výsledku klasifikace: {e}")
+        except Exception:
             raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek klasifikace.")
             
         return ml_data
 
 @app.post("/machines/{machine_id}/predict-rul")
-def predict_machine_rul(machine_id: int):
+def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
     """
-    Spustí predikci RUL (Bi-LSTM) na sekvenci posledních 10 měření a uloží výsledek do databáze.
+    Vypočítá zbývající životnost (RUL) ložiska na základě sekvenčního okna posledních
+    10 měření pomocí rekurentní sítě Bi-LSTM. Bere v úvahu dříve klasifikovaný typ vady.
     """
     with engine.connect() as conn:
-        # 1. Zjištění poslední klasifikované poruchy pro výběr modelu
         query_label = text("""
-            SELECT ar.prediction_label 
-            FROM analysis_results ar
+            SELECT ar.prediction_label FROM analysis_results ar
             JOIN measurements m ON ar.id_measurement = m.id_measurement
             JOIN sensors s ON m.id_sensor = s.id_sensor
             WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
@@ -1553,7 +1116,6 @@ def predict_machine_rul(machine_id: int):
         """)
         last_label_row = conn.execute(query_label, {"mid": machine_id}).fetchone()
         
-        # Určení kategorie: Outer Race (OR), Inner Race (IR), nebo Ostatní/Zdrávé (O)
         category = "O"
         if last_label_row and last_label_row[0]:
             label = last_label_row[0].lower()
@@ -1562,32 +1124,22 @@ def predict_machine_rul(machine_id: int):
             elif "inner" in label or "vnitřní" in label:
                 category = "IR"
 
-        # 2. Vytáhnutí posledních 10 měření VČETNĚ id_measurement
         query_meas = text("""
-            SELECT id_measurement, raw_data_path 
-            FROM (
-                SELECT m.id_measurement, m.raw_data_path, m.timestamp
-                FROM measurements m
-                JOIN sensors s ON m.id_sensor = s.id_sensor
-                WHERE s.id_machine = :mid
-                ORDER BY m.timestamp DESC
-                LIMIT 10
-            ) sub
-            ORDER BY timestamp ASC
+            SELECT id_measurement, raw_data_path FROM (
+                SELECT m.id_measurement, m.raw_data_path, m.timestamp FROM measurements m
+                JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid
+                ORDER BY m.timestamp DESC LIMIT 10
+            ) sub ORDER BY timestamp ASC
         """)
         meas_rows = conn.execute(query_meas, {"mid": machine_id}).fetchall()
-        
         if len(meas_rows) < 10:
-            raise HTTPException(status_code=400, detail=f"Nedostatek dat pro RUL. Potřebujeme 10 měření, máme {len(meas_rows)}.")
+            raise HTTPException(status_code=400, detail=f"Nedostatek dat pro RUL (požadováno 10, máme {len(meas_rows)}).")
             
-        # Z indexu 1 bereme cesty, z indexu 0 bereme ID
         paths = [row[1] for row in meas_rows]
-        latest_measurement_id = meas_rows[-1][0] # ID toho absolutně nejnovějšího měření v okně
+        latest_measurement_id = meas_rows[-1][0] 
         
-        # 3. Komunikace s ML Service
         try:
-            ml_payload = {"paths": paths, "category": category}
-            ml_res = requests.post(f"{ML_SERVICE_URL}/predict-rul", json=ml_payload)
+            ml_res = requests.post(f"{ML_SERVICE_URL}/predict-rul", json={"paths": paths, "category": category})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
         except Exception as e:
@@ -1596,70 +1148,44 @@ def predict_machine_rul(machine_id: int):
         rul_fraction = ml_data.get("rul_fraction")
         used_model = ml_data.get("used_model")
         
-        # Převod zlomku (0-1) na reálné dny
         MAX_LIFESPAN_DAYS = 30
         rul_days = round(rul_fraction * MAX_LIFESPAN_DAYS, 1)
         
-        # 4. ULOŽENÍ VÝSLEDKU DO DATABÁZE
-        # Pokusíme se najít ID RUL modelu v databázi
         model_query = text("SELECT id_model FROM ml_models WHERE name LIKE '%Bi-LSTM%' OR type LIKE '%RUL%' LIMIT 1")
         model_row = conn.execute(model_query).fetchone()
         model_id = model_row[0] if model_row else None
 
         insert_query = text("""
-            INSERT INTO analysis_results 
-            (id_model, id_measurement, prediction_type, prediction_value, prediction_label, timestamp)
+            INSERT INTO analysis_results (id_model, id_measurement, prediction_type, prediction_value, prediction_label, timestamp)
             VALUES (:model_id, :meas_id, 'RUL Prediction', :val, :label, NOW())
         """)
+        conn.execute(insert_query, {"model_id": model_id, "meas_id": latest_measurement_id, "val": rul_days, "label": f"{rul_days} dní"})
+        conn.commit() 
         
-        conn.execute(insert_query, {
-            "model_id": model_id,
-            "meas_id": latest_measurement_id,
-            "val": rul_days,
-            "label": f"{rul_days} dní"
-        })
-        
-        conn.commit() # DŮLEŽITÉ: Uložení do DB
-        
-        return {
-            "rul_value": rul_days,
-            "unit": "dní",
-            "used_model": used_model
-        }
+        return {"rul_value": rul_days, "unit": "dní", "used_model": used_model}
         
 @app.get("/training-segments")
 def get_training_segments(
-    machine_id: Optional[int] = None,
-    sensor_id: Optional[int] = None,
-    datetime_from: Optional[str] = None,
-    datetime_to: Optional[str] = None
+    machine_id: Optional[int] = None, sensor_id: Optional[int] = None,
+    datetime_from: Optional[str] = None, datetime_to: Optional[str] = None,
+    token: str = Depends(oauth2_scheme)
 ):
-    """
-    Vyhledá dostupná měření podle detailních filtrů (včetně času).
-    """
+    """Agreguje a vyhledá segmenty historických měření podle filtrů pro účely doučení modelů."""
     with engine.connect() as conn:
         query_str = """
-            SELECT 
-                mac.id_machine, mac.name as machine_name,
-                s.id_sensor, s.position as sensor_name,
-                MIN(m.timestamp) as date_from,
-                MAX(m.timestamp) as date_to,
-                COUNT(m.id_measurement) as measurements_count
+            SELECT mac.id_machine, mac.name as machine_name, s.id_sensor, s.position as sensor_name,
+                   MIN(m.timestamp) as date_from, MAX(m.timestamp) as date_to, COUNT(m.id_measurement) as measurements_count
             FROM measurements m
             JOIN sensors s ON m.id_sensor = s.id_sensor
-            JOIN machines mac ON s.id_machine = mac.id_machine
-            WHERE 1=1
+            JOIN machines mac ON s.id_machine = mac.id_machine WHERE 1=1
         """
         params = {}
-        
         if machine_id:
             query_str += " AND mac.id_machine = :machine_id"
             params["machine_id"] = machine_id
         if sensor_id:
             query_str += " AND s.id_sensor = :sensor_id"
             params["sensor_id"] = sensor_id
-            
-        # React 'datetime-local' posílá formát YYYY-MM-DDTHH:MM (s Tčkem uprostřed)
         if datetime_from:
             query_str += " AND m.timestamp >= :dt_from"
             params["dt_from"] = datetime_from.replace("T", " ") + ":00"
@@ -1667,346 +1193,298 @@ def get_training_segments(
             query_str += " AND m.timestamp <= :dt_to"
             params["dt_to"] = datetime_to.replace("T", " ") + ":59"
             
-        query_str += " GROUP BY mac.id_machine, mac.name, s.id_sensor, s.position"
-        query_str += " ORDER BY MAX(m.timestamp) DESC"
-        
+        query_str += " GROUP BY mac.id_machine, mac.name, s.id_sensor, s.position ORDER BY MAX(m.timestamp) DESC"
         result = conn.execute(text(query_str), params).fetchall()
         
         segments = []
         for row in result:
             display_sensor = row.sensor_name if row.sensor_name else f"Senzor #{row.id_sensor}"
             segments.append({
-                "id": f"{row.id_machine}_{row.id_sensor}", 
-                "machine": row.machine_name,
-                "sensor": display_sensor,
-                # Vracíme čas na minuty přesně pro hezčí zobrazení v tabulce
-                "dateFrom": str(row.date_from)[:16], 
-                "dateTo": str(row.date_to)[:16],
-                "measurementsCount": row.measurements_count
+                "id": f"{row.id_machine}_{row.id_sensor}", "machine": row.machine_name, "sensor": display_sensor,
+                "dateFrom": str(row.date_from)[:16], "dateTo": str(row.date_to)[:16], "measurementsCount": row.measurements_count
             })
-            
         return segments
     
 @app.get("/machines/{machine_id}/latest-ai")
 def get_latest_ai_results(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """
-    Vrátí nejnovější výsledky AI diagnostiky (Anomálie, Klasifikace, RUL) pro konkrétní stroj.
-    """
+    """Načte poslední známé vyhodnocení anomálií, typu poruchy a RUL pro dashboard stroje."""
     with engine.connect() as conn:
-        # Nejnovější detekce anomálií (AE_ANOWGAN)
         query_anomaly = text("""
-            SELECT ar.prediction_value, ar.prediction_label, ar.timestamp 
-            FROM analysis_results ar
+            SELECT ar.prediction_value, ar.prediction_label, ar.timestamp FROM analysis_results ar
             JOIN measurements m ON ar.id_measurement = m.id_measurement
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE s.id_machine = :mid AND ar.prediction_type = 'Anomaly Detection'
+            JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid AND ar.prediction_type = 'Anomaly Detection'
             ORDER BY ar.timestamp DESC LIMIT 1
         """)
         anomaly = conn.execute(query_anomaly, {"mid": machine_id}).fetchone()
 
-        # Nejnovější klasifikace poruchy (1D_CNN)
         query_fault = text("""
-            SELECT ar.prediction_label, ar.confidence, ar.timestamp 
-            FROM analysis_results ar
+            SELECT ar.prediction_label, ar.confidence, ar.timestamp FROM analysis_results ar
             JOIN measurements m ON ar.id_measurement = m.id_measurement
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
+            JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
             ORDER BY ar.timestamp DESC LIMIT 1
         """)
         fault = conn.execute(query_fault, {"mid": machine_id}).fetchone()
 
-        # Nejnovější RUL (Bi-LSTM)
         query_rul = text("""
-            SELECT ar.prediction_value, ar.timestamp 
-            FROM analysis_results ar
+            SELECT ar.prediction_value, ar.timestamp FROM analysis_results ar
             JOIN measurements m ON ar.id_measurement = m.id_measurement
-            JOIN sensors s ON m.id_sensor = s.id_sensor
-            WHERE s.id_machine = :mid AND ar.prediction_type = 'RUL Prediction'
+            JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid AND ar.prediction_type = 'RUL Prediction'
             ORDER BY ar.timestamp DESC LIMIT 1
         """)
         rul = conn.execute(query_rul, {"mid": machine_id}).fetchone()
 
-        # Formátování času pro frontend
         def format_ts(ts):
             return ts.strftime('%d.%m.%Y %H:%M') if ts else None
 
         return {
-            "anomaly": {
-                "value": anomaly[0] if anomaly else None,
-                "label": anomaly[1] if anomaly else None,
-                "timestamp": format_ts(anomaly[2]) if anomaly else None
-            },
-            "fault": {
-                "label": fault[0] if fault else None,
-                "confidence": fault[1] if fault else None,
-                "timestamp": format_ts(fault[2]) if fault else None
-            },
-            "rul": {
-                "value": rul[0] if rul else None,
-                "timestamp": format_ts(rul[1]) if rul else None
-            }
+            "anomaly": {"value": anomaly[0] if anomaly else None, "label": anomaly[1] if anomaly else None, "timestamp": format_ts(anomaly[2]) if anomaly else None},
+            "fault": {"label": fault[0] if fault else None, "confidence": fault[1] if fault else None, "timestamp": format_ts(fault[2]) if fault else None},
+            "rul": {"value": rul[0] if rul else None, "timestamp": format_ts(rul[1]) if rul else None}
         }
 
 @app.post("/models/{model_id}/fine-tune")
 def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: str = Depends(oauth2_scheme)):
-    print(f"\n{'='*50}\n🚀 START FINE-TUNING Z BASE MODELU ID {model_id}")
-    
+    """
+    Iniciuje proces asynchronního doučení (Fine-Tuning) vybrané architektury modelu
+    na označených datech z operátorského rozhraní Reactu.
+    """
+    print(f"\n🚀 START FINE-TUNING Z BASE MODELU ID {model_id}")
     with engine.connect() as conn:
-        # 1. Načtení zdrojového modelu
         query_model = text("SELECT name, version, type, description FROM ml_models WHERE id_model = :mid")
         model_row = conn.execute(query_model, {"mid": model_id}).fetchone()
         if not model_row:
-            raise HTTPException(status_code=404, detail="Zdrojový model nebyl nalezen.")
+            raise HTTPException(status_code=404, detail="Zdrojový model nebyl znalezen.")
         
         model_name, current_version, model_type, description = model_row
-        
-        # 2. Generování nové verze (např. 1.0 -> 2.0 nebo 1.1)
         try:
             new_version = str(round(float(current_version) + 0.1, 1))
         except ValueError:
             new_version = f"{current_version}.1"
             
-        # 3. Vygenerování cílové cesty pro nové váhy (save_path)
-        # Podle tvé struktury: models/1DCNN/v2/bearing_fault_model.pth
         folder_name = "1DCNN" if "CNN" in model_name else model_name
-        save_dir = f"models/{folder_name}/v{new_version}"
-        save_path = f"{save_dir}/bearing_fault_model.pth"
+        save_path = f"models/{folder_name}/v{new_version}/bearing_fault_model.pth"
 
-        # 4. Uložení nové verze do DB
         insert_query = text("""
-            INSERT INTO ml_models 
-            (name, version, type, description, is_active, training_status, path_to_model) 
-            VALUES 
-            (:name, :ver, :type, :desc, False, 'training', :path)
-            RETURNING id_model
+            INSERT INTO ml_models (name, version, type, description, is_active, training_status, path_to_model) 
+            VALUES (:name, :ver, :type, :desc, False, 'training', :path) RETURNING id_model
         """)
         new_model_id = conn.execute(insert_query, {
             "name": model_name, "ver": new_version, "type": model_type,
-            "desc": f"{description} (Fine-tuned z v{current_version})",
-            "path": save_path
+            "desc": f"{description} (Fine-tuned z v{current_version})", "path": save_path
         }).scalar()
-        
-        print(f"✅ Vytvořen model ID: {new_model_id} (v{new_version}) -> Bude uložen do: {save_path}")
 
-        # 5. EXTRAKCE REÁLNÝCH DAT Z DATABÁZE (SQL JOIN na measurements)
-        file_paths = []      # Pro GAN a LSTM
-        measurements_data = [] # Pro CNN (potřebuje i labely)
+        file_paths = []      
+        measurements_data = [] 
         
         for seg in payload.segments:
-            # Vytáhneme všechny cesty k souborům v daném časovém okně
             data_query = text("""
                 SELECT raw_data_path FROM measurements 
-                WHERE id_sensor = :sensor_id 
-                  AND timestamp BETWEEN :d_from AND :d_to
-                ORDER BY timestamp ASC
+                WHERE id_sensor = :sensor_id AND timestamp BETWEEN :d_from AND :d_to ORDER BY timestamp ASC
             """)
-            rows = conn.execute(data_query, {
-                "sensor_id": seg.id_sensor,
-                "d_from": seg.dateFrom,
-                "d_to": seg.dateTo
-            }).fetchall()
-            
+            rows = conn.execute(data_query, {"sensor_id": seg.id_sensor, "d_from": seg.dateFrom, "d_to": seg.dateTo}).fetchall()
             for row in rows:
-                if row[0]: # Pokud cesta existuje
+                if row[0]: 
                     file_paths.append(row[0])
                     if "CNN" in model_name:
-                        # Pokud je to CNN, přibalíme i label, který přišel z frontendu
-                        measurements_data.append({
-                            "path": row[0],
-                            "label": int(seg.label) if seg.label else 0
-                        })
-        
+                        measurements_data.append({"path": row[0], "label": int(seg.label) if seg.label else 0})
         conn.commit()
 
         if not file_paths:
-            raise HTTPException(status_code=400, detail="V zadaných úsecích nebyla nalezena žádná surová data (raw_data_path).")
+            raise HTTPException(status_code=400, detail="V zadaných úsecích nebyla nalezena žádná surová data.")
 
-        print(f"📦 Nasbíráno celkem {len(file_paths)} souborů pro trénink.")
-
-        # 6. REÁLNÉ ODESLÁNÍ DO ML SERVISY
         webhook_url = f"http://127.0.0.1:8000/webhook/training-done/{new_model_id}"
-        
         try:
             if "GAN" in model_name:
-                ml_payload = {
-                    "file_paths": file_paths,
-                    "webhook_url": webhook_url,
-                    "save_path": save_path
-                }
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning", json=ml_payload)
-                
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning", json={"file_paths": file_paths, "webhook_url": webhook_url, "save_path": save_path})
             elif "CNN" in model_name:
-                ml_payload = {
-                    "measurements": measurements_data,
-                    "webhook_url": webhook_url,
-                    "save_path": save_path
-                }
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-1dcnn", json=ml_payload)
-                
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-1dcnn", json={"measurements": measurements_data, "webhook_url": webhook_url, "save_path": save_path})
             elif "LSTM" in model_name:
-                # Pro RUL (bereme defaultně "O" jako kategorii, zjednodušeno)
-                ml_payload = {
-                    "category": "O", 
-                    "file_paths": file_paths,
-                    "webhook_url": webhook_url,
-                    "save_path": save_path
-                }
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-rul", json=ml_payload)
-
-            res.raise_for_status() # Zkontroluje, zda ML service neodpověděla chybou
-            print("🚀 Požadavek úspěšně předán ML servise!")
-            
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-rul", json={"category": "O", "file_paths": file_paths, "webhook_url": webhook_url, "save_path": save_path})
+            res.raise_for_status() 
         except requests.exceptions.RequestException as e:
-            # Pokud ML Service nekomunikuje, musíme to vrátit v DB zpět (nebo nastavit na failed)
             with engine.connect() as fail_conn:
                 fail_conn.execute(text("UPDATE ml_models SET training_status = 'failed' WHERE id_model = :mid"), {"mid": new_model_id})
                 fail_conn.commit()
             raise HTTPException(status_code=503, detail=f"Nepodařilo se spojit s ML Servisou: {e}")
 
-    return {
-        "status": "accepted",
-        "message": f"Trénink modelu povýšen na v{new_version} byl spuštěn.",
-        "new_model_id": new_model_id
-    }
+    return {"status": "accepted", "message": f"Trénink modelu verze v{new_version} byl spuštěn.", "new_model_id": new_model_id}
 
 @app.post("/webhook/training-done/{model_id}")
 def training_webhook(model_id: int, payload: WebhookPayload):
     """
-    Endpoint, který volá ML servisa po dokončení nebo selhání tréninku.
+    Interní asynchronní webhook volaný ML mikroslužbou po dokončení/selhání tréninku modelu.
     """
-    print(f"\n{'='*50}")
-    print(f"🔔 WEBHOOK PŘIJAT PRO MODEL ID {model_id}")
-    print(f"Výsledek: {payload.status.upper()}")
-    if payload.message:
-        print(f"Zpráva: {payload.message}")
-        
     with engine.connect() as conn:
-        if payload.status == "success":
-            # Trénink se povedl. Změníme stav na 'ready'.
-            # Pozn.: is_active necháváme False, abychom produkci nepřepnuli automaticky bez otestování.
-            update_query = text("UPDATE ml_models SET training_status = 'ready' WHERE id_model = :mid")
-            print("✅ Model je doučen a připraven k nasazení!")
-        else:
-            # Trénink selhal.
-            update_query = text("UPDATE ml_models SET training_status = 'failed' WHERE id_model = :mid")
-            print("❌ Trénink selhal. Zkontrolováno a zapsáno do DB.")
-            
-        conn.execute(update_query, {"mid": model_id})
+        status_str = 'ready' if payload.status == "success" else 'failed'
+        update_query = text("UPDATE ml_models SET training_status = :status WHERE id_model = :mid")
+        conn.execute(update_query, {"status": status_str, "mid": model_id})
         conn.commit()
-        
-    print(f"{'='*50}\n")
     return {"status": "acknowledged"}
 
 @app.post("/models/sync-active")
 def sync_active_models():
     """
-    Tento endpoint volá ML servisa při startu.
-    Najde nejnovější 'ready' verze, aktivuje je a vrátí jejich cesty.
+    Interní synchronizační endpoint volaný ML službou při startu ke zjištění aktivních vah.
     """
     active_paths = {}
     with engine.connect() as conn:
-        # 1. Všechny modely nastavíme jako neaktivní (reset)
         conn.execute(text("UPDATE ml_models SET is_active = False"))
-        
-        # 2. Najdeme nejnovější (podle id_model) pro každý unikátní 'name', které jsou 'ready'
-        # DISTINCT ON (name) nám zaručí, že dostaneme jen 1 řádek pro každý název modelu.
         query = text("""
             SELECT DISTINCT ON (name) id_model, name, path_to_model 
-            FROM ml_models 
-            WHERE training_status = 'ready' 
-            ORDER BY name, id_model DESC
+            FROM ml_models WHERE training_status = 'ready' ORDER BY name, id_model DESC
         """)
         latest_models = conn.execute(query).fetchall()
-        
         for row in latest_models:
             m_id, m_name, m_path = row
-            
-            # Nastavíme vybranému modelu, že je produkčně aktivní
             conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": m_id})
-            
-            # Analýza cesty (AE a LSTM potřebují předat celou složku, CNN potřebuje přesný soubor)
             m_dir = os.path.dirname(m_path) if m_path and m_path.endswith('.pth') else m_path
-            if not m_dir: 
-                m_dir = m_path # Fallback
 
-            if "GAN" in m_name:
-                active_paths["AE_ANOWGAN"] = m_dir
-            elif "CNN" in m_name:
-                active_paths["1D_CNN"] = m_path # Vracíme přesný soubor .pth
-            elif "LSTM" in m_name:
-                active_paths["Bi-LSTM"] = m_dir
-                
+            if "GAN" in m_name: active_paths["AE_ANOWGAN"] = m_dir
+            elif "CNN" in m_name: active_paths["1D_CNN"] = m_path 
+            elif "LSTM" in m_name: active_paths["Bi-LSTM"] = m_dir
         conn.commit()
-        
     return active_paths
-
-@app.put("/models/{model_id}/activate")
-def activate_model_version(model_id: int):
-    """
-    Přepne is_active na True pro vybranou verzi a na False pro všechny ostatní verze stejného modelu.
-    Zároveň dá vědět ML servise, ať si znovu načte váhy!
-    """
-    with engine.connect() as conn:
-        # 1. Zjistíme jméno modelu, který chceme aktivovat
-        model_name_row = conn.execute(text("SELECT name FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
-        if not model_name_row:
-            raise HTTPException(status_code=404, detail="Model nebyl nalezen.")
-            
-        model_name = model_name_row[0]
-        
-        # 2. Deaktivujeme VŠECHNY modely se stejným jménem
-        conn.execute(text("UPDATE ml_models SET is_active = False WHERE name = :name"), {"name": model_name})
-        
-        # 3. Aktivujeme ten jeden konkrétní, na který uživatel klikl
-        conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": model_id})
-        conn.commit()
-
-        # 4. (Volitelné, ale doporučené) Zavoláme na ML Service, aby si aktualizovala modely
-        # Pokud si do ml_service přidáš /reload endpoint, frontendem to ihned propíšeš do inference
-        # try:
-        #     requests.post(f"{ML_SERVICE_URL}/reload", timeout=5)
-        # except Exception as e:
-        #     print(f"Nelze kontaktovat ML servisu pro reload: {e}")
-
-    return {"status": "success", "message": f"Verze modelu byla aktivována a nasazena do produkce."}
 
 @app.put("/models/{model_id}/activate")
 def activate_model_version(model_id: int, token: str = Depends(oauth2_scheme)):
     """
-    Aktivuje verzi v DB a nařídí ML Servise její okamžité načtení.
+    Aktivuje vybranou verzi modelu v DB, hromadně deaktivuje předchozí verze
+    se stejným logickým názvem a nařídí běžící ML mikroslužbě okamžitý reload vah do RAM.
     """
     with engine.connect() as conn:
-        # 1. Najdeme jméno modelu
         res = conn.execute(text("SELECT name FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
-        if not res:
-            raise HTTPException(status_code=404, detail="Model nenalezen.")
-        
+        if not res: raise HTTPException(status_code=404, detail="Model nenalezen.")
         model_name = res[0]
 
-        # 2. Transakční update (Vypnout staré, zapnout nový)
         conn.execute(text("UPDATE ml_models SET is_active = False WHERE name = :name"), {"name": model_name})
         conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": model_id})
         conn.commit()
-        
-        print(f"✅ Model ID {model_id} ({model_name}) aktivován v databázi.")
 
-    # 3. NOTIFIKACE ML SERVISY (Klíčový krok)
     try:
-        print(f"📡 Posílám signál k přenačtení na ML Servisu ({ML_SERVICE_URL}/reload)...")
-        # Voláme endpoint, který jsme vytvořili v kroku 1
         reload_res = requests.post(f"{ML_SERVICE_URL}/reload", timeout=10)
         reload_res.raise_for_status()
-        print("🚀 ML Servisa potvrdila úspěšné přenačtení modelů.")
-        
     except Exception as e:
-        # Pokud ML servisa neběží, nevadí to pro DB, ale uživatel by měl dostat varování
-        print(f"⚠️ Varování: Nepodařilo se aktualizovat běžící ML servisu: {e}")
         return {
             "status": "partial_success", 
             "message": "Model aktivován v DB, ale ML servisa neodpovídá. Změna se projeví po jejím restartu."
         }
-
     return {"status": "success", "message": "Model byl úspěšně nasazen do produkce."}
+
+
+# ==========================================
+# --- SEKCE AUTOMATICKÝ PLÁNOVANÝ SBĚR ----
+# ==========================================
+
+async def download_and_process_raw_data():
+    """
+    Hlavní asynchronní Master-Slave smyčka řízení. Vyvolává stavový automat na PLC 
+    pomocí OPC UA, čeká na dokončení generování CSV vyrovnávací paměti a následně 
+    přes šifrované FTP (FTP Pull) stahuje signálová data do lokálního úložiště.
+    """
+    print(f"[{datetime.now()}] Spouštím asynchronní rutinu pro sběr dat z PLC...")
+    try:
+        with engine.connect() as conn:
+            query = text("SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir FROM machines WHERE is_active_collection = TRUE")
+            active_machines = conn.execute(query).fetchall()
+            if not active_machines:
+                print("Žádný stroj nemá povolený automatický sběr dat.")
+                return
+    except Exception as e:
+        print(f"Chyba databáze při načítání strojů: {e}")
+        return
+
+    for machine in active_machines:
+        mach_id, plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass, plc_remote_dir = machine
+        plc_remote_dir = plc_remote_dir or "C:/BufferData"
+        
+        try:
+            with engine.connect() as conn:
+                query_rms = text(f"SELECT AVG(rms_raw) FROM feature_data WHERE id_machine = {mach_id} AND time >= NOW() - INTERVAL '1 hour'")
+                avg_rms = conn.execute(query_rms).scalar()
+                if avg_rms is None or avg_rms < 0.1:
+                    print(f"Stroj {mach_id} pravděpodobně stojí (RMS < 0.1). Přeskakuji sběr.")
+                    continue
+        except Exception as e:
+            print(f"Chyba při ověřování běhu stroje: {e}")
+            continue
+            
+        work_id_prefix = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        buffer_mapping = {1: 9, 2: 11, 3: 13, 4: 15}
+
+        try:
+            async with Client(url=plc_opc_url) as client:
+                node_workid  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
+                node_buflen  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
+                node_bufnum  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferNumber") 
+                node_start   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
+                node_done    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
+                node_csv     = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
+                node_reset   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+
+                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
+
+                for channel, buffer_number in buffer_mapping.items():
+                    current_work_id = f"{work_id_prefix}_CH{channel}"
+                    await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
+                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.UInt16)))
+                    await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+                    
+                    timeout = 0
+                    while True:
+                        if await node_done.read_value():
+                            break
+                        await asyncio.sleep(1)
+                        timeout += 1
+                        if timeout > 45:
+                            print(f"[{mach_id}] Timeout na PLC u kanálu {channel}!")
+                            break
+                    
+                    csv_filename = await node_csv.read_value()
+                    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+                    await asyncio.sleep(0.5) 
+                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    
+                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
+                    os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
+                    
+                    def download_and_delete_ftp():
+                        ctx = ssl.create_default_context()
+                        ctx.check_hostname = False
+                        ctx.verify_mode = ssl.CERT_NONE
+                        ctx.set_ciphers('ALL:@SECLEVEL=0')
+                        
+                        ftp = FTP_TLS(context=ctx)
+                        ftp.connect(plc_ftp_host, 21)
+                        ftp.login(plc_ftp_user, plc_ftp_pass)
+                        ftp.prot_p()
+                        ftp.set_pasv(True)
+                        remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
+                        with open(local_filepath, 'wb') as f:
+                            ftp.retrbinary(f"RETR {remote_path}", f.write)
+                        ftp.delete(remote_path)
+                        ftp.quit()
+                        
+                    try:
+                        await asyncio.to_thread(download_and_delete_ftp)
+                        with engine.connect() as conn:
+                            query_sensor = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC OFFSET {channel - 1} LIMIT 1")
+                            sensor_id = conn.execute(query_sensor).scalar()
+                            
+                            if sensor_id:
+                                conn.execute(text("""
+                                    INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                                    VALUES (:sid, :ts, :path, :notes)
+                                """), {
+                                    "sid": sensor_id, "ts": datetime.now(timezone.utc),
+                                    "path": local_filepath, "notes": f"Batch: {work_id_prefix} | Kanál {channel}"
+                                })
+                                conn.commit()
+                    except Exception as e:
+                        print(f"[{mach_id}] Chyba FTP přenosu nebo DB u kanálu {channel}: {e}")
+        except Exception as e:
+            print(f"[{mach_id}] Kritická chyba OPC UA: {e}")
+    print(f"[{datetime.now()}] Asynchronní sběr dat dokončen.")
 
 if __name__ == "__main__":
     uvicorn.run(app, host="127.0.0.1", port=8000)

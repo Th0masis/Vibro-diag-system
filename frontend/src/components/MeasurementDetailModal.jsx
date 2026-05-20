@@ -21,6 +21,12 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
   const SAMPLING_FREQ = 12800; 
   const DOWNSAMPLE_STEP = 16;  
 
+  // Pomocná funkce pro získání autorizační hlavičky
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
   // 1. Načtení základu (Nejprve features, pokud jsou, tak i raw data)
   const fetchDetail = async () => {
     try {
@@ -28,7 +34,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
       
       let featResData = null;
       try {
-        const featRes = await axios.get(`/measurements/${measurementId}/features`);
+        const featRes = await axios.get(`/measurements/${measurementId}/features`, getAuthHeader());
         featResData = featRes.data; 
         setDetails(featResData);
       } catch (e) {
@@ -38,7 +44,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
 
       // Pokud jsou data zpracována (mají rms_raw), načteme i surový signál pro graf
       if (featResData && featResData.rms_raw) {
-        const rawRes = await axios.get(`/measurements/${measurementId}/raw`);
+        const rawRes = await axios.get(`/measurements/${measurementId}/raw`, getAuthHeader());
         const signalData = Array.isArray(rawRes.data) ? rawRes.data : (rawRes.data?.signal || []);
         
         if (signalData.length === 0) {
@@ -74,7 +80,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
         if (!details || !details.rms_raw) return;
 
         if (activeTab === 'fft' && fftData.length === 0) {
-          const res = await axios.get(`/measurements/${measurementId}/fft`);
+          const res = await axios.get(`/measurements/${measurementId}/fft`, getAuthHeader());
           const formattedFft = res.data.frequencies.map((freq, i) => ({
             freq: freq,
             amp: res.data.amplitudes[i]
@@ -82,7 +88,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
           setFftData(formattedFft);
         } 
         else if (activeTab === 'cwt' && !cwtImage) {
-          const res = await axios.get(`/measurements/${measurementId}/cwt`);
+          const res = await axios.get(`/measurements/${measurementId}/cwt`, getAuthHeader());
           setCwtImage(res.data.cwt_image);
         }
       } catch (err) {
@@ -99,7 +105,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
   const handleProcess = async () => {
     setIsProcessing(true);
     try {
-      await axios.post(`/measurements/${measurementId}/process`);
+      await axios.post(`/measurements/${measurementId}/process`, {}, getAuthHeader());
       await fetchDetail(); 
       if (onProcessed) onProcessed(); 
     } catch (error) {
