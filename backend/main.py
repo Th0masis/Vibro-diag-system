@@ -90,7 +90,7 @@ async def lifespan(app: FastAPI):
     """
     scheduler = AsyncIOScheduler()
     # Produkční plán: Sběr dat každé 4 hodiny v minutě 28 (02:28, 06:28, 10:28, 14:28, 18:28, 22:28)
-    scheduler.add_job(download_and_process_raw_data, 'cron', hour='2,6,10,14,18,22', minute=28)
+    scheduler.add_job(download_and_process_raw_data, 'cron', hour='9,10', minute='15,30,45,50')
     scheduler.start()
     print("Asynchronní scheduler úloh spuštěn v produkčním režimu.")
     

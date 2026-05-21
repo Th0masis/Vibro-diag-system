@@ -1,0 +1,20 @@
+# Virtuální prostředí
+venv/
+env/
+
+# Datová složka
+data/
+
+# Python cache soubory
+**/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Skryté systémové a git soubory
+.git/
+.gitignore
+.dockerignore
+
+# Soubory s proměnnými prostředí (bezpečnost!)
+.env
