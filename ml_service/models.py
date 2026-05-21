@@ -167,7 +167,7 @@ class BearingFault1DCNN(nn.Module):
 # 3. Bi-LSTM - predikce RUL
 # ==========================================
 class BiLSTM_RUL(nn.Module):
-    def __init__(self, input_size=14, hidden_size=64, num_layers=2, dropout=0.3):
+    def __init__(self, input_size=6, hidden_size=64, num_layers=2, dropout=0.3):
         super(BiLSTM_RUL, self).__init__()
         
         # Obousměrná LSTM vrstva
@@ -180,20 +180,17 @@ class BiLSTM_RUL(nn.Module):
             bidirectional=True
         )
         
-        # Plně propojené vrstvy pro finální regresi
-        # hidden_size * 2 kvůli obousměrnosti (forward + backward states)
+        # Plně propojené vrstvy pro regresi
         self.fc1 = nn.Linear(hidden_size * 2, 32)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(32, 1)
 
     def forward(self, x):
-        # x má tvar: (batch_size, sequence_length, input_size)
+        # x: (batch_size, sequence_length, input_size)
         out, _ = self.lstm(x)
-        
-        # Zajímají nás pouze výstupy z posledního časového kroku v daném okně
+        # Použijeme poslední časový krok z obou směrů
         out = out[:, -1, :] 
-        
         out = self.fc1(out)
         out = self.relu(out)
-        out = self.fc2(out) # Výstupem je jediné číslo (RUL)
+        out = self.fc2(out)
         return out

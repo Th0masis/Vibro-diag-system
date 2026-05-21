@@ -51,10 +51,27 @@ def load_raw_data_from_paths(file_paths):
                         all_signals.append(Y_data[i]['Data'].flatten())
                         break
             elif path.endswith('.csv'):
-                # Pokud to jsou CSV (např. MAFAULDA)
-                df = pd.read_csv(path, header=None)
-                signal = df.iloc[:, 0].values # Předpokládáme signál v 1. sloupci
-                all_signals.append(signal)
+                # Načteme normálně s hlavičkou (pro MAFAULDU se obětuje 1. vzorek, což u desetitisíců nevadí)
+                df = pd.read_csv(path)
+                
+                # Zjistíme, jestli jde o tvá data z databáze (obsahují sloupec 'yAxis')
+                if 'yAxis' in df.columns:
+                    signal_series = df['yAxis']
+                else:
+                    # Fallback pro MAFAULDA a jiné: vezmeme poslední sloupec (ne první, kvůli indexům)
+                    signal_series = df.iloc[:, -1]
+                
+                # Magická funkce: vše převede na čísla a zahodí NaN/prázdné znaky
+                signal = pd.to_numeric(signal_series, errors='coerce').dropna().values
+                
+                # Pro jistotu explicitně přetypujeme na float32 pro PyTorch/NumPy
+                signal = np.array(signal, dtype=np.float32)
+                
+                if len(signal) > 0:
+                    all_signals.append(signal)
+                else:
+                    print(f"[VAROVÁNÍ] Soubor {path} neobsahuje žádná platná číselná data.")
+                    
         except Exception as e:
             print(f"[BACKGROUND TASK] Varování: Nelze načíst {path} - {e}")
             

@@ -11,13 +11,18 @@ function MlSector() {
   // Stav pro otevírání nového tréninkového wizardu
   const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
 
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
   // Funkce vytažená ven z useEffect, abychom ji mohli volat po aktivaci nebo zavření modalu
   const fetchModels = async () => {
     try {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
 
-      const res = await axios.get('/ml-models', { headers });
+      const res = await axios.get('/ml-models', getAuthHeader());
       
       setModels(res.data);
       
@@ -57,7 +62,7 @@ function MlSector() {
       const token = sessionStorage.getItem('token') || localStorage.getItem('token');
       const headers = token ? { Authorization: `Bearer ${token}` } : {};
       
-      await axios.put(`http://127.0.0.1:8000/models/${id_model}/activate`, {}, { headers });
+      await axios.put(`:8000/models/${id_model}/activate`, {}, { headers });
       
       alert("Model byl úspěšně aktivován a je nyní v produkci.");
       await fetchModels(); // Ihned po aktivaci stáhneme čerstvá data

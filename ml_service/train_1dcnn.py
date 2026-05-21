@@ -1,8 +1,8 @@
 import os
-import time
 import requests
 import traceback
 import numpy as np
+import pandas as pd
 import scipy.io as sio
 import torch
 import torch.nn as nn
@@ -15,35 +15,70 @@ from utils import Database1DCNNDataset
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 CLASSIFY_MODEL_DIR = "./models/1DCNN"
 
-def load_labeled_mat_files(measurements):
+def load_labeled_data(measurements):
     results = []
     for m in measurements:
+        path = m['path']
         try:
-            mat_data = sio.loadmat(m['path'])
-            de_key = next((k for k in mat_data.keys() if 'DE_time' in k or 'vibration' in k.lower()), None)
-            if de_key:
-                results.append({
-                    "signal": mat_data[de_key].flatten(),
-                    "label": m['label']
-                })
+            # 1. Podpora pro reálná CSV data z naší databáze
+            if path.endswith('.csv'):
+                df = pd.read_csv(path)
+                
+                # Nalezení správného sloupce s daty
+                if 'yAxis' in df.columns:
+                    signal_series = df['yAxis']
+                else:
+                    signal_series = df.iloc[:, -1]
+                
+                # Bezpečný převod na čísla a odstranění NaN (ochrana proti prázdnému indexu)
+                signal = pd.to_numeric(signal_series, errors='coerce').dropna().values
+                signal = np.array(signal, dtype=np.float32)
+                
+                if len(signal) > 0:
+                    results.append({
+                        "signal": signal,
+                        "label": m['label']
+                    })
+                else:
+                    print(f"[VAROVÁNÍ] Soubor {path} neobsahuje platná data.")
+
+            # 2. Podpora pro starší datasety (CWRU) ve formátu .mat
+            elif path.endswith('.mat'):
+                mat_data = sio.loadmat(path)
+                de_key = next((k for k in mat_data.keys() if 'DE_time' in k or 'vibration' in k.lower()), None)
+                if de_key:
+                    results.append({
+                        "signal": mat_data[de_key].flatten(),
+                        "label": m['label']
+                    })
         except Exception as e:
-            print(f"[BACKGROUND TASK] Chyba při čtení {m['path']}: {e}")
+            print(f"[BACKGROUND TASK] Chyba při čtení {path}: {e}")
+            
     return results
 
-# PŘIDÁN PARAMETR save_path
-def run_1dcnn_training_pipeline(measurements, webhook_url, epochs, batch_size, save_path):
+def run_1dcnn_training_pipeline(measurements, webhook_url, epochs=10, batch_size=64, save_path=None):
     print(f"\n[BACKGROUND TASK] Startuji 1DCNN fine-tuning pro {len(measurements)} souborů.")
     
     try:
-        raw_data = load_labeled_mat_files(measurements)
+        raw_data = load_labeled_data(measurements)
         if not raw_data:
-            raise ValueError("Žádná platná data k tréninku.")
+            raise ValueError("Žádná platná data k tréninku nebyla nalezena nebo extrahována.")
             
         dataset = Database1DCNNDataset(raw_data)
         dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
 
-        model = BearingFault1DCNN(num_classes=10).to(DEVICE)
-        model.load_state_dict(torch.load(f"{CLASSIFY_MODEL_DIR}/bearing_fault_model.pth", map_location=DEVICE))
+        # OPRAVA: Použití 4 tříd přesně podle naší diplomky a main.py
+        model = BearingFault1DCNN(num_classes=4).to(DEVICE)
+        
+        # Pokus o načtení původních vah (pokud existují) - z produkční cesty
+        # Můžeš to upravit, pokud si chceš cestu k base modelu posílat z API
+        base_model_path = f"{CLASSIFY_MODEL_DIR}/v1/bearing_fault_model.pth"
+        if os.path.exists(base_model_path):
+            model.load_state_dict(torch.load(base_model_path, map_location=DEVICE))
+            print(f"[BACKGROUND TASK] Načteny původní váhy z {base_model_path}")
+        else:
+            print("[BACKGROUND TASK] UPOZORNĚNÍ: Původní váhy nenalezeny, trénuji model od nuly.")
+            
         model.train()
 
         criterion = nn.CrossEntropyLoss()
@@ -67,11 +102,13 @@ def run_1dcnn_training_pipeline(measurements, webhook_url, epochs, batch_size, s
 
             print(f"[BACKGROUND TASK] 1DCNN Epoch [{epoch+1}/{epochs}] | Loss: {running_loss/len(dataloader):.4f} | Acc: {100*correct/total:.2f}%")
 
-        # ÚPRAVA: Ukládání na dynamickou cestu
-        target_dir = os.path.dirname(save_path)
+        # Dynamické uložení pod novou verzí
+        target_dir = os.path.dirname(save_path) if save_path else CLASSIFY_MODEL_DIR
         os.makedirs(target_dir, exist_ok=True)
-        torch.save(model.state_dict(), save_path)
-        print(f"[BACKGROUND TASK] Hotovo. Model uložen do {save_path}.")
+        final_save_path = save_path if save_path else f"{target_dir}/bearing_fault_model_finetuned.pth"
+        
+        torch.save(model.state_dict(), final_save_path)
+        print(f"[BACKGROUND TASK] Hotovo. Model uložen do {final_save_path}.")
 
         if webhook_url.startswith("http"):
             requests.post(webhook_url, json={"status": "success", "message": "1DCNN nová verze připravena."}, timeout=10)

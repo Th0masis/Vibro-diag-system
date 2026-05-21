@@ -16,10 +16,17 @@ function MachineCard({ machine, onOpenDetail }) {
   const statusText = machine.status === 'OK' ? '#166534' : machine.status === 'WARNING' ? '#9a3412' : '#991b1b';
   const lineColors = ['#334155', '#3b82f6', '#E4002B', '#ff8200'];
 
+  // Pomocná funkce pro získání autorizační hlavičky
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
   useEffect(() => {
     const fetchMiniGraph = async () => {
       try {
-        const res = await axios.get(`/machines/${machine.id_machine}/history`);
+        // Přidán getAuthHeader() pro odeslání JWT tokenu
+        const res = await axios.get(`/machines/${machine.id_machine}/history`, getAuthHeader());
         const raw = res.data.filter(d => d.rms != null);
 
         const groupedMap = new Map();
@@ -39,7 +46,7 @@ function MachineCard({ machine, onOpenDetail }) {
            const entry = groupedMap.get(timeKey);
            entry[item.sensor_name] = item.rms; 
            entry[`${item.sensor_name}_id`] = item.id_measurement; // ID pro proklik
-           entry[`${item.sensor_name}_source`] = item.source; // PŘIDÁNO: Zdroj dat pro alert
+           entry[`${item.sensor_name}_source`] = item.source; // Zdroj dat pro alert
            foundSensors.add(item.sensor_name);
         });
 

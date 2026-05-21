@@ -7,7 +7,7 @@ import requests
 import uvicorn
 import aioftp
 import pandas as pd
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from typing import Optional, List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
@@ -29,6 +29,7 @@ import seed
 load_dotenv()
 SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM")
+BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
 
@@ -67,6 +68,17 @@ class MachineSettingsUpdate(BaseModel):
     is_active_collection: bool
     opc_ua: OPCSettings
     ftp: FTPSettings
+
+class SegmentInfo(BaseModel):
+    id_machine: int
+    id_sensor: int
+    dateFrom: str
+    dateTo: str
+    label: Optional[int] = None
+
+class FineTuneStartRequest(BaseModel):
+    segments: List[SegmentInfo]
+    lifecycle_info: Optional[dict] = None
 
 # --- ASYNCHRONNÍ SPRÁVA ŽIVOTNÍHO CYKLU (LIFESPAN) ---
 
@@ -127,7 +139,7 @@ def home():
 # ==========================================
 
 @app.get("/history")
-def get_history(limit: int = 100, token: str = Depends(oauth2_scheme)):
+def get_history(limit: int = 100, token: str = Depends(get_current_user_role)):
     """
     Vrátí pole posledních 'limit' záznamů z databáze pro globální vizualizaci.
     (Opraveno pro explicitní názvy sloupců kvůli změně struktury init.sql)
@@ -759,7 +771,7 @@ def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oaut
 # ==========================================
 
 @app.post("/measurements")
-def create_measurement(measurement_data: dict, role: str = Depends(get_current_user_role)):
+def create_measurement(measurement_data: dict, role: str = Depends(oauth2_scheme)):
     """
     Vytvoří nový záznam o provedeném měření (registrace cesty k surovému souboru).
     Používáno především automatizovanými skripty.
@@ -804,7 +816,7 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
     return {"message": result["message"], "simulated_fault": result.get("fault")}
 
 @app.get("/machines/{machine_id}/history")
-def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(get_current_user_role)):
+def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:
         # Přidán výběr ID a odstraněno filtrování IS NOT NULL u surových dat
         query = text("""
@@ -864,7 +876,7 @@ def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(ge
         return history
     
 @app.post("/measurements/{id_measurement}/process")
-def process_measurement_data(id_measurement: int, role: str = Depends(get_current_user_role)):
+def process_measurement_data(id_measurement: int, role: str = Depends(oauth2_scheme)):
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nedostatečná oprávnění")
 
@@ -997,8 +1009,13 @@ def proxy_cwt_data(id_measurement: int):
 @app.get("/ml-models")
 def get_ml_models(role: str = Depends(get_current_user_role)):
     """Vrátí přehled všech ML modelů, jejich verzí, úspěšnosti a stavu trénování."""
-    if role not in ["admin", "operator"]:
-        raise HTTPException(status_code=403, detail="Nemáte oprávnění k zobrazení modelů.")
+    
+    # Bezpečnostní pojistka: převedeme roli na čistý malý text
+    safe_role = str(role).strip().lower()
+    
+    # Pokud role nesedí, vypíšeme ji přímo do erroru pro snazší debugování!
+    if safe_role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail=f"Nemáte oprávnění. Vaše role v tokenu je: '{role}'")
 
     with engine.connect() as conn:
         try:
@@ -1010,10 +1027,13 @@ def get_ml_models(role: str = Depends(get_current_user_role)):
             return [dict(row._mapping) for row in result]
         except Exception:
             raise HTTPException(status_code=500, detail="Chyba databáze při načítání modelů.")
-
+        
 @app.post("/machines/{machine_id}/analyze-anomaly")
 def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)):
-    """Spustí na pozadí detekci anomálií pomocí generativního rekonstrukčního modelu AE-AnoWGAN na posledním staženém měření stroje a zapíše skóre do DB."""
+    """
+    Spustí na pozadí detekci anomálií pomocí generativního rekonstrukčního modelu
+    AE-AnoWGAN na posledním staženém měření stroje a zapíše skóre do DB.
+    """
     with engine.connect() as conn:
         query_meas = text("""
             SELECT m.id_measurement, m.raw_data_path FROM measurements m
@@ -1022,14 +1042,15 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
         """)
         meas = conn.execute(query_meas, {"mid": machine_id}).fetchone()
         if not meas:
-            raise HTTPException(status_code=404, detail="Pro tento stroj nebylo nalezeno žádné měření.")
+            raise HTTPException(status_code=404, detail="Pro tento stroj nebylo nalezeno žádné lokální měření s raw daty.")
             
         id_measurement, raw_data_path = meas
         
-        query_model = text("SELECT id_model FROM ml_models WHERE name = 'AE_ANOWGAN' AND is_active = true LIMIT 1")
+        # ROBUSTNÍ DOTAZ: Hledáme cokoliv s "GAN" v názvu, co je aktivní (Ignoruje překlepy)
+        query_model = text("SELECT id_model FROM ml_models WHERE name LIKE '%GAN%' AND is_active = true LIMIT 1")
         model = conn.execute(query_model).fetchone()
         if not model:
-            raise HTTPException(status_code=500, detail="Aktivní model AE_ANOWGAN nebyl nalezen v databázi.")
+            raise HTTPException(status_code=404, detail="Aktivní model pro detekci anomálií (GAN) nebyl nalezen v databázi.")
         id_model = model[0]
         
         try:
@@ -1043,9 +1064,10 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
         is_anomaly = ml_data.get("is_anomaly")
         label = "Zjištěna anomálie" if is_anomaly else "Zdravý chod"
         
+        # OPRAVENO: Musí se zapisovat 'Anomaly Detection', aby to React dokázal přečíst!
         query_insert = text("""
             INSERT INTO analysis_results (id_measurement, id_model, prediction_type, prediction_value, prediction_label, confidence, timestamp)
-            VALUES (:mid, :modid, 'Anomaly Score', :val, :label, :conf, NOW())
+            VALUES (:mid, :modid, 'Anomaly Detection', :val, :label, :conf, NOW())
         """)
         try:
             conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "val": anomaly_score, "label": label, "conf": 1.0})
@@ -1054,7 +1076,7 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
             raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek analýzy do databáze.")
             
         return {"anomaly_score": anomaly_score, "is_anomaly": is_anomaly, "message": "Analýza úspěšně dokončena"}
-
+    
 @app.post("/machines/{machine_id}/classify-fault")
 def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme)):
     """
@@ -1072,10 +1094,11 @@ def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme))
             
         id_measurement, raw_data_path = meas
         
-        query_model = text("SELECT id_model FROM ml_models WHERE name = '1D_CNNwWGN' AND is_active = true LIMIT 1")
+        # ROBUSTNÍ DOTAZ: Hledáme cokoliv s "CNN" v názvu
+        query_model = text("SELECT id_model FROM ml_models WHERE name LIKE '%CNN%' AND is_active = true LIMIT 1")
         model = conn.execute(query_model).fetchone()
         if not model:
-            raise HTTPException(status_code=500, detail="Aktivní model 1D_CNNwWGN nebyl nalezen.")
+            raise HTTPException(status_code=404, detail="Aktivní model pro klasifikaci (CNN) nebyl nalezen v databázi.")
         id_model = model[0]
         
         try:
@@ -1103,14 +1126,14 @@ def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme))
 @app.post("/machines/{machine_id}/predict-rul")
 def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
     """
-    Vypočítá zbývající životnost (RUL) ložiska na základě sekvenčního okna posledních
-    10 měření pomocí rekurentní sítě Bi-LSTM. Bere v úvahu dříve klasifikovaný typ vady.
+    Vypočítá RUL. Krmí ML mikroslužbu maticí 6x10 vytaženou přímo z DB.
+    Spojuje data z FTP i IIoT.
     """
     with engine.connect() as conn:
+        # Zjištění kategorie poruchy (Zůstává beze změny)
         query_label = text("""
             SELECT ar.prediction_label FROM analysis_results ar
-            JOIN measurements m ON ar.id_measurement = m.id_measurement
-            JOIN sensors s ON m.id_sensor = s.id_sensor
+            JOIN sensors s ON ar.id_measurement = s.id_sensor -- Upraveno pro obecnost
             WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
             ORDER BY ar.timestamp DESC LIMIT 1
         """)
@@ -1124,22 +1147,42 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
             elif "inner" in label or "vnitřní" in label:
                 category = "IR"
 
-        query_meas = text("""
-            SELECT id_measurement, raw_data_path FROM (
-                SELECT m.id_measurement, m.raw_data_path, m.timestamp FROM measurements m
-                JOIN sensors s ON m.id_sensor = s.id_sensor WHERE s.id_machine = :mid
-                ORDER BY m.timestamp DESC LIMIT 10
-            ) sub ORDER BY timestamp ASC
+        # TAHÁME PŘÍMO TĚCH 6 CHARAKTERISTIK Z OBOU TABULEK
+        query_features = text("""
+            SELECT 
+                COALESCE(f.rms_raw, m.rms_raw) as rms,
+                COALESCE(f.peak_raw, m.peak_raw) as peak,
+                COALESCE(f.kurtosis_raw, m.kurtosis_raw) as kurtosis,
+                COALESCE(f.rms_acl_env, m.rms_acl_env) as env,
+                COALESCE(f.dif_kt_raw, m.dif_kt_raw) as dif,
+                COALESCE(f.skewness_raw, m.skewness_raw) as skew,
+                COALESCE(m.id_measurement, f.id_featureset) as meas_id
+            FROM measurements m
+            FULL OUTER JOIN feature_data f ON m.id_measurement = f.id_measurement
+            JOIN sensors s ON COALESCE(m.id_sensor, f.id_sensor) = s.id_sensor
+            WHERE s.id_machine = :mid 
+              AND COALESCE(f.rms_raw, m.rms_raw) IS NOT NULL -- Pouze zpracovaná data!
+            ORDER BY COALESCE(m.timestamp, f.time) DESC LIMIT 10
         """)
-        meas_rows = conn.execute(query_meas, {"mid": machine_id}).fetchall()
-        if len(meas_rows) < 10:
-            raise HTTPException(status_code=400, detail=f"Nedostatek dat pro RUL (požadováno 10, máme {len(meas_rows)}).")
+        rows = conn.execute(query_features, {"mid": machine_id}).fetchall()
+        
+        if len(rows) == 0:
+            raise HTTPException(status_code=400, detail="Nejsou k dispozici žádná data (RMS) pro výpočet RUL.")
             
-        paths = [row[1] for row in meas_rows]
-        latest_measurement_id = meas_rows[-1][0] 
+        # Otočíme data z DB do chronologického pořadí pro LSTM (od nejstaršího po nejnovější)
+        rows = rows[::-1]
+        
+        # Sestavíme tenzor: Seznam 10 listů, kde každý list má 6 float hodnot
+        sequence = [[float(val) for val in row[:6]] for row in rows]
+        latest_meas_id = rows[-1][6] # Uložíme si ID posledního pro INSERT výsledku
+        
+        # PADDING: Pokud máme < 10 měření, naklonujeme nejstarší záznam na začátek
+        while len(sequence) < 10:
+            sequence.insert(0, sequence[0])
         
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/predict-rul", json={"paths": paths, "category": category})
+            # POSÍLÁME PŘÍMO MATICI DAT, NE CESTY!
+            ml_res = requests.post(f"{ML_SERVICE_URL}/predict-rul", json={"features": sequence, "category": category})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
         except Exception as e:
@@ -1147,23 +1190,24 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
             
         rul_fraction = ml_data.get("rul_fraction")
         used_model = ml_data.get("used_model")
+        rul_days = round(rul_fraction * 30, 1)
         
-        MAX_LIFESPAN_DAYS = 30
-        rul_days = round(rul_fraction * MAX_LIFESPAN_DAYS, 1)
-        
-        model_query = text("SELECT id_model FROM ml_models WHERE name LIKE '%Bi-LSTM%' OR type LIKE '%RUL%' LIMIT 1")
+        model_query = text("SELECT id_model FROM ml_models WHERE (name LIKE '%LSTM%' OR type LIKE '%RUL%') AND is_active = true LIMIT 1")
         model_row = conn.execute(model_query).fetchone()
-        model_id = model_row[0] if model_row else None
+        
+        if not model_row:
+             raise HTTPException(status_code=404, detail="Aktivní model pro predikci RUL nebyl nalezen.")
+        model_id = model_row[0]
 
         insert_query = text("""
             INSERT INTO analysis_results (id_model, id_measurement, prediction_type, prediction_value, prediction_label, timestamp)
             VALUES (:model_id, :meas_id, 'RUL Prediction', :val, :label, NOW())
         """)
-        conn.execute(insert_query, {"model_id": model_id, "meas_id": latest_measurement_id, "val": rul_days, "label": f"{rul_days} dní"})
+        conn.execute(insert_query, {"model_id": model_id, "meas_id": latest_meas_id, "val": rul_days, "label": f"{rul_days} dní"})
         conn.commit() 
         
         return {"rul_value": rul_days, "unit": "dní", "used_model": used_model}
-        
+    
 @app.get("/training-segments")
 def get_training_segments(
     machine_id: Optional[int] = None, sensor_id: Optional[int] = None,
@@ -1253,7 +1297,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
         query_model = text("SELECT name, version, type, description FROM ml_models WHERE id_model = :mid")
         model_row = conn.execute(query_model, {"mid": model_id}).fetchone()
         if not model_row:
-            raise HTTPException(status_code=404, detail="Zdrojový model nebyl znalezen.")
+            raise HTTPException(status_code=404, detail="Zdrojový model nebyl nalezen.")
         
         model_name, current_version, model_type, description = model_row
         try:
@@ -1262,7 +1306,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
             new_version = f"{current_version}.1"
             
         folder_name = "1DCNN" if "CNN" in model_name else model_name
-        save_path = f"models/{folder_name}/v{new_version}/bearing_fault_model.pth"
+        save_path = f"models/{folder_name}/v{new_version}/{model_type.lower()}_model.pth"
 
         insert_query = text("""
             INSERT INTO ml_models (name, version, type, description, is_active, training_status, path_to_model) 
@@ -1274,32 +1318,100 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
         }).scalar()
 
         file_paths = []      
-        measurements_data = [] 
+        measurements_data_cnn = [] 
+        measurements_data_rul = [] 
         
         for seg in payload.segments:
+            # --- NOVÁ ČÁST: Rozšíření časového okna o toleranci ---
+            try:
+                # Převedeme string z Reactu (odstraníme případné 'Z' z ISO formátu)
+                d_from_obj = datetime.fromisoformat(seg.dateFrom.replace('Z', ''))
+                d_to_obj = datetime.fromisoformat(seg.dateTo.replace('Z', ''))
+                
+                # Zvětšíme interval o 1 minutu na obě strany (tzv. padding okna)
+                d_from_obj -= timedelta(minutes=1)
+                d_to_obj += timedelta(minutes=1)
+                
+                # Zformátujeme zpět pro SQL dotaz
+                sql_d_from = d_from_obj.strftime("%Y-%m-%d %H:%M:%S")
+                sql_d_to = d_to_obj.strftime("%Y-%m-%d %H:%M:%S")
+            except Exception as e:
+                print(f"[DEBUG] Upozornění - nepodařilo se zparsovat datum, použije se originál: {e}")
+                sql_d_from = seg.dateFrom
+                sql_d_to = seg.dateTo
+            # -------------------------------------------------------
+
+            print(f"\n[DEBUG] 🔎 Hledám data pro senzor ID {seg.id_sensor} v rozšířeném okně od '{sql_d_from}' do '{sql_d_to}'")
+            
             data_query = text("""
-                SELECT raw_data_path FROM measurements 
-                WHERE id_sensor = :sensor_id AND timestamp BETWEEN :d_from AND :d_to ORDER BY timestamp ASC
+                SELECT raw_data_path, timestamp FROM measurements 
+                WHERE id_sensor = :sensor_id 
+                  AND timestamp >= CAST(:d_from AS timestamp) 
+                  AND timestamp <= CAST(:d_to AS timestamp)
+                ORDER BY timestamp ASC
             """)
-            rows = conn.execute(data_query, {"sensor_id": seg.id_sensor, "d_from": seg.dateFrom, "d_to": seg.dateTo}).fetchall()
+            
+            # Použijeme naše nové rozšířené proměnné sql_d_from a sql_d_to
+            rows = conn.execute(data_query, {
+                "sensor_id": seg.id_sensor, 
+                "d_from": sql_d_from, 
+                "d_to": sql_d_to
+            }).fetchall()
+            
+            print(f"[DEBUG] 📊 Nalezeno řádků v tabulce measurements: {len(rows)}")
+            
+            valid_paths = 0
             for row in rows:
-                if row[0]: 
-                    file_paths.append(row[0])
+                raw_path = row[0]
+                timestamp_val = row[1]
+                
+                if raw_path: 
+                    valid_paths += 1
+                    file_paths.append(raw_path)
+                    
                     if "CNN" in model_name:
-                        measurements_data.append({"path": row[0], "label": int(seg.label) if seg.label else 0})
+                        measurements_data_cnn.append({"path": raw_path, "label": int(seg.label) if seg.label else 0})
+                        
+                    if "LSTM" in model_name:
+                        measurements_data_rul.append({"path": raw_path, "date": str(timestamp_val)})
+            
+            print(f"[DEBUG] 📁 Z toho má fyzickou cestu k CSV (raw_data_path): {valid_paths}")
+        
         conn.commit()
 
         if not file_paths:
-            raise HTTPException(status_code=400, detail="V zadaných úsecích nebyla nalezena žádná surová data.")
+            raise HTTPException(status_code=400, detail="V zadaných úsecích nebyla nalezena žádná surová data (CSV).")
 
-        webhook_url = f"http://127.0.0.1:8000/webhook/training-done/{new_model_id}"
+        webhook_url = f"{BACKEND_URL}/webhook/training-done/{new_model_id}"
+        
         try:
             if "GAN" in model_name:
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning", json={"file_paths": file_paths, "webhook_url": webhook_url, "save_path": save_path})
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning", json={
+                    "file_paths": file_paths, 
+                    "webhook_url": webhook_url, 
+                    "save_path": save_path
+                })
             elif "CNN" in model_name:
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-1dcnn", json={"measurements": measurements_data, "webhook_url": webhook_url, "save_path": save_path})
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-1dcnn", json={
+                    "measurements": measurements_data_cnn, 
+                    "webhook_url": webhook_url, 
+                    "save_path": save_path
+                })
             elif "LSTM" in model_name:
-                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-rul", json={"category": "O", "file_paths": file_paths, "webhook_url": webhook_url, "save_path": save_path})
+                if not payload.lifecycle_info:
+                    raise HTTPException(status_code=400, detail="Pro RUL model chybí parametry životního cyklu.")
+                    
+                category = "O"
+                if "OR" in model_name.upper(): category = "OR"
+                elif "IR" in model_name.upper(): category = "IR"
+                
+                res = requests.post(f"{ML_SERVICE_URL}/trigger-finetuning-rul", json={
+                    "category": category, 
+                    "measurements": measurements_data_rul, 
+                    "lifecycle_info": payload.lifecycle_info, 
+                    "webhook_url": webhook_url, 
+                    "save_path": save_path
+                })
             res.raise_for_status() 
         except requests.exceptions.RequestException as e:
             with engine.connect() as fail_conn:
