@@ -1,0 +1,426 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio Version="4.12.6.106"?>
+<Objects>
+  <Object
+    Path="C:\projects\Project\Logical\Package.pkg"
+    LogicalPath=""
+    Type="Package.ParentUnknown"
+    LastWriteTime="134103446026050527" />
+  <Object
+    Path="C:\projects\Project\Logical\Global.typ"
+    LogicalPath="Global.typ"
+    Type="File"
+    LastWriteTime="134103446025855246"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Global.var"
+    LogicalPath="Global.var"
+    Type="File"
+    LastWriteTime="134103446025970502"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\Package.pkg"
+    LogicalPath="Libraries"
+    Type="Package"
+    LastWriteTime="134103446026200454" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\FileIO\binary.lby"
+    LogicalPath="Libraries.FileIO"
+    Type="Library"
+    LastWriteTime="134103446028764940" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\FileIO\FileIO.fun"
+    LogicalPath="Libraries.FileIO.FileIO.fun"
+    Type="File"
+    LastWriteTime="134103446029105245"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\FileIO\FileIO.typ"
+    LogicalPath="Libraries.FileIO.FileIO.typ"
+    Type="File"
+    LastWriteTime="134103446029260300"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\FileIO\FileIO.var"
+    LogicalPath="Libraries.FileIO.FileIO.var"
+    Type="File"
+    LastWriteTime="134103446029342638"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\runtime\binary.lby"
+    LogicalPath="Libraries.runtime"
+    Type="Library"
+    LastWriteTime="134103446029713340" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\runtime\runtime.fun"
+    LogicalPath="Libraries.runtime.runtime.fun"
+    Type="File"
+    LastWriteTime="134103446029753329"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\runtime\runtime.typ"
+    LogicalPath="Libraries.runtime.runtime.typ"
+    Type="File"
+    LastWriteTime="134103446029803412"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\runtime\runtime.var"
+    LogicalPath="Libraries.runtime.runtime.var"
+    Type="File"
+    LastWriteTime="134103446029868583"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\sys_lib\binary.lby"
+    LogicalPath="Libraries.sys_lib"
+    Type="Library"
+    LastWriteTime="134103446030228985" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\sys_lib\sys_lib.fun"
+    LogicalPath="Libraries.sys_lib.sys_lib.fun"
+    Type="File"
+    LastWriteTime="134103446030268909"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\sys_lib\sys_lib.typ"
+    LogicalPath="Libraries.sys_lib.sys_lib.typ"
+    Type="File"
+    LastWriteTime="134103446030338825"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\sys_lib\sys_lib.var"
+    LogicalPath="Libraries.sys_lib.sys_lib.var"
+    Type="File"
+    LastWriteTime="134103446030405915"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsBrStr\binary.lby"
+    LogicalPath="Libraries.AsBrStr"
+    Type="Library"
+    LastWriteTime="134103446026547385" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsBrStr\AsBrStr.fun"
+    LogicalPath="Libraries.AsBrStr.AsBrStr.fun"
+    Type="File"
+    LastWriteTime="134103446026310373"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsBrStr\AsBrStr.typ"
+    LogicalPath="Libraries.AsBrStr.AsBrStr.typ"
+    Type="File"
+    LastWriteTime="134103446026422504"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsBrStr\AsBrStr.var"
+    LogicalPath="Libraries.AsBrStr.AsBrStr.var"
+    Type="File"
+    LastWriteTime="134103446026497374"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOVib\binary.lby"
+    LogicalPath="Libraries.AsIOVib"
+    Type="Library"
+    LastWriteTime="134103446027971879" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOVib\AsIOVib.fun"
+    LogicalPath="Libraries.AsIOVib.AsIOVib.fun"
+    Type="File"
+    LastWriteTime="134103446027846663"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOVib\AsIOVib.typ"
+    LogicalPath="Libraries.AsIOVib.AsIOVib.typ"
+    Type="File"
+    LastWriteTime="134103446027892012"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOVib\AsIOVib.var"
+    LogicalPath="Libraries.AsIOVib.AsIOVib.var"
+    Type="File"
+    LastWriteTime="134103446027931929"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsFltGen\binary.lby"
+    LogicalPath="Libraries.AsFltGen"
+    Type="Library"
+    LastWriteTime="134103446027203722" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsFltGen\AsFltGen.fun"
+    LogicalPath="Libraries.AsFltGen.AsFltGen.fun"
+    Type="File"
+    LastWriteTime="134103446027013694"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsFltGen\AsFltGen.typ"
+    LogicalPath="Libraries.AsFltGen.AsFltGen.typ"
+    Type="File"
+    LastWriteTime="134103446027063710"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsFltGen\AsFltGen.var"
+    LogicalPath="Libraries.AsFltGen.AsFltGen.var"
+    Type="File"
+    LastWriteTime="134103446027113982"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\brsystem\binary.lby"
+    LogicalPath="Libraries.brsystem"
+    Type="Library"
+    LastWriteTime="134103446028244687" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\brsystem\brsystem.fun"
+    LogicalPath="Libraries.brsystem.brsystem.fun"
+    Type="File"
+    LastWriteTime="134103446028284930"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\brsystem\brsystem.typ"
+    LogicalPath="Libraries.brsystem.brsystem.typ"
+    Type="File"
+    LastWriteTime="134103446028324525"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\brsystem\brsystem.var"
+    LogicalPath="Libraries.brsystem.brsystem.var"
+    Type="File"
+    LastWriteTime="134103446028364738"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOAcc\binary.lby"
+    LogicalPath="Libraries.AsIOAcc"
+    Type="Library"
+    LastWriteTime="134103446027566433" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOAcc\AsIOAcc.fun"
+    LogicalPath="Libraries.AsIOAcc.AsIOAcc.fun"
+    Type="File"
+    LastWriteTime="134103446027416451"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOAcc\AsIOAcc.typ"
+    LogicalPath="Libraries.AsIOAcc.AsIOAcc.typ"
+    Type="File"
+    LastWriteTime="134103446027456526"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\Libraries\AsIOAcc\AsIOAcc.var"
+    LogicalPath="Libraries.AsIOAcc.AsIOAcc.var"
+    Type="File"
+    LastWriteTime="134103446027506361"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\Package.pkg"
+    LogicalPath="VibroBuffer"
+    Type="Package"
+    LastWriteTime="134103446030766606" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\IEC.prg"
+    LogicalPath="VibroBuffer.GetBuffer"
+    Type="Program"
+    LastWriteTime="134103446031021996" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\Main.st"
+    LogicalPath="VibroBuffer.GetBuffer.Main.st"
+    Type="File"
+    LastWriteTime="134103446031102004"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\Types.typ"
+    LogicalPath="VibroBuffer.GetBuffer.Types.typ"
+    Type="File"
+    LastWriteTime="134103446097865772"
+    Private="true" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\Variables.var"
+    LogicalPath="VibroBuffer.GetBuffer.Variables.var"
+    Type="File"
+    LastWriteTime="134103446031379799"
+    Private="true" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\SaveData\IEC.prg"
+    LogicalPath="VibroBuffer.SaveData"
+    Type="Program"
+    LastWriteTime="134103446031499847" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\SaveData\Main.st"
+    LogicalPath="VibroBuffer.SaveData.Main.st"
+    Type="File"
+    LastWriteTime="134103446031549825"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\SaveData\Types.typ"
+    LogicalPath="VibroBuffer.SaveData.Types.typ"
+    Type="File"
+    LastWriteTime="134103446031580340"
+    Private="true" />
+  <Object
+    Path="C:\projects\Project\Logical\VibroBuffer\SaveData\Variables.var"
+    LogicalPath="VibroBuffer.SaveData.Variables.var"
+    Type="File"
+    LastWriteTime="134103446031629836"
+    Private="true" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\Config.pkg"
+    LogicalPath="Config1"
+    Type="Configuration.ParentUnknown"
+    LastWriteTime="134103446031886089" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\Hardware.hw"
+    LogicalPath="Config1.Hardware.hw"
+    Type="File"
+    LastWriteTime="134219407851906286"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\Hardware.hwl"
+    LogicalPath="Config1.Hardware.hwl"
+    Type="File"
+    LastWriteTime="134219388252396704"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Cpu.pkg"
+    LogicalPath="Config1.X20CP3586"
+    Type="Cpu"
+    LastWriteTime="134219393758910883" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Cpu.sw"
+    LogicalPath="Config1.X20CP3586.Cpu.sw"
+    Type="File"
+    LastWriteTime="134103446032491747"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Cpu.per"
+    LogicalPath="Config1.X20CP3586.Cpu.per"
+    Type="File"
+    LastWriteTime="134103446032351747"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\IoMap.iom"
+    LogicalPath="Config1.X20CP3586.IoMap.iom"
+    Type="File"
+    LastWriteTime="134103446032582432"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Connectivity\Package.pkg"
+    LogicalPath="Config1.X20CP3586.Connectivity"
+    Type="Package"
+    LastWriteTime="134103446034709925" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Connectivity\OpcUA\Package.pkg"
+    LogicalPath="Config1.X20CP3586.Connectivity.OpcUA"
+    Type="Package"
+    LastWriteTime="134103446034885327" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Connectivity\OpcUA\OpcUaMap.uad"
+    LogicalPath="Config1.X20CP3586.Connectivity.OpcUA.OpcUaMap.uad"
+    Type="File"
+    LastWriteTime="134103446034810114"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\Connectivity\OpcUaFx\Package.pkg"
+    LogicalPath="Config1.X20CP3586.Connectivity.OpcUaFx"
+    Type="Package"
+    LastWriteTime="134103446035044676" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\TextSystem\Package.pkg"
+    LogicalPath="Config1.X20CP3586.TextSystem"
+    Type="Package"
+    LastWriteTime="134103446035404312" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\UnitSystem\Package.pkg"
+    LogicalPath="Config1.X20CP3586.UnitSystem"
+    Type="Package"
+    LastWriteTime="134103446035532506" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity"
+    Type="Package"
+    LastWriteTime="134103446032742293" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\UserRoleSystem\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.UserRoleSystem"
+    Type="Package"
+    LastWriteTime="134103446034365103" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\UserRoleSystem\Role.role"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.UserRoleSystem.Role.role"
+    Type="File"
+    LastWriteTime="134103446034415175"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\UserRoleSystem\User.user"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.UserRoleSystem.User.user"
+    Type="File"
+    LastWriteTime="134103446034525192"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore"
+    Type="Package"
+    LastWriteTime="134103446032855502" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\OwnCertificates\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.OwnCertificates"
+    Type="Package"
+    LastWriteTime="134103446033265909" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\OwnCertificates\Certificates\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.OwnCertificates.Certificates"
+    Type="Package"
+    LastWriteTime="134103446033435931" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\OwnCertificates\PrivateKeys\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.OwnCertificates.PrivateKeys"
+    Type="Package"
+    LastWriteTime="134103446033576121" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\ThirdPartyCertificates\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.ThirdPartyCertificates"
+    Type="Package"
+    LastWriteTime="134103446033707249" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\ThirdPartyCertificates\SoftwareCertificates\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.ThirdPartyCertificates.SoftwareCertificates"
+    Type="Package"
+    LastWriteTime="134103446033818848" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\CertificateRevocationLists\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.CertificateRevocationLists"
+    Type="Package"
+    LastWriteTime="134103446032996067" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\CertificateStore\CertificateSigningRequests\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.CertificateStore.CertificateSigningRequests"
+    Type="Package"
+    LastWriteTime="134103446033136012" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\TransportLayerSecurity\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.TransportLayerSecurity"
+    Type="Package"
+    LastWriteTime="134103446034221071" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\Firewall\Package.pkg"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.Firewall"
+    Type="Package"
+    LastWriteTime="134103446033978463" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\AccessAndSecurity\Firewall\Rules.firewallRules"
+    LogicalPath="Config1.X20CP3586.AccessAndSecurity.Firewall.Rules.firewallRules"
+    Type="File"
+    LastWriteTime="134103446034021989"
+    Private="false" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\mappView\Package.pkg"
+    LogicalPath="Config1.X20CP3586.mappView"
+    Type="Package"
+    LastWriteTime="134103446035279109" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\X20CP3586\mappCockpit\Package.pkg"
+    LogicalPath="Config1.X20CP3586.mappCockpit"
+    Type="Package"
+    LastWriteTime="134103446035174665" />
+  <Object
+    Path="C:\projects\Project\Physical\Config1\Hardware.jpg"
+    LogicalPath="Config1.Hardware.jpg"
+    Type="File"
+    LastWriteTime="134219388252899001"
+    Private="false" />
+</Objects>

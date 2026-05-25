@@ -1,0 +1,7 @@
+$(AS_PROJECT_PATH)/Logical/Libraries/AsIOVib/AsIOVib.fun
+$(AS_PROJECT_PATH)/Logical/Libraries/AsIOVib/AsIOVib.typ
+$(AS_PROJECT_PATH)/Logical/Libraries/AsFltGen/AsFltGen.typ
+$(AS_PROJECT_PATH)/Logical/Libraries/AsFltGen/AsFltGen.fun
+$(AS_PROJECT_PATH)/Logical/VibroBuffer/GetBuffer/Variables.var
+$(AS_PROJECT_PATH)/Logical/Global.var
+$(AS_PROJECT_PATH)/Logical/Global.typ

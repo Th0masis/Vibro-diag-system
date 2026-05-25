@@ -1,0 +1,21 @@
+(* CSV Export Variables *)
+VAR CONSTANT
+	CRLF : STRING[4] := '$r$n'; (* Carriage Return + Line Feed *)
+	FILE_DEVICE : STRING[20] := 'BufferData'; (* FTP file device *)
+	BUFFER_SIZE_LIMIT : UDINT := 60000; (* Write to file when buffer reaches 60KB *)
+	BATCH_SIZE : UINT := 500; (* Number of rows to process per cycle *)
+END_VAR
+(* State machine *)
+VAR
+	fileStep : UINT := 0; (* File operations *)
+	fileName : STRING[255]; (* Dynamic CSV filename from WorkID *)
+	fbFileCreate : FileCreate;
+	fbFileWrite : FileWrite;
+	fbFileClose : FileClose;
+	FDelete : FileDelete; (* Buffer for batch CSV writing *)
+	fileBuffer : STRING[65535];
+	rowIndex : UINT;
+	StartAddress : UDINT;
+	NextAddress : UDINT;
+	batchCounter : UINT;
+END_VAR

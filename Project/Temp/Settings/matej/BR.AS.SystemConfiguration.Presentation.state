@@ -1,0 +1,127 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio FileVersion="4.9"?>
+<State Top="0" Left="0" Width="0" Height="0" WindowState="Normal" xmlns="http://br-automation.co.at/AS/State">
+  <TreeView ID="BR.AS.SystemConfiguration.Presentation-X20CP3586" EditColumn="0" TopRow="154" HorizontalScrollOffset="0" SortedColumn="0">
+    <Columns>
+      <Column Index="0" Width="511" Position="0" />
+      <Column Index="1" Width="506" Position="1" />
+      <Column Index="2" Width="100" Position="2" />
+      <Column Index="3" Width="100" Position="3" />
+      <Column Index="4" Width="0" Position="4" />
+    </Columns>
+    <ExpandedNodes>
+      <ExpandedNode Row="0" />
+      <ExpandedNode Row="69" />
+      <ExpandedNode Row="72" />
+      <ExpandedNode Row="129" />
+      <ExpandedNode Row="150" />
+      <ExpandedNode Row="169" />
+      <ExpandedNode Row="170" />
+      <ExpandedNode Row="171" />
+      <ExpandedNode Row="225" />
+      <ExpandedNode Row="226" />
+      <ExpandedNode Row="227" />
+    </ExpandedNodes>
+    <SelectedNodes />
+    <ZoomIndices />
+  </TreeView>
+  <Versatile ID="BR.AS.SystemConfiguration.Presentation-EditorState-X20CP3586">
+    <Property Name="advancedparametervisibility" Value="False" />
+  </Versatile>
+  <TreeView ID="BR.AS.SystemConfiguration.Presentation-X20CP3586.IF2" EditColumn="1" TopRow="7" HorizontalScrollOffset="0" SortedColumn="0">
+    <Columns>
+      <Column Index="0" Width="511" Position="0" />
+      <Column Index="1" Width="506" Position="1" />
+      <Column Index="2" Width="100" Position="2" />
+      <Column Index="3" Width="100" Position="3" />
+      <Column Index="4" Width="0" Position="4" />
+    </Columns>
+    <ExpandedNodes>
+      <ExpandedNode Row="0" />
+      <ExpandedNode Row="1" />
+      <ExpandedNode Row="2" />
+      <ExpandedNode Row="3" />
+      <ExpandedNode Row="6" />
+      <ExpandedNode Row="9" />
+      <ExpandedNode Row="13" />
+      <ExpandedNode Row="15" />
+      <ExpandedNode Row="16" />
+      <ExpandedNode Row="17" />
+      <ExpandedNode Row="20" />
+      <ExpandedNode Row="27" />
+      <ExpandedNode Row="29" />
+      <ExpandedNode Row="31" />
+      <ExpandedNode Row="33" />
+    </ExpandedNodes>
+    <SelectedNodes>
+      <SelectedNode Row="7" />
+    </SelectedNodes>
+    <ZoomIndices />
+  </TreeView>
+  <Versatile ID="BR.AS.SystemConfiguration.Presentation-EditorState-X20CP3586.IF2">
+    <Property Name="advancedparametervisibility" Value="False" />
+  </Versatile>
+  <TreeView ID="BR.AS.SystemConfiguration.Presentation-X20CP3586.IF3" EditColumn="0" TopRow="30" HorizontalScrollOffset="0" SortedColumn="0">
+    <Columns>
+      <Column Index="0" Width="511" Position="0" />
+      <Column Index="1" Width="506" Position="1" />
+      <Column Index="2" Width="100" Position="2" />
+      <Column Index="3" Width="100" Position="3" />
+      <Column Index="4" Width="0" Position="4" />
+    </Columns>
+    <ExpandedNodes>
+      <ExpandedNode Row="0" />
+      <ExpandedNode Row="2" />
+      <ExpandedNode Row="5" />
+      <ExpandedNode Row="9" />
+      <ExpandedNode Row="10" />
+      <ExpandedNode Row="14" />
+      <ExpandedNode Row="25" />
+      <ExpandedNode Row="26" />
+      <ExpandedNode Row="30" />
+      <ExpandedNode Row="33" />
+      <ExpandedNode Row="34" />
+      <ExpandedNode Row="38" />
+      <ExpandedNode Row="42" />
+      <ExpandedNode Row="44" />
+    </ExpandedNodes>
+    <SelectedNodes>
+      <SelectedNode Row="30" />
+    </SelectedNodes>
+    <ZoomIndices />
+  </TreeView>
+  <Versatile ID="BR.AS.SystemConfiguration.Presentation-EditorState-X20CP3586.IF3">
+    <Property Name="advancedparametervisibility" Value="False" />
+  </Versatile>
+  <TreeView ID="BR.AS.SystemConfiguration.Presentation-X20CM4810" EditColumn="0" TopRow="205" HorizontalScrollOffset="0" SortedColumn="0">
+    <Columns>
+      <Column Index="0" Width="511" Position="0" />
+      <Column Index="1" Width="506" Position="1" />
+      <Column Index="2" Width="100" Position="2" />
+      <Column Index="3" Width="100" Position="3" />
+      <Column Index="4" Width="0" Position="4" />
+    </Columns>
+    <ExpandedNodes>
+      <ExpandedNode Row="0" />
+      <ExpandedNode Row="1" />
+      <ExpandedNode Row="2" />
+      <ExpandedNode Row="3" />
+      <ExpandedNode Row="44" />
+      <ExpandedNode Row="45" />
+      <ExpandedNode Row="46" />
+      <ExpandedNode Row="49" />
+      <ExpandedNode Row="51" />
+      <ExpandedNode Row="55" />
+      <ExpandedNode Row="56" />
+      <ExpandedNode Row="59" />
+      <ExpandedNode Row="61" />
+    </ExpandedNodes>
+    <SelectedNodes>
+      <SelectedNode Row="205" />
+    </SelectedNodes>
+    <ZoomIndices />
+  </TreeView>
+  <Versatile ID="BR.AS.SystemConfiguration.Presentation-EditorState-X20CM4810">
+    <Property Name="advancedparametervisibility" Value="False" />
+  </Versatile>
+</State>

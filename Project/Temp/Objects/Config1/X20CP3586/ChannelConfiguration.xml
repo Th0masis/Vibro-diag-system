@@ -1,0 +1,328 @@
+<?xml version="1.0"?>
+<?AutomationRuntimeIOSystem Version = 2.5.0.7?>
+<ChannelConfiguration xmlns="http://www.br-automation.com/AR/IO">
+  <Module ID="$root" Hardware="X20CP3586" HardwareModuleName="X20CP3586" ModuleID="16">
+    <Channel ID="SerialNumber" Description="Serial number" Ext="/HW" Address="0" Direction="IN" Type="UDINT" Sig_St_Udint="1" ChannelType="SerialNumber" />
+    <Channel ID="ModuleID" Description="Module ID" Ext="/HW" Address="1" Direction="IN" Type="UINT" Sig_St_Uint="1" ChannelType="ModuleID" />
+    <Channel ID="HardwareVariant" Description="Hardware variant" FromVersion="J4.25" Ext="/HW" Address="15" Direction="IN" Type="UINT" ChannelType="HardwareVariant" />
+    <Channel ID="FirmwareVersion" Description="Firmware version" FromVersion="J4.25" Ext="/HW" Address="16" Direction="IN" Type="UINT" ChannelType="FirmwareVersion" />
+    <Channel ID="StorageWear" Description="Wear level of storage medium in percent" FromVersion="A4.90" Ext="/HW" Address="17" Direction="IN" Type="UINT" Sig_Ana_0percent_100percent_genuine="1" ChannelType="GenericFuncCall" Function="storageDpWear" CyclicUpdate="1" />
+    <Channel ID="ModeSwitch" Description="Mode switch" Ext="/HW" Address="2" Direction="IN" Type="USINT" Sig_St_Byte="1" ChannelType="Mode" />
+    <Channel ID="BatteryStatusCPU" Description="Battery status CPU (0 = battery low or missing, 1 = battery ok,)" Ext="/HW" Address="3" Direction="IN" Type="USINT" Sig_St_Byte="1" ChannelType="Battery" BatteryDetectionMethod="1" Ordinal="2" />
+    <Channel ID="TemperatureCPU" Description="Temperature CPU [1/10C]" Ext="/HW" Address="4" Direction="IN" Type="UINT" Sig_Temp_CpuTemp="1" ChannelType="Temp" Ordinal="1" />
+    <Channel ID="TemperatureENV" Description="Temperature cooling plate [1/10C]" Ext="/HW" Address="5" Direction="IN" Type="UINT" Sig_Temp_CpuTemp="1" ChannelType="Temp" Ordinal="2" />
+    <Channel ID="SystemTime" Description="System time at the start of the current task cycle [µs]" Ext="/HW" Address="9" Direction="IN" Type="DINT" Sig_St_Dint="1" ChannelType="SystemTime" />
+    <Channel ID="StatusInput01" Description="I/O power supply warning (0 = DC OK)" Ext="/HW" Address="8" Direction="IN" Type="BOOL" Sig_St_Bool="1" ChannelType="StatusInput" Ordinal="2" />
+    <Channel ID="SupplyCurrent" Description="Bus current 0.1 A  X2X Link IF6" FromVersion="A4.51" Ext="/HW" Address="11" Direction="IN" Type="USINT" Sig_St_Byte="1" ChannelType="StatusInput" Ordinal="3" />
+    <Channel ID="SupplyVoltage" Description="Bus voltage 0.1 V  X2X Link IF6" FromVersion="A4.51" Ext="/HW" Address="12" Direction="IN" Type="USINT" Sig_St_Byte="1" ChannelType="StatusInput" Ordinal="4" />
+    <Channel ID="IF2.NodeSwitch" Description="Node switch" Ext="/HW" Address="6" Direction="IN" Type="USINT" Sig_St_Byte="1" ChannelType="Node" Device="PCI.IF2" />
+    <Channel ID="IF3.LinkOk" Description="Link state" Ext="/INFO" Address="0x8000001A" BitOffset="0" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="IF3.OutputDMAMargin" Description="Margin to output cycle deadline in microseconds" Ext="/INFO" Address="0x8000000C" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF3.NodeNumber" Description="Node number currently in use (255 = invalid)" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF3.CycleOk" Description="Indication for proper cyclic operation (1 = operational)" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="IF3.SyncOk" Description="Indication for a synchronized POWERLINK-system (1 = synchronized)" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="IF3.TimeSeconds" Description="Absolute time extracted from current SoC-Frame (NetTime in POWERLINK V2) - Seconds" FromVersion="M2.90" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.TimeNanoseconds" Description="Absolute time extracted from current SoC-Frame (NetTime in POWERLINK V2) - Nanoseconds" FromVersion="M2.90" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.NettimeSoC" Description="Network time extracted from current SoC-Frame [µs] (RelativeTime in POWERLINK V2)" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF3.NettimeOffset" Description="Network time offset to local system time [µs]" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF3.CycleCount" Description="Overall number of bus cycles" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.FailedCycleCount" Description="Number of failed bus cycles" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.CycleTimeViolationCount" Description="Number of cycle time violations" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.CycleIdleTime" Description="Unoccupied time during one POWERLINK cycle [µs]" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF3.CycleCongestionCount" Description="allways 0, available for legacy projects" FromVersion="B2.87" Ext="/INFO" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="IF6.CycleCount" Description="Number of bus cycles" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.BreakCount" Description="Number of bus cycles with set break signal" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.Nettime" Description="Timestamp when the current input frame was started  [µs]" FromVersion="I2.90" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncErrorCount" Description="Number of failed synchronous frames" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncSramErrorCount" Description="Number of memory access errors within synchronous frame (overflow/underrun)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncBusyErrorCount" Description="Number of not sent synchronous frames (sender not ready)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncNoRxErrorCount" Description="Number of not received synchronous frames (timeout)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncFormatErrorCount" Description="Number of faulty synchronous frames" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncPendingErrorCount" Description="Number of synchronous frames which could not be sent because of receiving a frame" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncErrorCount" Description="Number of failed asynchronous frames" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncSramErrorCount" Description="Number of memory access errors within asynchronous frame (overflow/underrun)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncBusyErrorCount" Description="Number of not sent asynchronous frames (sender not ready)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncNoRxErrorCount" Description="Number of not received asynchronous frames (timeout)" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncFormatErrorCount" Description="Number of faulty asynchronous frames" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncPendingErrorCount" Description="Number of asynchronous frames which could not be sent because of receiving a frame" FromVersion="I2.85" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.DMALateOutputErrorCount" Description="Number of cycles when DMA for cyclic outputs was too late" FromVersion="G2.93" Ext="/INFO" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.NrOfStationsMax" Description="Number of max. stations" FromVersion="A3.08" Ext="/INFO" Address="0x80000113" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF6.NrOfStationsConfigured" Description="Number of configured stations" FromVersion="A3.08" Ext="/INFO" Address="0x80000114" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF6.StationAtBusEnd" Description="Station at end of bus" FromVersion="A3.08" Ext="/INFO" Address="0x80000115" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF6.StationAtBusEndChangeTime" Description="Time of last change at station on end of bus" FromVersion="A3.08" Ext="/INFO" Address="0xC0000115" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" />
+    <Channel ID="IF6.StationPastOutFrameError" Description="First station which recognizes output frame error" FromVersion="A3.08" Ext="/INFO" Address="0x80000116" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF6.StationPastOutFrameErrorChangeTime" Description="Time of last change of channel StationPastOutFrameError" FromVersion="A3.08" Ext="/INFO" Address="0xC0000116" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" />
+    <Channel ID="IF6.StationPastInFrameError" Description="First station which recognizes input frame error" FromVersion="A3.08" Ext="/INFO" Address="0x80000117" Direction="IN" Type="USINT" Sig_St_Usint="1" />
+    <Channel ID="IF6.StationPastInFrameErrorChangeTime" Description="Time of last change of channel StationPastInFrameError" FromVersion="A3.08" Ext="/INFO" Address="0xC0000117" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" />
+    <Channel ID="IF6.SyncInFrameSize" Description="Size of synchronous input frame [Bytes]" FromVersion="A3.08" Ext="/INFO" Address="0x80000118" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.SyncOutFrameSize" Description="Size of synchronous output frame [Bytes]" FromVersion="A3.08" Ext="/INFO" Address="0x80000119" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncFrameSize" Description="Size of asynchronous frame [Bytes]" FromVersion="A3.08" Ext="/INFO" Address="0x8000011A" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.AsyncFrameSpareSize" Description="Size reserve within asynchronous frame [Bytes]" FromVersion="A3.08" Ext="/INFO" Address="0x8000011B" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="IF6.BusLengthConfigured" Description="Configured bus length [m]" FromVersion="A3.08" Ext="/INFO" Address="0x8000011C" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+  </Module>
+  <Module ID="IF3.ST1" Hardware="X20BC0083" HardwareModuleName="X20BC0083" ModuleID="5">
+    <Channel ID="ModuleOk" Description="Module status (1 = module present)" FromVersion="C2.87" Ext="/OK" Address="0" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="SerialNumber" Description="Serial number" FromVersion="A3.08" Ext="/INFO" Address="4" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="ModuleID" Description="Module ID" FromVersion="A3.08" Ext="/INFO" Address="10" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="HardwareVariant" Description="Hardware variant" FromVersion="A3.08" Ext="/INFO" Address="12" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="FirmwareVersion" Description="Firmware version" FromVersion="A3.08" Ext="/INFO" Address="14" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="EthRxLost" Description="Number of lost Rx-Frames" FromVersion="C2.87" Ext="/INFO" Address="0x80000402" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="EthRxOversize" Description="Number of received oversized frames &gt; 1500 Bytes" FromVersion="C2.87" Ext="/INFO" Address="0x80000403" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="EthRxCRCError" Description="Number of Rx-Frames with wrong CRC" FromVersion="C2.87" Ext="/INFO" Address="0x80000404" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="EthRxOverflow" Description="Number of lost Rx-Frames due to performance shortage on BC" FromVersion="C2.87" Ext="/INFO" Address="0x80000405" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="EthTxCollision" Description="Number of collisions on ethernet while BC sending" FromVersion="C2.87" Ext="/INFO" Address="0x80000406" Direction="IN" Type="DINT" Sig_St_Dint="1" />
+    <Channel ID="EthPhy1LinkOk" Description="Link of interface 1 is active" FromVersion="A2.94" Ext="/INFO" Address="0x80000417" BitOffset="0" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="EthPhy1LinkLoss" Description="Increments each time when link of physical interface 1 is lost" FromVersion="C2.87" Ext="/INFO" Address="0x80000410" Direction="IN" Type="DINT" Sig_Counter_Dint="1" />
+    <Channel ID="EthPhy2LinkOk" Description="Link of interface 2 is active" FromVersion="A2.94" Ext="/INFO" Address="0x80000417" BitOffset="1" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="EthPhy2LinkLoss" Description="Increments each time when link of physical interface 2 is lost" FromVersion="C2.87" Ext="/INFO" Address="0x80000411" Direction="IN" Type="DINT" Sig_Counter_Dint="1" />
+    <Channel ID="Nettime" Description="Nettime of cycle receiving the Poll Response of the station" FromVersion="I4.02" Ext="/INFO" Address="0x80000450" Direction="IN" Type="DINT" Sig_Counter_Dint="1" />
+  </Module>
+  <Module ID="IF3.ST1" Hardware="X20BB80" HardwareModuleName="X20BB80" ModuleID="1">
+    <Channel ID="IF1.CycleCount" Description="Number of bus cycles" FromVersion="C2.87" Ext="/INFO" Address="0x80000100" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.BreakCount" Description="Number of bus cycles with set break signal" FromVersion="C2.87" Ext="/INFO" Address="0x80000101" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncErrorCount" Description="Number of failed synchronous frames" FromVersion="C2.87" Ext="/INFO" Address="0x80000102" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncBusyErrorCount" Description="Number of not sent synchronous frames (sender not ready)" FromVersion="C2.87" Ext="/INFO" Address="0x80000105" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncNoRxErrorCount" Description="Number of not received synchronous frames (timeout)" FromVersion="C2.87" Ext="/INFO" Address="0x80000106" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncFormatErrorCount" Description="Number of faulty synchronous frames" FromVersion="C2.87" Ext="/INFO" Address="0x80000107" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncPendingErrorCount" Description="Number of synchronous frames which could not be sent because of receiving a frame" FromVersion="C2.87" Ext="/INFO" Address="0x80000108" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncErrorCount" Description="Number of failed asynchronous frames" FromVersion="C2.87" Ext="/INFO" Address="0x80000103" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncBusyErrorCount" Description="Number of not sent asynchronous frames (sender not ready)" FromVersion="C2.87" Ext="/INFO" Address="0x8000010A" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncNoRxErrorCount" Description="Number of not received asynchronous frames (timeout)" FromVersion="C2.87" Ext="/INFO" Address="0x8000010B" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncFormatErrorCount" Description="Number of faulty asynchronous frames" FromVersion="C2.87" Ext="/INFO" Address="0x8000010C" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncPendingErrorCount" Description="Number of asynchronous frames which could not be sent because of receiving a frame" FromVersion="C2.87" Ext="/INFO" Address="0x8000010D" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.ModuleLostWhileOperational" Description="Hardware configuration changed: module disconnected while operational" FromVersion="C2.87" Ext="/INFO" Address="0x8000010E" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.ModuleNewWhileOperational" Description="Hardware configuration changed: new module detected while operational" FromVersion="C2.87" Ext="/INFO" Address="0x8000010F" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.StationAtBusEnd" Description="Station at end of bus" FromVersion="J4.08" Ext="/INFO" Address="0x80000115" Direction="IN" Type="USINT" Sig_St_Usint="" Resource="IF1" />
+    <Channel ID="IF1.StationAtBusEndChangeTime" Description="Time of last change at station on end of bus" FromVersion="J4.08" Ext="/INFO" Address="0xC0000115" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Resource="IF1" />
+    <Channel ID="IF1.StationPastOutFrameError" Description="First station which recognizes output frame error" FromVersion="J4.08" Ext="/INFO" Address="0x80000116" Direction="IN" Type="USINT" Sig_St_Usint="" Resource="IF1" />
+    <Channel ID="IF1.StationPastOutFrameErrorChangeTime" Description="Time of last change of channel StationPastOutFrameError" FromVersion="J4.08" Ext="/INFO" Address="0xC0000116" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Resource="IF1" />
+    <Channel ID="IF1.StationPastInFrameError" Description="First station which recognizes input frame error" FromVersion="J4.08" Ext="/INFO" Address="0x80000117" Direction="IN" Type="USINT" Sig_St_Usint="" Resource="IF1" />
+    <Channel ID="IF1.StationPastInFrameErrorChangeTime" Description="Time of last change of channel StationPastInFrameError" FromVersion="J4.08" Ext="/INFO" Address="0xC0000117" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Resource="IF1" />
+    <Channel ID="IF1.NrOfStationsMax" Description="Number of max. stations" FromVersion="J4.08" Ext="/INFO" Address="0x80000113" Direction="IN" Type="USINT" Sig_St_Usint="" Resource="IF1" />
+    <Channel ID="IF1.NrOfStationsConfigured" Description="Number of configured stations" FromVersion="J4.08" Ext="/INFO" Address="0x80000114" Direction="IN" Type="USINT" Sig_St_Usint="" Resource="IF1" />
+    <Channel ID="IF1.SyncInFrameSize" Description="Size of synchronous input frame [Bytes]" FromVersion="J4.08" Ext="/INFO" Address="0x80000118" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.SyncOutFrameSize" Description="Size of synchronous output frame [Bytes]" FromVersion="J4.08" Ext="/INFO" Address="0x80000119" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncFrameSize" Description="Size of asynchronous frame [Bytes]" FromVersion="J4.08" Ext="/INFO" Address="0x8000011A" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.AsyncFrameSpareSize" Description="Size reserve within asynchronous frame [Bytes]" FromVersion="J4.08" Ext="/INFO" Address="0x8000011B" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+    <Channel ID="IF1.BusLengthConfigured" Description="Configured bus length [m]" FromVersion="J4.08" Ext="/INFO" Address="0x8000011C" Direction="IN" Type="DINT" Sig_St_Dint="1" Resource="IF1" />
+  </Module>
+  <Module ID="IF3.ST1.IF1.ST2" Hardware="X20CM4810" HardwareModuleName="X20CM4810" ModuleID="13" Simulatable="true">
+    <Channel ID="ModuleOk" Description="Module status (1 = module present)" Ext="/OK" Address="0" Direction="IN" Type="BOOL" />
+    <Channel ID="SerialNumber" Description="Serial number" FromVersion="A3.08" Ext="/INFO" Address="4" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="ModuleID" Description="Module ID" FromVersion="A3.08" Ext="/INFO" Address="10" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="HardwareVariant" Description="Hardware variant" FromVersion="A3.08" Ext="/INFO" Address="12" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="FirmwareVersion" Description="Firmware version" FromVersion="A3.08" Ext="/INFO" Address="14" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="DataToggleBit01" Description="All the parameters and frequency bands are filled with new values at the same time (approximately once every 300 ms). The value of this output toggles if the datapoints are filled with new values" Ext="/ARFIFO" Address="496" BitOffset="1" Direction="IN" Type="BOOL" />
+    <Channel ID="BrokenWire01" Description="Broken wire channel 1" Ext="/ARFIFO" Address="32" BitOffset="0" Direction="IN" Type="BOOL" />
+    <Channel ID="BrokenWire02" Description="Broken wire channel 2" Ext="/ARFIFO" Address="32" BitOffset="1" Direction="IN" Type="BOOL" />
+    <Channel ID="BrokenWire03" Description="Broken wire channel 3" Ext="/ARFIFO" Address="32" BitOffset="2" Direction="IN" Type="BOOL" />
+    <Channel ID="BrokenWire04" Description="Broken wire channel 4" Ext="/ARFIFO" Address="32" BitOffset="3" Direction="IN" Type="BOOL" />
+    <Channel ID="OverflowAnalogInput01" Description="Overflow analog input channel 1 (1 = measurand exceeds the configured value in AnalogInputScale, measured with a 100mV/g sensor)" Ext="/ARFIFO" Address="34" BitOffset="0" Direction="IN" Type="BOOL" />
+    <Channel ID="OverflowAnalogInput02" Description="Overflow analog input channel 2 (1 = measurand exceeds the configured value in AnalogInputScale, measured with a 100mV/g sensor)" Ext="/ARFIFO" Address="34" BitOffset="1" Direction="IN" Type="BOOL" />
+    <Channel ID="OverflowAnalogInput03" Description="Overflow analog input channel 3 (1 = measurand exceeds the configured value in AnalogInputScale, measured with a 100mV/g sensor)" Ext="/ARFIFO" Address="34" BitOffset="2" Direction="IN" Type="BOOL" />
+    <Channel ID="OverflowAnalogInput04" Description="Overflow analog input channel 4 (1 = measurand exceeds the configured value in AnalogInputScale, measured with a 100mV/g sensor)" Ext="/ARFIFO" Address="34" BitOffset="3" Direction="IN" Type="BOOL" />
+    <Channel ID="Overflow01" Description="Overflow channel 1 (1 = overflow of parameter or frequency band)" Ext="/ARFIFO" Address="32" BitOffset="5" Direction="IN" Type="BOOL" />
+    <Channel ID="Overflow02" Description="Overflow channel 2 (1 = overflow of parameter or frequency band)" Ext="/ARFIFO" Address="32" BitOffset="6" Direction="IN" Type="BOOL" />
+    <Channel ID="Overflow03" Description="Overflow channel 3 (1 = overflow of parameter or frequency band)" Ext="/ARFIFO" Address="32" BitOffset="7" Direction="IN" Type="BOOL" />
+    <Channel ID="Overflow04" Description="Overflow channel 4 (1 = overflow of parameter or frequency band)" Ext="/ARFIFO" Address="33" BitOffset="0" Direction="IN" Type="BOOL" />
+    <Channel ID="OverflowCharacteristicValues01" Description="Overflow bits for the characteristic values of channel 1" Ext="/ARFIFO" Address="484" Direction="IN" Type="UINT" />
+    <Channel ID="OverflowCharacteristicValues02" Description="Overflow bits for the characteristic values of channel 2" Ext="/ARFIFO" Address="486" Direction="IN" Type="UINT" />
+    <Channel ID="OverflowCharacteristicValues03" Description="Overflow bits for the characteristic values of channel 3" Ext="/ARFIFO" Address="488" Direction="IN" Type="UINT" />
+    <Channel ID="OverflowCharacteristicValues04" Description="Overflow bits for the characteristic values of channel 4" Ext="/ARFIFO" Address="490" Direction="IN" Type="UINT" />
+    <Channel ID="OverflowFrequencyBands01" Description="Overflow bits for the frequency bands" Ext="/ARFIFO" Address="492" Direction="IN" Type="UDINT" />
+    <Channel ID="ActSpeed01" Description="Actual speed 01 [Hz]" Ext="/MANIPULATED" Address="80" Direction="OUT" Type="REAL" />
+    <Channel ID="ActSpeed02" Description="Actual speed 02 [Hz]" Ext="/MANIPULATED" Address="84" Direction="OUT" Type="REAL" />
+    <Channel ID="ActSpeed03" Description="Actual speed 03 [Hz]" Ext="/MANIPULATED" Address="88" Direction="OUT" Type="REAL" />
+    <Channel ID="ActSpeed04" Description="Actual speed 04 [Hz]" Ext="/MANIPULATED" Address="92" Direction="OUT" Type="REAL" />
+    <Channel ID="SensitivitySensor01" Description="Sensor sensitivity [mV/g] channel 1" Ext="/MANIPULATED" Address="0" Direction="OUT" Type="REAL" />
+    <Channel ID="AnalogInputControl01" Description="Enable of calculation of AnalogInput01" Address="22" BitOffset="0" Direction="OUT" Type="BOOL" />
+    <Channel ID="AnalogInputToggleBit01" Description="Toggles with every new calculation of AnalogInput01" Ext="/ARFIFO" Address="33" BitOffset="1" Direction="IN" Type="BOOL" />
+    <Channel ID="AnalogInput01" Description="Analog input channel 1" Ext="/ARFIFO" Address="0" Direction="IN" Type="REAL" />
+    <Channel ID="Iso10816_01" Description="RMS value of the velocity spectrum from 10 Hz to 1kHz as defined in the ISO 10816 [mm/s], channel 1" Ext="/ARFIFO" Address="72" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccRaw01" Description="RMS Value of the acceleration raw signal from MinFrequencyRaw to MaxFrequencyRaw [mg], channel 1" Ext="/ARFIFO" Address="56" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccEnvelope01" Description="RMS Value of the acceleration envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mg], channel 1" Ext="/ARFIFO" Address="64" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelRaw01" Description="RMS Value of the velocity raw signal from MinFrequencyRaw to MaxFrequencyRaw [mm/s], channel 1 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="60" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelEnvelope01" Description="RMS Value of the velocity envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mm/s], channel 1 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="68" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRaw01" Description="Absolute maximum value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 1" Ext="/ARFIFO" Address="104" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRef01" Description="Reference of the absolute maximum value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 1" Ext="/MANIPULATED" Address="4" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsRaw01" Description="RMS value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 1" Ext="/ARFIFO" Address="100" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRef01" Description="Reference of the RMS value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 1" Ext="/MANIPULATED" Address="8" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorRaw01" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 1" Ext="/ARFIFO" Address="108" Direction="IN" Type="REAL" />
+    <Channel ID="KurtosisRaw01" Description="Kurtosis (4th statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 1" Ext="/ARFIFO" Address="76" Direction="IN" Type="REAL" />
+    <Channel ID="SkewnessRaw01" Description="Skewnes (3rd statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 1" Ext="/ARFIFO" Address="80" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtRaw01" Description="Ratio of the refernce values to the actual measured values of the raw signal as defined in VDI 3832 [1], channel 1" Ext="/ARFIFO" Address="112" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRefCalculated01" Description="Used absolute maximum reference value of the raw signal for calculation of VDI 3832 [mg], channel 1" Ext="/ARFIFO" Address="40" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRefCalculated01" Description="Used RMS reference value of the raw signal for calculation of VDI 3832 [mg], channel 1" Ext="/ARFIFO" Address="44" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequency01" Description="Absolute maximum value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 1" Ext="/ARFIFO" Address="88" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRef01" Description="Reference of the absolute maximum value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 1" Ext="/MANIPULATED" Address="12" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsHighFrequency01" Description="Reference of the RMS value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 1" Ext="/ARFIFO" Address="84" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRef01" Description="Reference of the RMS value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 1" Ext="/MANIPULATED" Address="16" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorHighFrequency01" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [1], channel 1" Ext="/ARFIFO" Address="92" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtHighFrequency01" Description="Ratio of the refernce values to the actual measured values of the high frequenies of the raw signal as defined in VDI 3832 [1], channel 1" Ext="/ARFIFO" Address="96" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRefCalculated01" Description="Used absolute maximum reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 1" Ext="/ARFIFO" Address="48" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRefCalculated01" Description="Used RMS reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 1" Ext="/ARFIFO" Address="52" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand01" Description="Frequency band [mg] or [mm/s], channel 1" Ext="/ARFIFO" Address="356" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand02" Description="Frequency band [mg] or [mm/s], channel 1" Ext="/ARFIFO" Address="360" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand03" Description="Frequency band [mg] or [mm/s], channel 1" Ext="/ARFIFO" Address="364" Direction="IN" Type="REAL" />
+    <Channel ID="SensitivitySensor02" Description="Sensor sensitivity [mV/g] channel 2" Ext="/MANIPULATED" Address="20" Direction="OUT" Type="REAL" />
+    <Channel ID="AnalogInputControl02" Description="Control of AnalogInput02 (no function in this mode)" Address="22" BitOffset="1" Direction="OUT" Type="BOOL" />
+    <Channel ID="AnalogInputToggleBit02" Description="Toggles with every new calculation of AnalogInput02" Ext="/ARFIFO" Address="33" BitOffset="2" Direction="IN" Type="BOOL" />
+    <Channel ID="AnalogInput02" Description="Analog input channel 2" Ext="/ARFIFO" Address="4" Direction="IN" Type="REAL" />
+    <Channel ID="Iso10816_02" Description="RMS value of the velocity spectrum from 10 Hz to 1kHz as defined in the ISO 10816 [mm/s], channel 2" Ext="/ARFIFO" Address="152" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccRaw02" Description="RMS Value of the acceleration raw signal from MinFrequencyRaw to MaxFrequencyRaw [mg], channel 2" Ext="/ARFIFO" Address="136" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccEnvelope02" Description="RMS Value of the acceleration envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mg], channel 2" Ext="/ARFIFO" Address="144" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelRaw02" Description="RMS Value of the velocity raw signal from MinFrequencyRaw to MaxFrequencyRaw [mm/s], channel 2 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="140" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelEnvelope02" Description="RMS Value of the velocity envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mm/s], channel 2 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="148" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRaw02" Description="Absolute maximum value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 2" Ext="/ARFIFO" Address="184" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRef02" Description="Reference of the absolute maximum value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 2" Ext="/MANIPULATED" Address="24" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsRaw02" Description="RMS value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 2" Ext="/ARFIFO" Address="180" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRef02" Description="Reference of the RMS value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 2" Ext="/MANIPULATED" Address="28" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorRaw02" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 2" Ext="/ARFIFO" Address="188" Direction="IN" Type="REAL" />
+    <Channel ID="KurtosisRaw02" Description="Kurtosis (4th statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 2" Ext="/ARFIFO" Address="156" Direction="IN" Type="REAL" />
+    <Channel ID="SkewnessRaw02" Description="Skewnes (3rd statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 2" Ext="/ARFIFO" Address="160" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtRaw02" Description="Ratio of the refernce values to the actual measured values of the raw signal as defined in VDI 3832 [1], channel 2" Ext="/ARFIFO" Address="192" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRefCalculated02" Description="Used absolute maximum reference value of the raw signal for calculation of VDI 3832 [mg], channel 2" Ext="/ARFIFO" Address="120" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRefCalculated02" Description="Used RMS reference value of the raw signal for calculation of VDI 3832 [mg], channel 2" Ext="/ARFIFO" Address="124" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequency02" Description="Absolute maximum value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 2" Ext="/ARFIFO" Address="168" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRef02" Description="Reference of the absolute maximum value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 2" Ext="/MANIPULATED" Address="32" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsHighFrequency02" Description="Reference of the RMS value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 2" Ext="/ARFIFO" Address="164" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRef02" Description="Reference of the RMS value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 2" Ext="/MANIPULATED" Address="36" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorHighFrequency02" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [1], channel 2" Ext="/ARFIFO" Address="172" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtHighFrequency02" Description="Ratio of the refernce values to the actual measured values of the high frequenies of the raw signal as defined in VDI 3832 [1], channel 2" Ext="/ARFIFO" Address="176" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRefCalculated02" Description="Used absolute maximum reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 2" Ext="/ARFIFO" Address="128" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRefCalculated02" Description="Used RMS reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 2" Ext="/ARFIFO" Address="132" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand09" Description="Frequency band [mg] or [mm/s], channel 2" Ext="/ARFIFO" Address="388" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand10" Description="Frequency band [mg] or [mm/s], channel 2" Ext="/ARFIFO" Address="392" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand11" Description="Frequency band [mg] or [mm/s], channel 2" Ext="/ARFIFO" Address="396" Direction="IN" Type="REAL" />
+    <Channel ID="SensitivitySensor03" Description="Sensor sensitivity [mV/g] channel 3" Ext="/MANIPULATED" Address="40" Direction="OUT" Type="REAL" />
+    <Channel ID="AnalogInputControl03" Description="Control of AnalogInput03 (no function in this mode)" Address="22" BitOffset="2" Direction="OUT" Type="BOOL" />
+    <Channel ID="AnalogInputToggleBit03" Description="Toggles with every new calculation of AnalogInput03" Ext="/ARFIFO" Address="33" BitOffset="3" Direction="IN" Type="BOOL" />
+    <Channel ID="AnalogInput03" Description="Analog input channel 3" Ext="/ARFIFO" Address="8" Direction="IN" Type="REAL" />
+    <Channel ID="Iso10816_03" Description="RMS value of the velocity spectrum from 10 Hz to 1kHz as defined in the ISO 10816 [mm/s], channel 3" Ext="/ARFIFO" Address="232" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccRaw03" Description="RMS Value of the acceleration raw signal from MinFrequencyRaw to MaxFrequencyRaw [mg], channel 3" Ext="/ARFIFO" Address="216" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccEnvelope03" Description="RMS Value of the acceleration envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mg], channel 3" Ext="/ARFIFO" Address="224" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelRaw03" Description="RMS Value of the velocity raw signal from MinFrequencyRaw to MaxFrequencyRaw [mm/s], channel 3 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="220" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelEnvelope03" Description="RMS Value of the velocity envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mm/s], channel 3 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="228" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRaw03" Description="Absolute maximum value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 3" Ext="/ARFIFO" Address="264" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRef03" Description="Reference of the absolute maximum value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 3" Ext="/MANIPULATED" Address="44" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsRaw03" Description="RMS value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 3" Ext="/ARFIFO" Address="260" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRef03" Description="Reference of the RMS value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 3" Ext="/MANIPULATED" Address="48" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorRaw03" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 3" Ext="/ARFIFO" Address="268" Direction="IN" Type="REAL" />
+    <Channel ID="KurtosisRaw03" Description="Kurtosis (4th statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 3" Ext="/ARFIFO" Address="236" Direction="IN" Type="REAL" />
+    <Channel ID="SkewnessRaw03" Description="Skewnes (3rd statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 3" Ext="/ARFIFO" Address="240" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtRaw03" Description="Ratio of the refernce values to the actual measured values of the raw signal as defined in VDI 3832 [1], channel 3" Ext="/ARFIFO" Address="272" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRefCalculated03" Description="Used absolute maximum reference value of the raw signal for calculation of VDI 3832 [mg], channel 3" Ext="/ARFIFO" Address="200" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRefCalculated03" Description="Used RMS reference value of the raw signal for calculation of VDI 3832 [mg], channel 3" Ext="/ARFIFO" Address="204" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequency03" Description="Absolute maximum value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 3" Ext="/ARFIFO" Address="248" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRef03" Description="Reference of the absolute maximum value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 3" Ext="/MANIPULATED" Address="52" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsHighFrequency03" Description="Reference of the RMS value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 3" Ext="/ARFIFO" Address="244" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRef03" Description="Reference of the RMS value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 3" Ext="/MANIPULATED" Address="56" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorHighFrequency03" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [1], channel 3" Ext="/ARFIFO" Address="252" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtHighFrequency03" Description="Ratio of the refernce values to the actual measured values of the high frequenies of the raw signal as defined in VDI 3832 [1], channel 3" Ext="/ARFIFO" Address="256" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRefCalculated03" Description="Used absolute maximum reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 3" Ext="/ARFIFO" Address="208" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRefCalculated03" Description="Used RMS reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 3" Ext="/ARFIFO" Address="212" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand17" Description="Frequency band [mg] or [mm/s], channel 3" Ext="/ARFIFO" Address="420" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand18" Description="Frequency band [mg] or [mm/s], channel 3" Ext="/ARFIFO" Address="424" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand19" Description="Frequency band [mg] or [mm/s], channel 3" Ext="/ARFIFO" Address="428" Direction="IN" Type="REAL" />
+    <Channel ID="SensitivitySensor04" Description="Sensor sensitivity [mV/g] channel 4" Ext="/MANIPULATED" Address="60" Direction="OUT" Type="REAL" />
+    <Channel ID="AnalogInputControl04" Description="Control of AnalogInput04 (no function in this mode)" Address="22" BitOffset="3" Direction="OUT" Type="BOOL" />
+    <Channel ID="AnalogInputToggleBit04" Description="Toggles with every new calculation of AnalogInput04" Ext="/ARFIFO" Address="33" BitOffset="4" Direction="IN" Type="BOOL" />
+    <Channel ID="AnalogInput04" Description="Analog input channel 4" Ext="/ARFIFO" Address="12" Direction="IN" Type="REAL" />
+    <Channel ID="Iso10816_04" Description="RMS value of the velocity spectrum from 10 Hz to 1kHz as defined in the ISO 10816 [mm/s], channel 4" Ext="/ARFIFO" Address="312" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccRaw04" Description="RMS Value of the acceleration raw signal from MinFrequencyRaw to MaxFrequencyRaw [mg], channel 4" Ext="/ARFIFO" Address="296" Direction="IN" Type="REAL" />
+    <Channel ID="RmsAccEnvelope04" Description="RMS Value of the acceleration envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mg], channel 4" Ext="/ARFIFO" Address="304" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelRaw04" Description="RMS Value of the velocity raw signal from MinFrequencyRaw to MaxFrequencyRaw [mm/s], channel 4 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="300" Direction="IN" Type="REAL" />
+    <Channel ID="RmsVelEnvelope04" Description="RMS Value of the velocity envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mm/s], channel 4 (0 = calculation of velocity signal is disabled)" Ext="/ARFIFO" Address="308" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRaw04" Description="Absolute maximum value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 4" Ext="/ARFIFO" Address="344" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRef04" Description="Reference of the absolute maximum value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 4" Ext="/MANIPULATED" Address="64" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsRaw04" Description="RMS value of the raw signal from 0 Hz to MaxFrequencyRaw [mg], channel 4" Ext="/ARFIFO" Address="340" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRef04" Description="Reference of the RMS value of the raw signal for calculation of VDI 3832 K(t) [mg], channel 4" Ext="/MANIPULATED" Address="68" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorRaw04" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 4" Ext="/ARFIFO" Address="348" Direction="IN" Type="REAL" />
+    <Channel ID="KurtosisRaw04" Description="Kurtosis (4th statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 4" Ext="/ARFIFO" Address="316" Direction="IN" Type="REAL" />
+    <Channel ID="SkewnessRaw04" Description="Skewnes (3rd statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 4" Ext="/ARFIFO" Address="320" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtRaw04" Description="Ratio of the refernce values to the actual measured values of the raw signal as defined in VDI 3832 [1], channel 4" Ext="/ARFIFO" Address="352" Direction="IN" Type="REAL" />
+    <Channel ID="PeakRawRefCalculated04" Description="Used absolute maximum reference value of the raw signal for calculation of VDI 3832 [mg], channel 4" Ext="/ARFIFO" Address="280" Direction="IN" Type="REAL" />
+    <Channel ID="RmsRawRefCalculated04" Description="Used RMS reference value of the raw signal for calculation of VDI 3832 [mg], channel 4" Ext="/ARFIFO" Address="284" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequency04" Description="Absolute maximum value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 4" Ext="/ARFIFO" Address="328" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRef04" Description="Reference of the absolute maximum value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 4" Ext="/MANIPULATED" Address="72" Direction="OUT" Type="REAL" />
+    <Channel ID="RmsHighFrequency04" Description="Reference of the RMS value of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [mg], channel 4" Ext="/ARFIFO" Address="324" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRef04" Description="Reference of the RMS value of the high frequenies of the raw signal for calculation of VDI 3832 K(t) [mg], channel 4" Ext="/MANIPULATED" Address="76" Direction="OUT" Type="REAL" />
+    <Channel ID="CrestFactorHighFrequency04" Description="Crest-Factor (Ratio of the absolute maximum value to the RMS value) of the high frequenies of the raw signal from HighFrequencyConfig to MaxFrequencyRaw [1], channel 4" Ext="/ARFIFO" Address="332" Direction="IN" Type="REAL" />
+    <Channel ID="Vdi3832KtHighFrequency04" Description="Ratio of the refernce values to the actual measured values of the high frequenies of the raw signal as defined in VDI 3832 [1], channel 4" Ext="/ARFIFO" Address="336" Direction="IN" Type="REAL" />
+    <Channel ID="PeakHighFrequencyRefCalculated04" Description="Used absolute maximum reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 4" Ext="/ARFIFO" Address="288" Direction="IN" Type="REAL" />
+    <Channel ID="RmsHighFrequencyRefCalculated04" Description="Used RMS reference value of the high frequenies of the raw signal for calculation of VDI 3832 [mg], channel 4" Ext="/ARFIFO" Address="292" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand25" Description="Frequency band [mg] or [mm/s], channel 4" Ext="/ARFIFO" Address="452" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand26" Description="Frequency band [mg] or [mm/s], channel 4" Ext="/ARFIFO" Address="456" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand27" Description="Frequency band [mg] or [mm/s], channel 4" Ext="/ARFIFO" Address="460" Direction="IN" Type="REAL" />
+    <Channel ID="MinMaxUpdate01" Description="Update minimum and maximum parameters (with each edge)" Address="2" BitOffset="1" Direction="OUT" Type="BOOL" />
+    <Channel ID="RequestBufferLock01" Description="Buffer lock request" Address="2" BitOffset="0" Direction="OUT" Type="BOOL" />
+    <Channel ID="BufferLockValid01" Description="Buffer locked" Address="2" BitOffset="4" Direction="IN" Type="BOOL" />
+    <Channel ID="DataConsistentWithLockedBuffers01" Description="TRUE if the parameters and frequency bands are calculated using the locked module buffers" Ext="/ARFIFO" Address="496" BitOffset="0" Direction="IN" Type="BOOL" />
+    <Channel ID="BufferInputSequence01" Description="Buffer-Flatstream input sequence" Address="0x940" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferRxByte01" Description="Buffer-Flatstream receive byte 1" Address="0x941" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferRxByte02" Description="Buffer-Flatstream receive byte 2" Address="0x942" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferRxByte03" Description="Buffer-Flatstream receive byte 3" Address="0x943" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferRxByte04" Description="Buffer-Flatstream receive byte 4" Address="0x944" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferRxByte05" Description="Buffer-Flatstream receive byte 5" Address="0x945" Direction="IN" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferOutputSequence01" Description="Buffer-Flatstream output sequence" Address="0x960" Direction="OUT" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferTxByte01" Description="Buffer-Flatstream transmit byte 1" Address="0x961" Direction="OUT" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferTxByte02" Description="Buffer-Flatstream transmit byte 2" Address="0x962" Direction="OUT" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferTxByte03" Description="Buffer-Flatstream transmit byte 3" Address="0x963" Direction="OUT" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="BufferTxByte04" Description="Buffer-Flatstream transmit byte 4" Address="0x964" Direction="OUT" Type="USINT" Sig_St_Byte="1" />
+    <Channel ID="FrequencyBand04" Description="Frequency band not used" Ext="/ARFIFO" Address="368" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand05" Description="Frequency band not used" Ext="/ARFIFO" Address="372" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand06" Description="Frequency band not used" Ext="/ARFIFO" Address="376" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand07" Description="Frequency band not used" Ext="/ARFIFO" Address="380" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand08" Description="Frequency band not used" Ext="/ARFIFO" Address="384" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand12" Description="Frequency band not used" Ext="/ARFIFO" Address="400" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand13" Description="Frequency band not used" Ext="/ARFIFO" Address="404" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand14" Description="Frequency band not used" Ext="/ARFIFO" Address="408" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand15" Description="Frequency band not used" Ext="/ARFIFO" Address="412" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand16" Description="Frequency band not used" Ext="/ARFIFO" Address="416" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand20" Description="Frequency band not used" Ext="/ARFIFO" Address="432" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand21" Description="Frequency band not used" Ext="/ARFIFO" Address="436" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand22" Description="Frequency band not used" Ext="/ARFIFO" Address="440" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand23" Description="Frequency band not used" Ext="/ARFIFO" Address="444" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand24" Description="Frequency band not used" Ext="/ARFIFO" Address="448" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand28" Description="Frequency band not used" Ext="/ARFIFO" Address="464" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand29" Description="Frequency band not used" Ext="/ARFIFO" Address="468" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand30" Description="Frequency band not used" Ext="/ARFIFO" Address="472" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand31" Description="Frequency band not used" Ext="/ARFIFO" Address="476" Direction="IN" Type="REAL" />
+    <Channel ID="FrequencyBand32" Description="Frequency band not used" Ext="/ARFIFO" Address="480" Direction="IN" Type="REAL" />
+    <Channel ID="BusModuleId" Description="Module ID of bus module" FromVersion="A4.81" Ext="/INFO" Address="0x80000180" Direction="IN" Type="UINT" Sig_St_Uint="1" Diagnose="/DIAG" />
+    <Channel ID="ModeOfOperation" Description="Status of module" FromVersion="A4.81" Ext="/INFO" Address="0x80000181" Direction="IN" Type="USINT" Sig_St_Usint="1" Diagnose="/DIAG" />
+    <Channel ID="ModeOfOperationChangeTime" Description="Time of last change of channel ModeOfOperation" FromVersion="A4.81" Ext="/INFO" Address="0xC0000181" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfResets" Description="Number of resets of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000182" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfResetsChangeTime" Description="Time of last change of channel NrOfResets" FromVersion="A4.81" Ext="/INFO" Address="0xC0000182" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfInits" Description="Number of inits of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000183" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfInitsChangeTime" Description="Time of last change of channel NrOfInits" FromVersion="A4.81" Ext="/INFO" Address="0xC0000183" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfFwUpdates" Description="Number of FW updates of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000184" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfFwUpdatesChangeTime" Description="Time of last change of channel NrOfFwUpdates" FromVersion="A4.81" Ext="/INFO" Address="0xC0000184" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleNoComm" Description="Number of missing answers from IO processor on IO module" FromVersion="A4.81" Ext="/INFO" Address="0x80000185" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleNoCommChangeTime" Description="Time of last change of channel ModuleNoComm" FromVersion="A4.81" Ext="/INFO" Address="0xC0000185" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleCommError" Description="Number of communication errors to IO processor on IO module" FromVersion="A4.81" Ext="/INFO" Address="0x80000186" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleCommErrorChangeTime" Description="Time of last change of channel ModuleCommError" FromVersion="A4.81" Ext="/INFO" Address="0xC0000186" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+  </Module>
+  <Module ID="IF3.ST1.IF1.ST1" Hardware="X20PS9400a" HardwareModuleName="X20PS9400" ModuleID="26" Simulatable="true">
+    <Channel ID="ModuleOk" Description="Module status (1 = module present)" Ext="/OK" Address="0" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="SerialNumber" Description="Serial number" FromVersion="A3.08" Ext="/INFO" Address="4" Direction="IN" Type="UDINT" Sig_St_Udint="1" />
+    <Channel ID="ModuleID" Description="Module ID" FromVersion="A3.08" Ext="/INFO" Address="10" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="HardwareVariant" Description="Hardware variant" FromVersion="A3.08" Ext="/INFO" Address="12" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="FirmwareVersion" Description="Firmware version" FromVersion="A3.08" Ext="/INFO" Address="14" Direction="IN" Type="UINT" Sig_St_Uint="1" />
+    <Channel ID="StatusInput01" Description="Bus power supply warning (1 = over current &gt;2.3 A or low voltage &lt;4.7 V)" Ext="/FIXED" Address="1" BitOffset="0" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="StatusInput02" Description="I/O power supply warning (0 = DC OK)" Ext="/FIXED" Address="1" BitOffset="2" Direction="IN" Type="BOOL" Sig_St_Bool="1" />
+    <Channel ID="BusModuleId" Description="Module ID of bus module" FromVersion="A4.81" Ext="/INFO" Address="0x80000180" Direction="IN" Type="UINT" Sig_St_Uint="1" Diagnose="/DIAG" />
+    <Channel ID="ModeOfOperation" Description="Status of module" FromVersion="A4.81" Ext="/INFO" Address="0x80000181" Direction="IN" Type="USINT" Sig_St_Usint="1" Diagnose="/DIAG" />
+    <Channel ID="ModeOfOperationChangeTime" Description="Time of last change of channel ModeOfOperation" FromVersion="A4.81" Ext="/INFO" Address="0xC0000181" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfResets" Description="Number of resets of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000182" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfResetsChangeTime" Description="Time of last change of channel NrOfResets" FromVersion="A4.81" Ext="/INFO" Address="0xC0000182" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfInits" Description="Number of inits of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000183" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfInitsChangeTime" Description="Time of last change of channel NrOfInits" FromVersion="A4.81" Ext="/INFO" Address="0xC0000183" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfFwUpdates" Description="Number of FW updates of the station" FromVersion="A4.81" Ext="/INFO" Address="0x80000184" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="NrOfFwUpdatesChangeTime" Description="Time of last change of channel NrOfFwUpdates" FromVersion="A4.81" Ext="/INFO" Address="0xC0000184" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleNoComm" Description="Number of missing answers from IO processor on IO module" FromVersion="A4.81" Ext="/INFO" Address="0x80000185" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleNoCommChangeTime" Description="Time of last change of channel ModuleNoComm" FromVersion="A4.81" Ext="/INFO" Address="0xC0000185" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleCommError" Description="Number of communication errors to IO processor on IO module" FromVersion="A4.81" Ext="/INFO" Address="0x80000186" Direction="IN" Type="DINT" Sig_St_Dint="1" Diagnose="/DIAG" />
+    <Channel ID="ModuleCommErrorChangeTime" Description="Time of last change of channel ModuleCommError" FromVersion="A4.81" Ext="/INFO" Address="0xC0000186" Direction="IN" Type="DATE_AND_TIME" Sig_St_Dt="1" Diagnose="/DIAG" />
+  </Module>
+</ChannelConfiguration>

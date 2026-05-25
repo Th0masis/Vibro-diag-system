@@ -1,0 +1,6 @@
+VAR
+	gTrace : TraceVibro;
+	ISO10816 : REAL;
+	RMSAclEnv : REAL;
+	RMSVelEnv : REAL;
+END_VAR

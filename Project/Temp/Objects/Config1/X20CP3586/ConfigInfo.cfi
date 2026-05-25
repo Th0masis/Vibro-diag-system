@@ -1,0 +1,46 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio Version="4.12.6.106"?>
+<ConfigInfo xmlns="http://br-automation.co.at/AS/BuildInfo">
+  <TaskClass
+    Name="Cyclic#1">
+    <Task
+      Name="GetBuffer"
+      Disable="false"
+      Source="VibroBuffer.GetBuffer"
+      Language="IEC">
+      <InternalFile
+        Path="C:\projects\Project\Temp\Objects\Config1\X20CP3586\GetBuffer\Main.st.var" />
+      <File
+        Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\Types.typ" />
+      <File
+        Path="C:\projects\Project\Logical\VibroBuffer\GetBuffer\Variables.var" />
+    </Task>
+  </TaskClass>
+  <TaskClass
+    Name="Cyclic#2" />
+  <TaskClass
+    Name="Cyclic#3" />
+  <TaskClass
+    Name="Cyclic#4" />
+  <TaskClass
+    Name="Cyclic#5" />
+  <TaskClass
+    Name="Cyclic#6" />
+  <TaskClass
+    Name="Cyclic#7" />
+  <TaskClass
+    Name="Cyclic#8">
+    <Task
+      Name="SaveData"
+      Disable="false"
+      Source="VibroBuffer.SaveData"
+      Language="IEC">
+      <InternalFile
+        Path="C:\projects\Project\Temp\Objects\Config1\X20CP3586\SaveData\Main.st.var" />
+      <File
+        Path="C:\projects\Project\Logical\VibroBuffer\SaveData\Types.typ" />
+      <File
+        Path="C:\projects\Project\Logical\VibroBuffer\SaveData\Variables.var" />
+    </Task>
+  </TaskClass>
+</ConfigInfo>

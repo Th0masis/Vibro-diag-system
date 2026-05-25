@@ -1,0 +1,68 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<?AutomationStudio Version=4.12.6.106 FileVersion="4.9"?>
+<Hardware xmlns="http://br-automation.co.at/AS/Hardware">
+  <Module Name="X20BB80" Type="X20BB80" Version="1.1.0.0" />
+  <Module Name="X20BC0083" Type="X20BC0083" Version="2.14.0.0">
+    <Connection Connector="PLK1" TargetModule="X20CP3586" TargetConnector="IF3" NodeNumber="1">
+      <Cable Type="PowerlinkCable" Length="10" Version="1.0.0.3" />
+    </Connection>
+    <Connection Connector="SL" TargetModule="X20BB80" TargetConnector="SL1" />
+    <Parameter ID="EnableDNA" Value="on" />
+  </Module>
+  <Module Name="X20BM31" Type="X20BM31" Version="1.1.0.0">
+    <Connection Connector="X2X1" TargetModule="X20BB80" TargetConnector="IF1" />
+  </Module>
+  <Module Name="X20CM4810" Type="X20CM4810" Version="1.7.0.0">
+    <Connection Connector="SS1" TargetModule="X20TB12a" TargetConnector="SS" />
+    <Connection Connector="SL" TargetModule="X20BM31" TargetConnector="SL1" />
+    <Parameter ID="Current01" Value="on" />
+    <Parameter ID="CalcVel01" Value="on" />
+    <Parameter ID="FLOWQ01" Value="16#0002" />
+    <Parameter ID="AICalc01" Value="on" />
+    <Parameter ID="AIParameter01" Value="PEAK" />
+    <Parameter ID="Current02" Value="on" />
+  </Module>
+  <Module Name="X20CP3586" Type="X20CP3586" Version="1.10.0.0">
+    <Connector Name="IF2">
+      <Parameter ID="ActivateDevice" Value="1" />
+      <Parameter ID="HostName" Value="cotrace-api" />
+      <Parameter ID="Mode" Value="Manual" />
+      <Parameter ID="InternetAddress" Value="10.24.137.37" />
+      <Parameter ID="SubnetMask" Value="255.255.255.0" />
+    </Connector>
+    <Connector Name="IF3">
+      <Parameter ID="EplHostName" Value="cotrace-api" />
+      <Parameter ID="HostName" Value="cotrace-api" />
+    </Connector>
+    <Parameter ID="ConfigurationID" Value="CoTrace_Vibor_Config1" />
+    <Parameter ID="VolatileGlobalPvSize" Value="200000" />
+    <Parameter ID="IdleTaskClass" Value="1" />
+    <Parameter ID="Cyclic1Duration" Value="2000" />
+    <Parameter ID="Cyclic1Tolerance" Value="2000" />
+    <Parameter ID="Cyclic3Duration" Value="48000" />
+    <Parameter ID="Cyclic3Tolerance" Value="48000" />
+    <Parameter ID="Cyclic8Duration" Value="8000" />
+    <Parameter ID="Cyclic8Tolerance" Value="50000000" />
+    <Parameter ID="Cyclic8Stack" Value="65000" />
+    <Group ID="FileDevice1" />
+    <Parameter ID="FileDeviceName1" Value="BufferData" />
+    <Parameter ID="FileDevicePath1" Value="F:/BufferData" />
+    <Parameter ID="EthernetHostName" Value="cotrace-api" />
+    <Parameter ID="EthernetDefaultGateway" Value="10.24.137.1" />
+    <Parameter ID="FTPProtocol" Value="3" />
+    <Group ID="FtpUser1" />
+    <Parameter ID="FtpUsername1" Value="user" />
+    <Parameter ID="FtpUserPassword1" Value="ztK7XSEqskzSOCpiuLWoesyAqwvBD/N0feCBZVSbf+w=" />
+    <Parameter ID="FtpUserSalt1" Value="7xprmDrz" />
+    <Parameter ID="FTPAccessRight1" Value="0" />
+    <Parameter ID="WebServerProtocol" Value="2" />
+    <Parameter ID="ActivateOpcUa" Value="1" />
+    <Parameter ID="OpcUaInformationModels_PV_Version" Value="1" />
+  </Module>
+  <Module Name="X20PS9400" Type="X20PS9400" Version="1.8.0.0">
+    <Connection Connector="SS1" TargetModule="X20TB12" TargetConnector="SS" />
+    <Connection Connector="PS" TargetModule="X20BB80" TargetConnector="PS1" />
+  </Module>
+  <Module Name="X20TB12" Type="X20TB12" Version="1.0.0.0" />
+  <Module Name="X20TB12a" Type="X20TB12" Version="1.0.0.0" />
+</Hardware>
