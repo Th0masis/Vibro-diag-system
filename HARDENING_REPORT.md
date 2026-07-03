@@ -406,27 +406,48 @@ button, [role="button"], .btn-primary, .btn-secondary, .btn-logout-red {
 
 ---
 
-## Remaining P1 Issues (For Phase 2: Colorize)
+## Progress Update (2026-07-03)
 
-These issues remain intentionally unaddressed in Phase 1; Phase 1B (colorize) will fix them:
+Post-hardening phases delivered after this report was created:
 
-1. **Color Palette Inconsistency** — Multiple orange/red shades (#FF4041, #FF6A4C, #F99244, #br-orange-dark) without semantic mapping
-2. **Gradient Panels** — Decorative gradients on .diag-panel violate flat design principle
-3. **Modal Anti-Pattern** — ML training, measurement details still in modals (Phase 2: shape)
-4. **Inline Styles** — MachineCard still has 20+ inline style props (Phase 2: distill)
+1. **Phase 1B (Colorize) — COMPLETE**
+  - Semantic palette unified (`--primary`, `--status-ok`, `--status-warning`, `--status-fault`)
+  - Legacy color variables removed from active surfaces
+  - Decorative gradients removed from key operational screens
+
+2. **Phase 2A (Shape) — MOSTLY COMPLETE**
+  - Measurement detail moved from modal to inline panel inside history context
+  - Sensor attach/detail workflows moved from modal to inline panel in machine detail
+  - Dashboard drill-down now routes to machine detail/history instead of modal overlay
+
+3. **Phase 2B (Distill) — IN PROGRESS**
+  - Significant inline style reduction completed in touched workflows
+  - Additional global consolidation still required in remaining pages/components
 
 ---
 
-## Next Steps: Phase 1B (Colorize)
+## Next Steps (Remaining Scope)
 
-Run `/impeccable colorize` to:
-1. **Rebuild color system** with refined palette (#F07800, #237A4A, #B83030, #A06000)
-2. **Fix gradient panels** → replace with flat design + semantic borders
-3. **Update all hardcoded colors** in CSS to use CSS variables
-4. **Verify all contrast** against new palette (ensure ≥4.5:1)
-5. **Update status color mappings** (green→OK, amber→WARNING, red→FAULT)
+### Phase 1C — Visual refinements (OPEN)
+1. Fine-tune spacing rhythm (cards, table density, form grouping)
+2. Standardize component sizing scale (headers, badges, compact buttons)
+3. Improve micro-interactions (hover/active/focus transitions) with reduced-motion parity
 
-**Estimated Time:** 30 minutes
+### Phase 2A — Shape (FINALIZE)
+1. Review remaining non-critical modals and decide per-flow replacement strategy
+2. Keep confirmation dialogs only for destructive actions (intentional exception)
+3. Ensure all operational drill-down flows preserve list/detail context
+
+### Phase 2B — Distill (OPEN)
+1. Consolidate remaining inline styles into reusable CSS classes
+2. Define reusable utility classes for repeated layout blocks and badges
+3. Remove duplicated style literals across admin/ML/sensor pages
+
+### Phase 3 — Polish (OPEN)
+1. Full responsive pass (desktop/tablet/mobile)
+2. Final motion pass including reduced-motion verification
+3. Typography pass (hierarchy, line length, density)
+4. End-to-end accessibility and interaction QA
 
 ---
 
@@ -446,7 +467,10 @@ Run `/impeccable colorize` to:
 ## Summary
 
 ✅ **Phase 1A Complete: Hardening**
+✅ **Phase 1B Complete: Colorize**
+🟡 **Phase 2A Mostly Complete: Shape (inline operational flows implemented)**
+🟡 **Phase 2B In Progress: Distill**
 
-All accessibility blockers fixed. PulseGuard now meets WCAG 2.1 Level AA and production-readiness standards. Forms are fully accessible, status indicators are colorblind-safe, error handling is robust, and keyboard navigation is seamless.
+PulseGuard now has a compliant accessibility baseline, unified semantic color system, and context-preserving inline workflows for core machine operations.
 
-**Ready for Phase 1B: `/impeccable colorize`** to rebuild color system and fix contrast issues in new palette.
+**Remaining focus:** Phase 1C refinements + Phase 2B consolidation + Phase 3 final polish.

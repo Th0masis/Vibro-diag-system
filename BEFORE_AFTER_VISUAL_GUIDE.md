@@ -627,16 +627,29 @@ export function MLModelDetail() {
 
 ---
 
-## 🚀 Next Steps to Implement
+## 🚀 Next Steps (Updated 2026-07-03)
 
-1. **Backup current CSS** → Keep `App.css` as `App.css.backup`
-2. **Update `:root` variables** → New palette (EE7733, D70015, 07A41E, etc.)
-3. **Create new CSS classes** → `.status-badge`, `.machine-card`, `.button`, etc.
-4. **Refactor components** → Move inline styles to classes
-5. **Add ARIA labels** → Fix accessibility
-6. **Test on mobile** → Verify 44×44px touch targets
-7. **Test contrast** → Verify all text ≥4.5:1 (use WCAG checker)
-8. **Replace modals** → Convert to inline panels or routable views
-9. **Live preview** → Open in browser, iterate
+### ✅ Completed since this guide was written
+1. Accessibility hardening (WCAG-focused)
+2. Semantic color system refactor and gradient cleanup
+3. Core modal-to-inline transition for machine operations (measurements + sensors)
 
-**Ready to implement Phase 1 (Accessibility + Colors)?** I can start writing the updated CSS and components now.
+### 🔜 Remaining
+1. **Phase 1C (Visual refinements)**
+  - spacing/sizing rhythm
+  - micro-interactions and interaction feedback consistency
+
+2. **Phase 2B (Distill)**
+  - finish migration of remaining inline styles to reusable classes
+  - reduce duplicated style literals in admin and ML pages
+
+3. **Phase 3 (Polish)**
+  - final responsive pass
+  - final motion + reduced-motion QA
+  - typography hierarchy and readability pass
+  - final cross-screen visual consistency review
+
+### Suggested immediate execution order
+1. Distill pass on remaining high-inline pages
+2. Responsive + typography polish
+3. Final QA checklist (a11y + interaction + visual consistency)

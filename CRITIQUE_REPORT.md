@@ -281,13 +281,32 @@
 
 ## Next Steps
 
-1. **Review this critique** with your team (particularly P0 accessibility and P1 modal workflows).
-2. **Choose a command** from the Recommended Fix Sequence (or ask me to run all of Phase 1).
-3. **Iterate live** — I'll open your dashboard in browser, apply changes, and verify:
-   - Contrast ratios with color-contrast tools
-   - Touch target sizing on mobile
-   - Modal flows before/after redesign
-   - Industrial context (will it feel safe & predictable to an operator?)
+### Progress status (2026-07-03)
 
-**Question**: Ready to start with **Phase 1 (Accessibility fixes)**, or would you like to discuss the modal refactor strategy first?
+1. **Phase 1 (Accessibility + Color)**: ✅ Completed
+2. **Phase 2A (Modal workflow reshape)**: 🟡 Mostly completed for core operational flows
+3. **Phase 2B (Distill inline styles)**: 🟡 In progress
+4. **Phase 3 (Polish)**: ⏳ Pending
+
+### What still remains
+
+1. **Phase 1C visual refinement pass**
+  - tighten spacing hierarchy and component sizing
+  - unify micro-interaction behavior
+
+2. **Phase 2B completion**
+  - remove remaining inline style islands
+  - consolidate repeated patterns into reusable classes
+
+3. **Phase 3 final polish**
+  - responsive validation on all key screens
+  - reduced-motion and interaction QA
+  - final typography/readability review
+  - final end-to-end consistency pass
+
+### Recommended immediate execution
+
+1. Finish Distill on remaining high-inline pages.
+2. Run full responsive + typography polish.
+3. Execute final QA checklist and freeze UI.
 
