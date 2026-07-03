@@ -72,7 +72,7 @@ function App() {
                     {currentUser?.role === 'user' && 'User'}
                   </span>
                 </div>
-                <button className="btn-logout-red" onClick={handleLogout}>
+                <button className="btn-logout-red" onClick={handleLogout} aria-label="Log out from application">
                   Log out
                 </button>
               </div>
@@ -80,16 +80,16 @@ function App() {
           </header>
 
           {/* NAVIGATION MENU */}
-          <nav className="nav-menu">
-            <NavLink to="/" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Dashboard</NavLink>
-            <NavLink to="/machines" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Machines</NavLink>
-            <NavLink to="/sensors" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>Sensors</NavLink>
-            <NavLink to="/ml-sector" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>ML Sector</NavLink>
-            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"}>User Management</NavLink>
+          <nav className="nav-menu" aria-label="Main navigation">
+            <NavLink to="/" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"} aria-current={({ isActive }) => isActive ? "page" : undefined}>Dashboard</NavLink>
+            <NavLink to="/machines" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"} aria-current={({ isActive }) => isActive ? "page" : undefined}>Machines</NavLink>
+            <NavLink to="/sensors" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"} aria-current={({ isActive }) => isActive ? "page" : undefined}>Sensors</NavLink>
+            <NavLink to="/ml-sector" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"} aria-current={({ isActive }) => isActive ? "page" : undefined}>ML Sector</NavLink>
+            <NavLink to="/users" className={({ isActive }) => isActive ? "nav-item active" : "nav-item"} aria-current={({ isActive }) => isActive ? "page" : undefined}>User Management</NavLink>
           </nav>
 
           {/* MAIN CONTENT AREA */}
-          <main className="main-content">
+          <main className="main-content" role="main" aria-label="Main application content">
             <Routes>
               <Route path="/" element={<Dashboard token={token} />} />
               <Route path="/machines" element={<Machines />} />

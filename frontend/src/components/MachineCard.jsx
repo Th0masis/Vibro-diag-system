@@ -78,14 +78,19 @@ function MachineCard({ machine, onOpenDetail }) {
       {/* 1. HLAVIČKA */}
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
         <div>
-          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#1e293b' }}>{machine.name}</h3>
-          <span style={{ fontSize: '0.8rem', color: '#64748b' }}>{machine.type}</span>
+          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#1e293b' }} className="truncate">{machine.name}</h3>
+          <span style={{ fontSize: '0.8rem', color: '#64748b' }} className="truncate">{machine.type}</span>
         </div>
-        <span style={{ 
-          background: statusBg, color: statusText, 
-          padding: '2px 8px', borderRadius: '6px', 
-          fontSize: '1.2rem', fontWeight: 'bold', textTransform: 'uppercase' 
-        }}>
+        <span 
+          className={`status-badge status-${machine.status?.toLowerCase()}`}
+          role="status"
+          aria-label={`Machine status: ${machine.status}`}
+        >
+          <span aria-hidden="true">
+            {machine.status === 'OK' && '✓'}
+            {machine.status === 'WARNING' && '⚠'}
+            {machine.status === 'FAULT' && '🔴'}
+          </span>
           {machine.status}
         </span>
       </div>
