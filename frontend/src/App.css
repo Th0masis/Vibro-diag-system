@@ -1344,9 +1344,6 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   border-color: #F07800;
   box-shadow: 0 0 0 4px rgba(240, 120, 0, 0.2);
 }
-  box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-  margin-bottom: 20px;
-}
 
 /* Stylový Select */
 .custom-select {
