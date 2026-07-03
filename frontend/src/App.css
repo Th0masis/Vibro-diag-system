@@ -2,26 +2,41 @@
    1. PROMĚNNÉ A ZÁKLADNÍ NASTAVENÍ
    ========================================================================== */
 :root {
-  /* Brand barvy VUT & B&R */
-  --vut-red: #FF4041;
-  --vut-red-dark: #b30004;
-  --br-orange-dark: #FF6A4C;
-  --br-orange: #F99244;
-  --br-yellow: #FAAB33;
-  --blue-primary: #487BE3;
-  --blue-dark: #2D55CC;
-
-  /* Funkční mapování */
-  --primary: var(--br-orange);
-  --primary-hover: var(--br-orange-dark);
-  --secondary: var(--vut-red);
-  --accent: var(--blue-primary);
+  /* Design System: PulseGuard (Restrained Strategy) */
   
-  --bg: #fdfdfd;
-  --card-bg: #ffffff;
-  --text-main: #1e293b;
-  --text-muted: #64748b;
+  /* PRIMARY: Steady Orange (accent ≤10% of screen) */
+  --primary: #F07800;
+  --primary-hover: #D96400;
+  
+  /* SEMANTIC STATES */
+  --status-ok: #237A4A;           /* Clear Green */
+  --status-ok-bg: #E8F5E9;        /* Light green background */
+  --status-warning: #A06000;      /* Alert Yellow */
+  --status-warning-bg: #FFF3E0;   /* Light orange background */
+  --status-fault: #B83030;        /* Decisive Red */
+  --status-fault-bg: #FFEBEE;     /* Light red background */
+  
+  /* NEUTRAL PALETTE */
+  --neutral-black: #111111;       /* Text primary */
+  --neutral-dark-gray: #555555;   /* Text secondary */
+  --neutral-gray: #666666;        /* Text muted */
+  --neutral-bg-white: #FFFFFF;    /* Card/surface background */
+  --neutral-bg-light: #F5F5F5;    /* Light surface */
+  --neutral-bg-lighter: #EEEEEE;  /* Lighter surface */
+  --neutral-bg-lightest: #E4E4E4; /* Lightest surface */
+  --neutral-border: #E2E2E2;      /* Border */
+  --neutral-border-dark: #CCCCCC; /* Darker border */
+  
+  /* LEGACY MAPPINGS (deprecated, use semantic vars above) */
+  --bg: #F5F5F5;
+  --card-bg: #FFFFFF;
+  --text-main: #111111;
+  --text-muted: #666666;
+  
+  /* SHADOW SCALE */
   --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
 }
 
 * {
@@ -39,7 +54,7 @@ body {
 .app-layout {
   position: relative;
   min-height: 100vh;
-  background: linear-gradient(135deg, #fff 0%, #f9f9f9 100%);
+  background: var(--neutral-bg-light);
 }
 
 .app-container {
@@ -83,12 +98,12 @@ body {
 
 /* --- NAVIGAČNÍ MENU --- */
 .nav-menu {
-  background: var(--br-orange); /* Oranžový základ */
+  background: var(--primary);
   padding: 0 2rem;
   display: flex;
-  justify-content: center; /* Vycentrování položek */
+  justify-content: center;
   gap: 10px;
-  box-shadow: 0 4px 12px rgba(249, 146, 68, 0.2);
+  box-shadow: 0 4px 12px rgba(240, 120, 0, 0.2);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -119,15 +134,15 @@ body {
   background: rgba(255, 255, 255, 0.2);
 }
 
-/* Fancy indikátor: Červená linka pod aktivním textem */
+/* Active indicator: Orange underline (semantic highlight) */
 .nav-item.active::after {
   content: '';
   position: absolute;
   bottom: 0;
   left: 0;
   width: 100%;
-  height: 4px;
-  background: var(--vut-red); /* Červená jako "akcent" */
+  height: 3px;
+  background: rgba(255, 255, 255, 0.4);
   animation: expandWidth 0.3s ease-out;
 }
 .main-content {
@@ -164,11 +179,11 @@ body {
 }
 
 .text-pulse {
-  color: var(--br-orange);
+  color: var(--primary);
 }
 
 .text-guard {
-  color: var(--vut-red);
+  color: var(--status-fault);
 }
 
 /* --- UŽIVATELSKÁ SEKCE --- */
@@ -202,7 +217,7 @@ body {
 .user-avatar {
   width: 32px;
   height: 32px;
-  background: var(--vut-red);
+  background: var(--primary);
   color: white;
   border-radius: 50%;
   display: flex;
@@ -212,9 +227,9 @@ body {
   font-size: 0.8rem;
 }
 
-/* --- ČERVENÉ ODHLAŠOVACÍ TLAČÍTKO --- */
+/* --- Logout button: Destructive action (semantic red) --- */
 .btn-logout-red {
-  background: var(--vut-red);
+  background: var(--status-fault);
   color: white;
   border: none;
   padding: 8px 16px;
@@ -223,13 +238,13 @@ body {
   font-size: 0.85rem;
   cursor: pointer;
   transition: all 0.2s ease;
-  box-shadow: 0 2px 4px rgba(255, 64, 65, 0.2);
+  box-shadow: 0 2px 4px rgba(184, 48, 48, 0.2);
 }
 
 .btn-logout-red:hover {
-  background: #d93637; /* Trochu tmavší červená při hoveru */
+  background: #a72424;
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px rgba(255, 64, 65, 0.3);
+  box-shadow: 0 4px 8px rgba(184, 48, 48, 0.3);
 }
 
 .btn-logout-red:active {
@@ -249,26 +264,26 @@ button {
 
 .btn-update {
   background: white;
-  border: 2px solid var(--br-orange);
-  color: var(--br-orange);
+  border: 2px solid var(--primary);
+  color: var(--primary);
 }
 
 .btn-update:hover {
-  background: var(--br-orange);
+  background: var(--primary);
   color: white;
 }
 
 .btn-diagnose {
-  background: var(--br-orange-dark);
+  background: var(--primary-hover);
   color: white;
   border: none;
-  box-shadow: 0 4px 14px 0 rgba(72, 123, 227, 0.39);
+  box-shadow: 0 4px 14px 0 rgba(217, 100, 0, 0.25);
 }
 
 .btn-diagnose:hover:not(:disabled) {
-  background: var(--br-orange-dark);
+  background: var(--primary-hover);
   transform: translateY(-2px);
-  box-shadow: 0 6px 20px rgba(45, 85, 204, 0.23);
+  box-shadow: 0 6px 20px rgba(217, 100, 0, 0.3);
 }
 
 .btn-diagnose:disabled {
@@ -299,11 +314,13 @@ button {
 }
 
 .diag-panel.status-ok {
-  background: linear-gradient(90deg, #22c55e 0%, #16a34a 100%);
+  background: var(--status-ok);
+  color: white;
 }
 
 .diag-panel.status-fault {
-  background: linear-gradient(90deg, var(--vut-red) 0%, #b91c1c 100%);
+  background: var(--status-fault);
+  color: white;
 }
 
 .chart-container {
@@ -331,7 +348,7 @@ table {
 }
 
 th {
-  background: var(--br-orange);
+  background: var(--primary);
   color: white;
   padding: 1rem;
   text-align: left;
@@ -371,7 +388,7 @@ tr:hover {
   box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
   width: 90%;
   max-width: 400px;
-  border-top: 6px solid var(--vut-red); /* Oranžový B&R akcent */
+  border-top: 6px solid var(--primary);
   animation: fadeInScale 0.4s ease-out;
 }
 .login-logo-header {
@@ -444,8 +461,8 @@ tr:hover {
 }
 
 .form-input:focus {
-    border-color: var(--vut-red);
-    box-shadow: 0 0 0 4px rgba(249, 146, 68, 0.1);
+    border-color: var(--primary);
+    box-shadow: 0 0 0 4px rgba(240, 120, 0, 0.1);
 }
 
 .form-input:disabled {
@@ -455,7 +472,7 @@ tr:hover {
 }
 .login-btn {
     width: 100%;
-    background: var(--vut-red); 
+    background: var(--primary);
     border: none;
     border-radius: 8px;
     padding: 14px;
@@ -468,13 +485,13 @@ tr:hover {
 }
 
 .login-btn:hover {
-    background: var(--vut-red);
+    background: var(--primary-hover);
     transform: translateY(-1px);
 }
 
 /* --- OSTATNÍ --- */
 .error-text-simple {
-    color: var(--vut-red);
+    color: var(--status-fault);
     font-size: 0.85rem;
     margin-bottom: 15px;
     text-align: left;
@@ -507,7 +524,7 @@ tr:hover {
 }
 
 .password-toggle:focus {
-    outline: 3px solid var(--vut-red);
+    outline: 3px solid var(--primary);
     outline-offset: 2px;
 }
 
@@ -566,7 +583,7 @@ tr:hover {
   font-weight: 700;
   text-transform: uppercase;
 }
-.role-badge.admin { background: #fee2e2; color: var(--vut-red); }
+.role-badge.admin { background: #fee2e2; color: var(--status-fault); }
 .role-badge.user { background: #e0f2fe; color: var(--blue-primary);}
 .role-badge.operator { background: #fee2e2; color: var(--br-yellow);}
 
@@ -581,23 +598,23 @@ tr:hover {
   font-size: 0.8rem;
 }
 .btn-small-edit {
-  border: 1px solid var(--br-orange);
-  color: var(--br-orange);
+  border: 1px solid var(--primary);
+  color: var(--primary);
   margin-right: 8px;
 }
 .btn-small-edit:hover {
-  background: var(--br-orange);
+  background: var(--primary);
   color: white;
-  box-shadow: 0 2px 8px rgba(249, 146, 68, 0.3);
+  box-shadow: 0 2px 8px rgba(240, 120, 0, 0.3);
 }
 .btn-small-delete {
-  border: 1px solid var(--vut-red);
-  color: var(--vut-red);
+  border: 1px solid var(--status-fault);
+  color: var(--status-fault);
 }
 .btn-small-delete:hover {
-  background: var(--vut-red);
+  background: var(--status-fault);
   color: white;
-  box-shadow: 0 2px 8px rgba(255, 64, 65, 0.3);
+  box-shadow: 0 2px 8px rgba(184, 48, 48, 0.3);
 }
 /* Overlay - ztmaví pozadí */
 .modal-overlay {
@@ -642,7 +659,7 @@ tr:hover {
 }
 
 .btn-confirm-delete {
-  background: var(--vut-red);
+  background: var(--status-fault);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -676,7 +693,7 @@ tr:hover {
 }
 
 .btn-add-confirm {
-  background: var(--br-orange);
+  background: var(--primary);
   color: white;
   border: none;
   padding: 10px 20px;
@@ -779,12 +796,12 @@ tr:hover {
 }
 
 .tab-btn:hover {
-  color: var(--br-orange);
+  color: var(--primary);
 }
 
 .tab-btn.active {
-  color: var(--br-orange);
-  border-bottom: 3px solid var(--br-orange);
+  color: var(--primary);
+  border-bottom: 3px solid var(--primary);
 }
 
 .tab-content {
@@ -805,13 +822,13 @@ tr:hover {
   padding: 20px 25px;
   border-radius: 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.03);
-  border-left: 6px solid var(--vut-red); /* Oranžový pruh vlevo */
+  border-left: 6px solid var(--primary);
 }
 
 .machine-title-section h1 {
   margin: 0;
   font-size: 1.8rem;
-  color: var(--vut-red);
+  color: var(--primary);
   display: flex;
   align-items: center;
   gap: 15px;
@@ -840,8 +857,8 @@ tr:hover {
 }
 
 .btn-back:hover {
-  border-color: var(--vut-red);
-  color: var(--vut-red);
+  border-color: var(--primary);
+  color: var(--primary);
   background: #fff5f5;
   transform: translateX(-3px); /* Jemný pohyb doleva při najetí */
 }
@@ -862,26 +879,26 @@ tr:hover {
   box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
 }
 
-/* Specifické barvy pro vršky karet */
-.card-tech { border-top-color: var(--br-orange); }
-.card-sensors { border-top-color: var(--vut-red); }
-.card-note { border-top-color: var(--br-orange); }
+/* Specific colors for card top borders */
+.card-tech { border-top-color: var(--primary); }
+.card-sensors { border-top-color: var(--status-fault); }
+.card-note { border-top-color: var(--primary); }
 
 .card-title {
   margin-top: 0;
   font-size: 1.1rem;
   font-weight: 700;
-  color: var(--vut-red);
+  color: var(--status-fault);
   margin-bottom: 15px;
   display: flex;
   justify-content: space-between;
   align-items: center;
 }
 
-/* --- TLAČÍTKO PRO ODEBRÁNÍ SENZORU (VUT RED) --- */
+/* --- Button to detach sensor (semantic red for destructive action) --- */
 .btn-detach {
   background: #fee2e2;
-  color: var(--vut-red);
+  color: var(--status-fault);
   border: 1px solid #fecaca;
   border-radius: 6px;
   width: 28px;
@@ -894,16 +911,16 @@ tr:hover {
 }
 
 .btn-detach:hover {
-  background: var(--vut-red);
+  background: var(--status-fault);
   color: white;
-  border-color: var(--vut-red);
+  border-color: var(--status-fault);
 }
 
-/* --- UPDATE TABŮ (Výraznější aktivní stav) --- */
+/* --- Active tab: Orange accent with subtle tint background --- */
 .tab-btn.active {
-  color: var(--vut-red); /* Aktivní záložka bude VUT červená */
-  border-bottom: 3px solid var(--vut-red);
-  background: linear-gradient(to top, #fff5f5 0%, transparent 100%);
+  color: var(--primary);
+  border-bottom: 3px solid var(--primary);
+  background: rgba(240, 120, 0, 0.04);
 }
 /* ==========================================================================
    12.  DASHBOARD 
@@ -937,7 +954,7 @@ tr:hover {
 /* Karta filtru a hlavičky */
 .history-header-card {
   background: white;
-  border-top: 4px solid var(--vut-red-dark); /* VUT Červená */
+  border-top: 4px solid var(--primary);
   padding: 20px;
   border-radius: 8px;
 }
@@ -1345,7 +1362,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .custom-select:focus {
-  border-color: var(--br-orange);
+  border-color: var(--primary);
   box-shadow: 0 0 0 3px rgba(228, 0, 43, 0.1);
 }
 
@@ -1378,7 +1395,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .custom-checkbox:checked {
-  background-color: var(--br-orange);
+  background-color: var(--primary);
   border-color: var(--bg);
 }
 
@@ -1399,7 +1416,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 /* Progress Bar Fill */
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #cd3808 0%, #E4002B 100%);
+  background: var(--primary);
   transition: width 0.3s ease-in-out;
   border-radius: 99px;
 }
@@ -1439,12 +1456,12 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .viz-tab:hover {
-  color: #cd3808;
-  background: #fff3ed;
+  color: var(--primary);
+  background: rgba(240, 120, 0, 0.04);
 }
 
 .viz-tab.active {
-  color: #cd3808;
-  border-bottom: 2px solid #cd3808;
+  color: var(--primary);
+  border-bottom: 2px solid var(--primary);
   background: white;
 }
