@@ -204,7 +204,7 @@ function ModelTrainingModal({ model, onClose }) {
         {/* RUL SPECIFICKÁ DATA ŽIVOTNÍHO CYKLU */}
         {isRUL && (
           <div style={{ background: '#f0f9ff', padding: '20px', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '20px' }}>
-            <h4 style={{ margin: '0 0 15px 0', color: 'var(--blue-primary)', display: 'flex', alignItems: 'center', gap: '10px' }}>
+            <h4 style={{ margin: '0 0 15px 0', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '10px' }}>
               🕒 Parametry životního cyklu ložiska
             </h4>
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '20px' }}>
@@ -238,14 +238,14 @@ function ModelTrainingModal({ model, onClose }) {
         )}
 
         {isCNN && (
-          <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '8px', borderLeft: '4px solid var(--vut-red)', marginBottom: '20px' }}>
+          <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '20px' }}>
             <strong>Režim Supervised (Labelování)</strong><br/>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Přiřaďte úsekům typy poruch pro učení klasifikátoru.</span>
           </div>
         )}
 
         {isGAN && (
-          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', borderLeft: '4px solid var(--br-orange)', marginBottom: '20px' }}>
+          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '20px' }}>
             <strong>Režim Unsupervised (Baseline)</strong><br/>
             <span style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>Vybírejte pouze úseky bezporuchového stavu stroje.</span>
           </div>
@@ -311,12 +311,12 @@ function ModelTrainingModal({ model, onClose }) {
           <div>
             <div style={{ marginTop: '20px' }}>
               <span style={{ color: 'var(--text-muted)' }}>Model:</span>
-              <h3 style={{ margin: '0', color: 'var(--blue-primary)' }}>{model.name} <small>v{model.version}</small></h3>
+              <h3 style={{ margin: '0', color: '#2563eb' }}>{model.name} <small>v{model.version}</small></h3>
             </div>
             {renderDataSelectionForm()}
             <div style={{ display: 'flex', justifyContent: 'flex-end', gap: '15px', marginTop: '30px', paddingTop: '20px', borderTop: '1px solid #eee' }}>
               <button className="btn-cancel" onClick={onClose}>Zrušit</button>
-              <button className="btn-diagnose" style={{ background: 'var(--vut-red)' }} onClick={startTraining} disabled={selectedSegments.length === 0}>Spustit Fine-Tuning</button>
+              <button className="btn-diagnose" style={{ background: 'var(--status-fault)' }} onClick={startTraining} disabled={selectedSegments.length === 0}>Spustit Fine-Tuning</button>
             </div>
           </div>
         )}

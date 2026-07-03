@@ -158,7 +158,7 @@ function Sensors() {
         <div className="modal-overlay">
           <div className="modal-content sensor-detail-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, color: 'var(--br-orange)' }}>Detail senzoru</h2>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>Detail senzoru</h2>
               <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
             </div>
             <div className="detail-grid">
@@ -192,7 +192,7 @@ function Sensors() {
       {editingSensor && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--br-orange)' }}>Upravit senzor</h2>
+            <h2 style={{ color: 'var(--primary)' }}>Upravit senzor</h2>
             <form onSubmit={handleUpdateSensor}>
               <div className="form-group">
                 <label>Sériové číslo (S/N)</label>
@@ -267,7 +267,7 @@ function Sensors() {
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--br-orange)' }}>Nový senzor</h2>
+            <h2 style={{ color: 'var(--primary)' }}>Nový senzor</h2>
             <form onSubmit={handleAddSensor}>
               <div className="form-group">
                 <label>Sériové číslo *</label>

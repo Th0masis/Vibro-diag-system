@@ -6,7 +6,7 @@ function ConfirmModal({ isOpen, onClose, onConfirm, title, message, confirmText 
   return (
     <div className="modal-overlay">
       <div className="modal-content delete-modal">
-        <h3 style={{ color: 'var(--vut-red)', marginTop: 0 }}>{title}</h3>
+        <h3 style={{ color: 'var(--status-fault)', marginTop: 0 }}>{title}</h3>
         <p style={{ color: '#475569', fontSize: '1rem', lineHeight: '1.5' }}>
           {message}
         </p>

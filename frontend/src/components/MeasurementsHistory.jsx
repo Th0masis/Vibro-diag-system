@@ -2,7 +2,7 @@ import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import MeasurementDetailModal from './MeasurementDetailModal'; 
 
-function MeasurementsHistory({ machineId }) {
+function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null }) {
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -23,7 +23,7 @@ function MeasurementsHistory({ machineId }) {
   const [filterTime, setFilterTime] = useState('');
 
   // Modal
-  const [selectedMeasurementId, setSelectedMeasurementId] = useState(null);
+  const [selectedMeasurementId, setSelectedMeasurementId] = useState(initialSelectedMeasurementId);
 
   const fetchData = async () => {
     try {
@@ -42,6 +42,10 @@ function MeasurementsHistory({ machineId }) {
   useEffect(() => {
     if (machineId) fetchData();
   }, [machineId]);
+
+  useEffect(() => {
+    setSelectedMeasurementId(initialSelectedMeasurementId);
+  }, [initialSelectedMeasurementId]);
 
   const sensorList = useMemo(() => {
     const sensors = new Set(data.map(d => d.sensor_name));
@@ -120,6 +124,17 @@ function MeasurementsHistory({ machineId }) {
 
   return (
     <div className="history-container">
+      {selectedMeasurementId && (
+        <div style={{ marginBottom: '16px' }}>
+          <MeasurementDetailModal
+            measurementId={selectedMeasurementId}
+            onClose={() => setSelectedMeasurementId(null)}
+            onProcessed={fetchData}
+            inline
+          />
+        </div>
+      )}
+
       {/* TOOLBAR S FILTRY - S flex layoutem */}
       <div style={{ 
         display: 'flex', gap: '20px', alignItems: 'flex-end', marginBottom: '20px', 
@@ -282,13 +297,6 @@ function MeasurementsHistory({ machineId }) {
         )}
       </div>
 
-      {selectedMeasurementId && (
-        <MeasurementDetailModal 
-          measurementId={selectedMeasurementId} 
-          onClose={() => setSelectedMeasurementId(null)} 
-          onProcessed={fetchData}
-        />
-      )}
     </div>
   );
 }

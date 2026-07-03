@@ -82,7 +82,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       {/* =====================================================================
          SEKCE 1: DETEKCE ANOMÁLIÍ (AE_ANOWGAN)
          ===================================================================== */}
-      <div className="detail-card card-sensors" style={{ borderTop: '4px solid var(--br-orange)' }}>
+      <div className="detail-card card-sensors" style={{ borderTop: '4px solid var(--primary)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
               1. Detekce Anomálií
@@ -98,7 +98,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
           <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '15px' }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
               <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Anomaly Score:</span>
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: anomalyResult.is_anomaly ? 'var(--vut-red)' : '#16a34a' }}>
+              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: anomalyResult.is_anomaly ? 'var(--status-fault)' : 'var(--status-ok)' }}>
                 {anomalyResult.anomaly_score?.toFixed(4)}
               </span>
             </div>
@@ -127,7 +127,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       {/* =====================================================================
          SEKCE 2: KLASIFIKACE PORUCH (1D_CNNwWGN)
          ===================================================================== */}
-      <div className="detail-card card-tech" style={{ borderTop: '4px solid var(--vut-red)' }}>
+      <div className="detail-card card-tech" style={{ borderTop: '4px solid var(--status-fault)' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
               2. Klasifikace Poruchy
@@ -142,8 +142,8 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
         {classResult ? (
           <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '15px' }}>
             <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-              <span style={{ color: 'var(--vut-red)', fontWeight: 600, display: 'block', marginBottom: '5px' }}>Detekovaný typ poruchy:</span>
-              <span style={{ fontSize: '1.6rem', fontWeight: 'bold', color: 'var(--vut-red-dark)' }}>
+              <span style={{ color: 'var(--status-fault)', fontWeight: 600, display: 'block', marginBottom: '5px' }}>Detekovaný typ poruchy:</span>
+              <span style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#9f2222' }}>
                 {classResult.fault_type}
               </span>
             </div>
@@ -160,7 +160,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             className="btn-diagnose" 
             onClick={runClassification} 
             disabled={classLoading}
-            style={{ width: '100%', background: 'var(--vut-red)' }}
+            style={{ width: '100%', background: 'var(--status-fault)' }}
           >
             {classLoading ? '⏳ Klasifikuji poruchu...' : '🏷️ Spustit klasifikaci poruchy'}
           </button>
@@ -170,7 +170,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       {/* =====================================================================
          SEKCE 3: PREDIKCE RUL (Bi-LSTM)
          ===================================================================== */}
-      <div className="detail-card card-note" style={{ borderTop: '4px solid var(--blue-primary)' }}>
+      <div className="detail-card card-note" style={{ borderTop: '4px solid #2563eb' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
             <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
               3. Predikce Životnosti (RUL)
@@ -185,17 +185,17 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
         {rulResult ? (
           <div style={{ background: '#e0f2fe', padding: '20px', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '15px' }}>
              <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: '0.95rem', color: 'var(--blue-dark)', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
+                <span style={{ fontSize: '0.95rem', color: '#1e40af', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
                   Zbývající užitečná životnost (RUL)
                 </span>
-                <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: 'var(--blue-primary)', margin: '10px 0' }}>
+                <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: '#2563eb', margin: '10px 0' }}>
                     {rulResult.rul_value} {rulResult.unit}
                 </div>
-                <div style={{ fontSize: '0.85rem', color: 'var(--blue-dark)', opacity: 0.8 }}>
+                <div style={{ fontSize: '0.85rem', color: '#1e40af', opacity: 0.8 }}>
                     Použitý model: <strong>{rulResult.used_model}</strong>
                 </div>
             </div>
-            <button onClick={() => setRulResult(null)} className="btn-cancel" style={{ marginTop: '20px', width: '100%', padding: '8px', background: 'white', color: 'var(--blue-dark)' }}>
+            <button onClick={() => setRulResult(null)} className="btn-cancel" style={{ marginTop: '20px', width: '100%', padding: '8px', background: 'white', color: '#1e40af' }}>
               Resetovat výsledek
             </button>
           </div>
@@ -204,7 +204,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             className="btn-diagnose" 
             onClick={runRULAnalysis} 
             disabled={rulLoading}
-            style={{ width: '100%', background: 'var(--blue-primary)' }}
+            style={{ width: '100%', background: '#2563eb' }}
           >
             {rulLoading ? '⏳ Analyzuji časové řady...' : '⏱️ Odhadnout zbývající životnost'}
           </button>

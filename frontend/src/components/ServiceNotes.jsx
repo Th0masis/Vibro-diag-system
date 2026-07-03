@@ -49,8 +49,8 @@ function ServiceNotes({ machineId, onNoteAdded }) {
 
   const getSeverityStyle = (sev) => { /* ... stejné ... */ 
     switch (sev) {
-        case 'CRITICAL': return { bg: '#fee2e2', color: '#991b1b', border: 'var(--vut-red)' };
-        case 'WARNING': return { bg: '#fef9c3', color: '#854d0e', border: 'var(--br-orange)' };
+        case 'CRITICAL': return { bg: '#fee2e2', color: '#991b1b', border: 'var(--status-fault)' };
+        case 'WARNING': return { bg: '#fef9c3', color: '#854d0e', border: 'var(--status-warning)' };
         default: return { bg: '#eff6ff', color: '#1e40af', border: '#3b82f6' };
       }
   };
@@ -67,7 +67,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
             <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem', color: '#64748b' }}>Závažnost</label>
             <div style={{ display: 'flex', gap: '10px' }}>
               {['INFO', 'WARNING', 'CRITICAL'].map(lev => (
-                <button key={lev} type="button" onClick={() => setSeverity(lev)} style={{ flex: 1, padding: '8px', border: `1px solid ${severity === lev ? (lev==='INFO'?'#3b82f6':lev==='WARNING'?'var(--br-orange)':'var(--vut-red)') : '#cbd5e1'}`, background: severity === lev ? '#fff' : '#f1f5f9', color: severity === lev ? 'black' : '#64748b', borderRadius: '6px', cursor: 'pointer', fontWeight: severity===lev?'bold':'normal' }}>{lev}</button>
+                <button key={lev} type="button" onClick={() => setSeverity(lev)} style={{ flex: 1, padding: '8px', border: `1px solid ${severity === lev ? (lev==='INFO'?'#3b82f6':lev==='WARNING'?'var(--status-warning)':'var(--status-fault)') : '#cbd5e1'}`, background: severity === lev ? '#fff' : '#f1f5f9', color: severity === lev ? 'black' : '#64748b', borderRadius: '6px', cursor: 'pointer', fontWeight: severity===lev?'bold':'normal' }}>{lev}</button>
               ))}
             </div>
           </div>
@@ -101,7 +101,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
                             onClick={() => handleDeleteClick(note.id_note)}
                             style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: '1.2rem', lineHeight: '0.5', padding: '0 5px' }}
                             title="Smazat záznam"
-                            onMouseOver={(e) => e.target.style.color = 'var(--vut-red)'}
+                          onMouseOver={(e) => e.target.style.color = 'var(--status-fault)'}
                             onMouseOut={(e) => e.target.style.color = '#cbd5e1'}
                         >
                             ×

@@ -5,15 +5,14 @@ import { LineChart, Line, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
 // Importujeme nový pásek pro AI diagnostiku
 import AiStatusBanner from './AiStatusBanner'; // Ujisti se, že cesta odpovídá umístění souboru
 
-// Přijímáme novou prop 'onOpenDetail'
-function MachineCard({ machine, onOpenDetail }) {
+function MachineCard({ machine }) {
   const navigate = useNavigate();
   const [graphData, setGraphData] = useState([]);
   const [sensors, setSensors] = useState([]); 
 
-  const statusColor = machine.status === 'OK' ? '#22c55e' : machine.status === 'WARNING' ? '#ff8200' : '#E4002B';
-  const statusBg = machine.status === 'OK' ? '#dcfce7' : machine.status === 'WARNING' ? '#ffedd5' : '#fee2e2';
-  const statusText = machine.status === 'OK' ? '#166534' : machine.status === 'WARNING' ? '#9a3412' : '#991b1b';
+  const machineStatus = (machine.status || '').toUpperCase();
+  const statusColor = machineStatus === 'OK' ? '#22c55e' : machineStatus === 'WARNING' ? '#ff8200' : '#B83030';
+  const statusClass = machineStatus === 'OK' ? 'ok' : machineStatus === 'WARNING' ? 'warning' : 'fault';
   const lineColors = ['#334155', '#3b82f6', '#E4002B', '#ff8200'];
 
   // Pomocná funkce pro získání autorizační hlavičky
@@ -66,6 +65,12 @@ function MachineCard({ machine, onOpenDetail }) {
     navigate(`/machines/${machine.id_machine}`, { state: { tab: tabName } });
   };
 
+  const goToMeasurementDetail = (measurementId) => {
+    navigate(`/machines/${machine.id_machine}`, {
+      state: { tab: 'history', selectedMeasurementId: measurementId }
+    });
+  };
+
   return (
     <div className="detail-card" style={{ 
       borderTop: `4px solid ${statusColor}`, 
@@ -82,16 +87,16 @@ function MachineCard({ machine, onOpenDetail }) {
           <span style={{ fontSize: '0.8rem', color: '#64748b' }} className="truncate">{machine.type}</span>
         </div>
         <span 
-          className={`status-badge status-${machine.status?.toLowerCase()}`}
+          className={`status-badge status-${statusClass}`}
           role="status"
-          aria-label={`Machine status: ${machine.status}`}
+          aria-label={`Machine status: ${machineStatus}`}
         >
           <span aria-hidden="true">
-            {machine.status === 'OK' && '✓'}
-            {machine.status === 'WARNING' && '⚠'}
-            {machine.status === 'FAULT' && '🔴'}
+            {machineStatus === 'OK' && '✓'}
+            {machineStatus === 'WARNING' && '⚠'}
+            {machineStatus !== 'OK' && machineStatus !== 'WARNING' && '🔴'}
           </span>
-          {machine.status}
+          {machineStatus}
         </span>
       </div>
 
@@ -132,7 +137,7 @@ function MachineCard({ machine, onOpenDetail }) {
                             
                             if (measId) {
                               if (source === 'raw_analysis') {
-                                onOpenDetail(measId); 
+                                goToMeasurementDetail(measId);
                               } else {
                                 alert("Tento bod pochází z průběžného měření (IIoT Connector) a neobsahuje zdrojový soubor s vysokofrekvenčním záznamem pro detailní analýzu.");
                               }
@@ -159,7 +164,7 @@ function MachineCard({ machine, onOpenDetail }) {
         </div>
 
         <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <CompactBtn label="Detail" icon="🔍" onClick={() => goToDetail('info')} />
+          <CompactBtn label="Detail" icon="🔍" onClick={() => goToDetail('history')} />
           <CompactBtn label="Grafy" icon="📈" onClick={() => goToDetail('graphs')} />
           <CompactBtn label="Historie" icon="📅" onClick={() => goToDetail('history')} />
           <CompactBtn label="Senzory" icon="📡" onClick={() => goToDetail('sensors')} />

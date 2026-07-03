@@ -76,8 +76,8 @@ const MachineSettings = ({ machineId }) => {
   };
 
   const getMessageStyles = (type) => {
-    if (type === 'error') return { bg: '#fff1f2', color: 'var(--vut-red)', border: '1px solid #fecaca' };
-    if (type === 'info') return { bg: '#eff6ff', color: 'var(--blue-primary)', border: '1px solid #bfdbfe' };
+    if (type === 'error') return { bg: '#fff1f2', color: 'var(--status-fault)', border: '1px solid #fecaca' };
+    if (type === 'info') return { bg: '#eff6ff', color: '#2563eb', border: '1px solid #bfdbfe' };
     return { bg: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' };
   };
 
@@ -134,7 +134,7 @@ const MachineSettings = ({ machineId }) => {
             />
             <span style={{ 
               position: 'absolute', top: 0, left: 0, right: 0, bottom: 0, 
-              backgroundColor: isActiveCollection ? 'var(--br-orange, #ea580c)' : '#cbd5e1', 
+              backgroundColor: isActiveCollection ? 'var(--primary)' : '#cbd5e1', 
               transition: '.3s', borderRadius: '34px' 
             }}>
               <span style={{ 
@@ -235,7 +235,7 @@ const MachineSettings = ({ machineId }) => {
                 type="button" 
                 className="btn-update" 
                 onClick={() => handleTestConnection('ftp')}
-                style={{ width: '100%', borderColor: 'var(--vut-red)', color: 'var(--vut-red)' }}
+                style={{ width: '100%', borderColor: 'var(--status-fault)', color: 'var(--status-fault)' }}
               >
                 Testovat FTP
               </button>
@@ -254,7 +254,7 @@ const MachineSettings = ({ machineId }) => {
               fontSize: '1rem',
               opacity: loading ? 0.6 : 1,
               cursor: loading ? 'not-allowed' : 'pointer',
-              background: 'var(--br-orange)'
+              background: 'var(--primary)'
             }}
           >
             {loading ? 'Ukládám do DB...' : 'Uložit novou konfiguraci'}

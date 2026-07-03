@@ -20,7 +20,7 @@ function MachineDetail() {
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
 
   // Stavy pro přiřazování senzoru
-  const [isAssignModalOpen, setIsAssignModalOpen] = useState(false);
+  const [isAssignPanelOpen, setIsAssignPanelOpen] = useState(false);
   const [availableSensors, setAvailableSensors] = useState([]);
   const [assignForm, setAssignForm] = useState({ sensor_id: '', position: '' });
 
@@ -38,9 +38,9 @@ function MachineDetail() {
   const getSeverityStyles = (severity) => {
     switch (severity) {
       case 'CRITICAL': 
-        return { border: 'var(--vut-red)', bg: '#fff1f2', text: '#991b1b', icon: '🔴' };
+        return { border: 'var(--status-fault)', bg: 'var(--status-fault-bg)', text: '#991b1b', icon: '🔴' };
       case 'WARNING': 
-        return { border: 'var(--br-orange)', bg: '#fffbeb', text: '#92400e', icon: '🟠' };
+        return { border: 'var(--status-warning)', bg: 'var(--status-warning-bg)', text: '#92400e', icon: '🟠' };
       case 'INFO': 
       default: 
         return { border: '#3b82f6', bg: '#eff6ff', text: '#1e40af', icon: '🔵' };
@@ -69,12 +69,12 @@ function MachineDetail() {
     }
   };
 
-  const openAssignModal = async () => {
+  const openAssignPanel = async () => {
     try {
       const res = await axios.get('/sensors/available');
       setAvailableSensors(res.data);
       setAssignForm({ sensor_id: '', position: '' });
-      setIsAssignModalOpen(true);
+      setIsAssignPanelOpen(true);
     } catch (error) { alert("Chyba načítání senzorů"); }
   };
 
@@ -82,7 +82,7 @@ function MachineDetail() {
     e.preventDefault();
     try {
       await axios.post(`/machines/${id}/sensors`, assignForm);
-      setIsAssignModalOpen(false);
+      setIsAssignPanelOpen(false);
       fetchDetail();
     } catch (error) { alert("Chyba přiřazení"); }
   };
@@ -125,7 +125,7 @@ return (
         
         {/* BOX 1: Technické údaje */}
         <div className="detail-card card-tech">
-          <div className="card-title" style={{ color: 'var(--br-orange)' }}>Technické údaje</div>
+          <div className="card-title" style={{ color: 'var(--primary)' }}>Technické údaje</div>
           <div className="detail-grid" style={{ gap: '12px' }}>
             <div className="detail-item"><label>ID Stroje</label><p style={{fontWeight:'bold'}}>#{info.id_machine}</p></div>
             <div className="detail-item"><label>Instalace</label><p>{info.installation_date}</p></div>
@@ -140,7 +140,7 @@ return (
         <div className="detail-card card-sensors">
           <div className="card-title">
              <span>Senzory ({sensors.length})</span>
-             <button className="btn-diagnose" onClick={openAssignModal} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>+ Přidat</button>
+             <button className="btn-diagnose" onClick={openAssignPanel} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>+ Přidat</button>
           </div>
           <div style={{ flex: 1, overflowY: 'auto', maxHeight: '150px', paddingRight: '5px' }}>
             {sensors.length === 0 ? <p style={{ color: '#ccc', fontStyle: 'italic', fontSize: '0.9rem' }}>Bez senzorů</p> : (
@@ -163,6 +163,29 @@ return (
               </ul>
             )}
           </div>
+
+          {isAssignPanelOpen && (
+            <div style={{ marginTop: '12px', border: '1px solid var(--neutral-border)', borderRadius: '8px', padding: '12px', background: 'var(--neutral-bg-white)' }}>
+              <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: 'var(--primary)' }}>Montáž senzoru</h3>
+              <form onSubmit={handleAttachSensor}>
+                <div className="form-group">
+                  <label>Vyberte senzor</label>
+                  <select value={assignForm.sensor_id} onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})} required>
+                    <option value="">-- Vybrat --</option>
+                    {availableSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.serial_number} - {s.description}</option>)}
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Pozice</label>
+                  <input type="text" value={assignForm.position} onChange={(e) => setAssignForm({...assignForm, position: e.target.value})} required />
+                </div>
+                <div className="modal-actions">
+                  <button type="button" className="btn-cancel" onClick={() => setIsAssignPanelOpen(false)}>Zrušit</button>
+                  <button type="submit" className="btn-add-confirm">Namontovat</button>
+                </div>
+              </form>
+            </div>
+          )}
         </div>
 
         {/* BOX 3: Nejnovější poznámka */}
@@ -224,7 +247,12 @@ return (
           {activeTab === 'graphs' && (<MachineGraphs machineId={info.id_machine} />)}
           {activeTab === 'diagnostics' && (<MachineDiagnostics machineId={info.id_machine} onDiagnosisComplete={fetchDetail} />)}
           {activeTab === 'notes' && (<ServiceNotes machineId={info.id_machine} onNoteAdded={() => fetchDetail()}/>)}
-          {activeTab === 'history' && (<MeasurementsHistory machineId={info.id_machine} />)}
+          {activeTab === 'history' && (
+            <MeasurementsHistory
+              machineId={info.id_machine}
+              initialSelectedMeasurementId={location.state?.selectedMeasurementId || null}
+            />
+          )}
           {activeTab === 'sensors' && (
             <MachineSensors 
                 sensors={sensors}             
@@ -236,32 +264,6 @@ return (
           {activeTab === 'settings' && (<MachineSettings machineId={info.id_machine} />)}
         </div>
       </div>
-
-      {/* MODÁL PRO PŘIŘAZENÍ SENZORU */}
-       {isAssignModalOpen && (
-        <div className="modal-overlay">
-           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--br-orange)', marginBottom: '20px' }}>Montáž senzoru</h2>
-            <form onSubmit={handleAttachSensor}>
-              <div className="form-group">
-                <label>Vyberte senzor</label>
-                <select value={assignForm.sensor_id} onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})} required>
-                  <option value="">-- Vybrat --</option>
-                  {availableSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.serial_number} - {s.description}</option>)}
-                </select>
-              </div>
-              <div className="form-group">
-                <label>Pozice</label>
-                <input type="text" value={assignForm.position} onChange={(e) => setAssignForm({...assignForm, position: e.target.value})} required />
-              </div>
-              <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setIsAssignModalOpen(false)}>Zrušit</button>
-                <button type="submit" className="btn-add-confirm">Namontovat</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
 
     </div>
   );

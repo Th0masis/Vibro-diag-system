@@ -584,7 +584,7 @@ tr:hover {
   text-transform: uppercase;
 }
 .role-badge.admin { background: #fee2e2; color: var(--status-fault); }
-.role-badge.user { background: #e0f2fe; color: var(--blue-primary);}
+.role-badge.user { background: #e0f2fe; color: #2563eb;}
 .role-badge.operator { background: #fee2e2; color: var(--br-yellow);}
 
 /* Malá tlačítka v tabulce */

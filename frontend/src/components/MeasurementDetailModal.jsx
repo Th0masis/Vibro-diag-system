@@ -4,7 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine 
 } from 'recharts';
 
-function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
+function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = false }) {
   // --- ZÁKLADNÍ STAVY ---
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState(null); 
@@ -119,218 +119,235 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed }) {
 
   if (!measurementId) return null;
 
+  const headerStyle = {
+    background: '#F07800',
+    padding: '15px 25px',
+    display: 'flex',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    color: 'white'
+  };
+
+  const processButtonStyle = {
+    background: isProcessed ? 'rgba(255,255,255,0.2)' : 'white',
+    color: isProcessed ? '#eee' : '#D96400',
+    border: 'none',
+    padding: '6px 16px',
+    borderRadius: '4px',
+    fontWeight: 'bold',
+    cursor: isProcessed ? 'default' : 'pointer',
+    fontSize: '0.9rem',
+    display: 'flex',
+    alignItems: 'center',
+    gap: '8px'
+  };
+
+  const content = (
+    <>
+      {/* --- HLAVIČKA --- */}
+      <div style={headerStyle}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
+          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Detail měření #{measurementId}</h2>
+          <button
+            onClick={handleProcess}
+            disabled={isProcessed || isProcessing}
+            style={processButtonStyle}
+          >
+            {isProcessing ? '⚡ Počítám...' : isProcessed ? '✅ Zpracováno' : '⚙️ Spustit analýzu'}
+          </button>
+        </div>
+        <button
+          onClick={onClose}
+          style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}
+          aria-label="Zavřít detail měření"
+        >
+          &times;
+        </button>
+      </div>
+
+      {/* --- OBSAH --- */}
+      <div style={{ padding: '25px', background: '#f8fafc', minHeight: '500px' }}>
+        {loading ? <p>Načítám data...</p> : (
+          <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '25px' }}>
+
+            {/* LEVÝ SLOUPEC: GRAFY A ZÁLOŽKY */}
+            <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+
+              {/* ZÁLOŽKY */}
+              <div className="viz-tabs">
+                <button className={`viz-tab ${activeTab === 'time' ? 'active' : ''}`} onClick={() => setActiveTab('time')}>
+                  Časový průběh (0.64 s)
+                </button>
+                <button className={`viz-tab ${activeTab === 'fft' ? 'active' : ''}`} onClick={() => setActiveTab('fft')}>
+                  Frekvenční spektrum (FFT)
+                </button>
+                <button className={`viz-tab ${activeTab === 'cwt' ? 'active' : ''}`} onClick={() => setActiveTab('cwt')}>
+                  Časově-frekvenční (CWT)
+                </button>
+              </div>
+
+              {/* PLÁTNO GRAFU */}
+              <div style={{ padding: '20px', width: '100%', height: '450px', position: 'relative' }}>
+
+                {!isProcessed ? (
+                  <div style={{
+                    height: '100%', display: 'flex', flexDirection: 'column',
+                    alignItems: 'center', justifyContent: 'center', color: '#94a3b8'
+                  }}>
+                    <span style={{ fontSize: '3rem', marginBottom: '10px' }}>📊</span>
+                    <p style={{ fontSize: '1.1rem', fontWeight: '500' }}>Nejprve data zpracujte</p>
+                    <p style={{ fontSize: '0.85rem', marginTop: '5px' }}>Použijte tlačítko 'Spustit analýzu' vpravo nahoře.</p>
+                  </div>
+                ) : loadingViz ? (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
+                    Generuji {activeTab.toUpperCase()}...
+                  </div>
+                ) : (
+                  <>
+                    {/* 1. ČASOVÝ PRŮBĚH */}
+                    {activeTab === 'time' && (
+                      <ResponsiveContainer>
+                        <LineChart data={rawData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis
+                            dataKey="time"
+                            label={{ value: 'Čas [ms]', position: 'insideBottomRight', offset: -5 }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis
+                            label={{ value: 'Amplituda [g]', angle: -90, position: 'insideLeft' }}
+                            domain={['auto', 'auto']}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value) => [value.toFixed(4) + ' g', 'Amplituda']}
+                            labelFormatter={(label) => `Čas: ${label} ms`}
+                          />
+                          <ReferenceLine y={0} stroke="#cbd5e1" />
+                          <Line
+                            type="monotone"
+                            dataKey="v"
+                            stroke="#D96400"
+                            strokeWidth={1.5}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+
+                    {/* 2. FREKVENČNÍ SPEKTRUM (FFT) */}
+                    {activeTab === 'fft' && (
+                      <ResponsiveContainer>
+                        <LineChart data={fftData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                          <XAxis
+                            dataKey="freq"
+                            label={{ value: 'Frekvence [Hz]', position: 'insideBottomRight', offset: -5 }}
+                            tickFormatter={(val) => val.toFixed(0)}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <YAxis
+                            label={{ value: 'Amplituda', angle: -90, position: 'insideLeft' }}
+                            tick={{ fontSize: 12 }}
+                          />
+                          <Tooltip
+                            contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
+                            formatter={(value) => [value.toFixed(4), 'Amplituda']}
+                            labelFormatter={(label) => `Frekvence: ${Number(label).toFixed(1)} Hz`}
+                          />
+                          <Line
+                            type="monotone"
+                            dataKey="amp"
+                            stroke="#0284c7"
+                            strokeWidth={1.5}
+                            dot={false}
+                            isAnimationActive={false}
+                          />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    )}
+
+                    {/* 3. CWT SKALOGRAM */}
+                    {activeTab === 'cwt' && cwtImage && (
+                      <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                        <img
+                          src={cwtImage}
+                          alt="CWT Scalogram"
+                          style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', border: '1px solid #e2e8f0', borderRadius: '4px' }}
+                        />
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* PRAVÝ SLOUPEC: HODNOTY */}
+            <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+              <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', background: '#fff7ed' }}>
+                <h4 style={{ margin: 0, color: '#9a3412' }}>Vypočtené parametry</h4>
+              </div>
+
+              <div style={{ padding: '20px', flex: 1 }}>
+                {isProcessed ? (
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
+
+                    <FeatureRow label="RMS (Efektivní h.)" value={details.rms_raw?.toFixed(4)} unit="g" highlight />
+                    <FeatureRow label="Peak (Špička)" value={details.peak_raw?.toFixed(4)} unit="g" />
+
+                    <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
+
+                    <FeatureRow label="Skewness (Šikmost)" value={details.skewness_raw?.toFixed(3)} unit="-" small />
+                    <FeatureRow label="Kurtosis (Špičatost)" value={details.kurtosis_raw?.toFixed(3)} unit="-" small />
+
+                    <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
+                      <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Zdrojový soubor:</label>
+                      <div style={{
+                        background: '#f1f5f9',
+                        padding: '8px',
+                        borderRadius: '4px',
+                        fontSize: '0.7rem',
+                        color: '#475569',
+                        wordBreak: 'break-all',
+                        fontFamily: 'monospace'
+                      }}>
+                        {details.raw_data_path}
+                      </div>
+                      <div style={{ marginTop: '5px', fontSize: '0.7rem', color: '#94a3b8' }}>
+                        Analyzováno: {new Date(details.timestamp || details.time || Date.now()).toLocaleString('cs-CZ')}
+                      </div>
+                    </div>
+
+                  </div>
+                ) : (
+                  <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '50px' }}>
+                    <p>Data nebyla zpracována.</p>
+                    <p style={{ fontSize: '0.8rem', marginTop: '10px' }}>Hodnoty se zobrazí po spuštění analýzy.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+          </div>
+        )}
+      </div>
+    </>
+  );
+
+  if (inline) {
+    return (
+      <div className="card-shadow" style={{ background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+        {content}
+      </div>
+    );
+  }
+
   return (
     <div className="modal-overlay">
       <div className="modal-content detail-modal-styled" style={{ maxWidth: '1300px', padding: 0, borderRadius: '8px', overflow: 'hidden' }}>
-        
-        {/* --- HLAVIČKA --- */}
-        <div style={{ 
-          background: 'linear-gradient(90deg, #cd3808 0%, #ff5e00 100%)', 
-          padding: '15px 25px', 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center',
-          color: 'white'
-        }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-            <h2 style={{ margin: 0, fontSize: '1.4rem' }}>Detail měření #{measurementId}</h2>
-            {/* JEDINÉ TLAČÍTKO PRO ZPRACOVÁNÍ */}
-            <button 
-              onClick={handleProcess}
-              disabled={isProcessed || isProcessing}
-              style={{
-                background: isProcessed ? 'rgba(255,255,255,0.2)' : 'white',
-                color: isProcessed ? '#eee' : '#cd3808',
-                border: 'none',
-                padding: '6px 16px',
-                borderRadius: '4px',
-                fontWeight: 'bold',
-                cursor: isProcessed ? 'default' : 'pointer',
-                fontSize: '0.9rem',
-                display: 'flex', alignItems: 'center', gap: '8px'
-              }}
-            >
-              {isProcessing ? '⚡ Počítám...' : isProcessed ? '✅ Zpracováno' : '⚙️ Spustit analýzu'}
-            </button>
-          </div>
-          <button 
-            onClick={onClose} 
-            style={{ background: 'transparent', border: 'none', color: 'white', fontSize: '1.5rem', cursor: 'pointer' }}
-          >
-            &times;
-          </button>
-        </div>
-
-        {/* --- OBSAH --- */}
-        <div style={{ padding: '25px', background: '#f8fafc', minHeight: '500px' }}>
-          {loading ? <p>Načítám data...</p> : (
-            <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '25px' }}>
-              
-              {/* LEVÝ SLOUPEC: GRAFY A ZÁLOŽKY */}
-              <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                
-                {/* ZÁLOŽKY */}
-                <div className="viz-tabs">
-                  <button className={`viz-tab ${activeTab === 'time' ? 'active' : ''}`} onClick={() => setActiveTab('time')}>
-                    Časový průběh (0.64 s)
-                  </button>
-                  <button className={`viz-tab ${activeTab === 'fft' ? 'active' : ''}`} onClick={() => setActiveTab('fft')}>
-                    Frekvenční spektrum (FFT)
-                  </button>
-                  <button className={`viz-tab ${activeTab === 'cwt' ? 'active' : ''}`} onClick={() => setActiveTab('cwt')}>
-                    Časově-frekvenční (CWT)
-                  </button>
-                </div>
-
-                {/* PLÁTNO GRAFU */}
-                <div style={{ padding: '20px', width: '100%', height: '450px', position: 'relative' }}>
-                  
-                  {!isProcessed ? (
-                    // Prázdný stav, pokud data nejsou zpracována (Bez tlačítka)
-                    <div style={{ 
-                      height: '100%', display: 'flex', flexDirection: 'column', 
-                      alignItems: 'center', justifyContent: 'center', color: '#94a3b8' 
-                    }}>
-                      <span style={{ fontSize: '3rem', marginBottom: '10px' }}>📊</span>
-                      <p style={{ fontSize: '1.1rem', fontWeight: '500' }}>Nejprve data zpracujte</p>
-                      <p style={{ fontSize: '0.85rem', marginTop: '5px' }}>Použijte tlačítko 'Spustit analýzu' vpravo nahoře.</p>
-                    </div>
-                  ) : loadingViz ? (
-                    <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
-                      Generuji {activeTab.toUpperCase()}...
-                    </div>
-                  ) : (
-                    <>
-                      {/* 1. ČASOVÝ PRŮBĚH */}
-                      {activeTab === 'time' && (
-                        <ResponsiveContainer>
-                          <LineChart data={rawData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis 
-                              dataKey="time" 
-                              label={{ value: 'Čas [ms]', position: 'insideBottomRight', offset: -5 }} 
-                              tick={{ fontSize: 12 }}
-                            />
-                            <YAxis 
-                              label={{ value: 'Amplituda [g]', angle: -90, position: 'insideLeft' }} 
-                              domain={['auto', 'auto']}
-                              tick={{ fontSize: 12 }}
-                            />
-                            <Tooltip 
-                              contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                              formatter={(value) => [value.toFixed(4) + ' g', 'Amplituda']}
-                              labelFormatter={(label) => `Čas: ${label} ms`}
-                            />
-                            <ReferenceLine y={0} stroke="#cbd5e1" />
-                            <Line 
-                              type="monotone" 
-                              dataKey="v" 
-                              stroke="#cd3808" 
-                              strokeWidth={1.5} 
-                              dot={false} 
-                              isAnimationActive={false} 
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      )}
-
-                      {/* 2. FREKVENČNÍ SPEKTRUM (FFT) */}
-                      {activeTab === 'fft' && (
-                        <ResponsiveContainer>
-                          <LineChart data={fftData}>
-                            <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
-                            <XAxis 
-                              dataKey="freq" 
-                              label={{ value: 'Frekvence [Hz]', position: 'insideBottomRight', offset: -5 }} 
-                              tickFormatter={(val) => val.toFixed(0)}
-                              tick={{ fontSize: 12 }}
-                            />
-                            <YAxis 
-                              label={{ value: 'Amplituda', angle: -90, position: 'insideLeft' }} 
-                              tick={{ fontSize: 12 }}
-                            />
-                            <Tooltip 
-                              contentStyle={{ borderRadius: '4px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                              formatter={(value) => [value.toFixed(4), 'Amplituda']}
-                              labelFormatter={(label) => `Frekvence: ${Number(label).toFixed(1)} Hz`}
-                            />
-                            <Line 
-                              type="monotone" 
-                              dataKey="amp" 
-                              stroke="#0284c7" 
-                              strokeWidth={1.5} 
-                              dot={false} 
-                              isAnimationActive={false} 
-                            />
-                          </LineChart>
-                        </ResponsiveContainer>
-                      )}
-
-                      {/* 3. CWT SKALOGRAM */}
-                      {activeTab === 'cwt' && cwtImage && (
-                        <div style={{ width: '100%', height: '100%', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                          <img 
-                            src={cwtImage} 
-                            alt="CWT Scalogram" 
-                            style={{ maxWidth: '100%', maxHeight: '100%', objectFit: 'contain', border: '1px solid #e2e8f0', borderRadius: '4px' }} 
-                          />
-                        </div>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              {/* PRAVÝ SLOUPEC: HODNOTY */}
-              <div className="card-shadow" style={{ background: 'white', padding: '0', borderRadius: '8px', overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                <div style={{ padding: '15px 20px', borderBottom: '1px solid #e2e8f0', background: '#fff7ed' }}>
-                  <h4 style={{ margin: 0, color: '#9a3412' }}>Vypočtené parametry</h4>
-                </div>
-                
-                <div style={{ padding: '20px', flex: 1 }}>
-                  {isProcessed ? (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '15px' }}>
-                      
-                      <FeatureRow label="RMS (Efektivní h.)" value={details.rms_raw?.toFixed(4)} unit="g" highlight />
-                      <FeatureRow label="Peak (Špička)" value={details.peak_raw?.toFixed(4)} unit="g" />
-                      
-                      <div style={{ height: '1px', background: '#e2e8f0', margin: '5px 0' }}></div>
-                      
-                      <FeatureRow label="Skewness (Šikmost)" value={details.skewness_raw?.toFixed(3)} unit="-" small />
-                      <FeatureRow label="Kurtosis (Špičatost)" value={details.kurtosis_raw?.toFixed(3)} unit="-" small />
-                      
-                      <div style={{ marginTop: 'auto', paddingTop: '20px' }}>
-                        <label style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'block', marginBottom: '4px' }}>Zdrojový soubor:</label>
-                        <div style={{ 
-                          background: '#f1f5f9', 
-                          padding: '8px', 
-                          borderRadius: '4px', 
-                          fontSize: '0.7rem', 
-                          color: '#475569', 
-                          wordBreak: 'break-all',
-                          fontFamily: 'monospace'
-                        }}>
-                          {details.raw_data_path}
-                        </div>
-                        <div style={{ marginTop: '5px', fontSize: '0.7rem', color: '#94a3b8' }}>
-                          Analyzováno: {new Date(details.timestamp || details.time || Date.now()).toLocaleString('cs-CZ')}
-                        </div>
-                      </div>
-
-                    </div>
-                  ) : (
-                    // Prázdný stav pro pravý sloupec (Bez tlačítka)
-                    <div style={{ textAlign: 'center', color: '#94a3b8', marginTop: '50px' }}>
-                      <p>Data nebyla zpracována.</p>
-                      <p style={{ fontSize: '0.8rem', marginTop: '10px' }}>Hodnoty se zobrazí po spuštění analýzy.</p>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-            </div>
-          )}
-        </div>
+        {content}
       </div>
     </div>
   );

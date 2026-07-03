@@ -115,7 +115,7 @@ function Machines() {
             {isAddModalOpen && (
                 <div className="modal-overlay">
                     <div className="modal-content add-user-modal">
-                        <h2 style={{ color: 'var(--br-orange)', marginBottom: '20px' }}>Nový stroj</h2>
+                        <h2 style={{ color: 'var(--primary)', marginBottom: '20px' }}>Nový stroj</h2>
                         <form onSubmit={handleAddMachine}>
                             <div className="form-group">
                                 <label>Název stroje *</label>

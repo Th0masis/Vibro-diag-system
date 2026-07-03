@@ -70,7 +70,7 @@ function MlSector() {
   };
   
   if (loading && models.length === 0) return <div className="main-content">Načítám Machine Learning sektor...</div>;
-  if (error) return <div className="main-content" style={{ color: 'var(--vut-red)' }}>{error}</div>;
+  if (error) return <div className="main-content" style={{ color: 'var(--status-fault)' }}>{error}</div>;
 
   return (
     <div className="main-content" style={{ display: 'flex', flexDirection: 'column', minHeight: '100%' }}>
@@ -117,7 +117,7 @@ function MlSector() {
                     padding: '15px 20px',
                     background: isSelected ? 'rgba(249, 146, 68, 0.08)' : 'white',
                     border: 'none',
-                    borderLeft: `4px solid ${isSelected ? 'var(--br-orange)' : 'transparent'}`,
+                    borderLeft: `4px solid ${isSelected ? 'var(--primary)' : 'transparent'}`,
                     borderBottom: '1px solid #f1f5f9',
                     textAlign: 'left',
                     cursor: 'pointer',
@@ -129,7 +129,7 @@ function MlSector() {
                   }}
                 >
                   <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', width: '100%' }}>
-                    <span style={{ fontWeight: 'bold', color: isSelected ? 'var(--br-orange)' : 'var(--text-main)', fontSize: '1rem' }}>
+                    <span style={{ fontWeight: 'bold', color: isSelected ? 'var(--primary)' : 'var(--text-main)', fontSize: '1rem' }}>
                       {model.name} 
                       <span style={{ marginLeft: '8px', fontSize: '0.75rem', fontWeight: 'normal', opacity: 0.6, color: 'var(--text-muted)' }}>
                         v{model.version}
@@ -150,7 +150,7 @@ function MlSector() {
             
             {/* Barevná hlavička detailu */}
             <div style={{ 
-              background: 'linear-gradient(90deg, var(--vut-red) 0%, var(--br-orange) 100%)', 
+              background: 'var(--primary)',
               padding: '25px 30px', 
               color: 'white',
               display: 'flex',
@@ -181,7 +181,7 @@ function MlSector() {
                   <button 
                     className="btn-update" 
                     onClick={() => handleActivateModel(selectedModel.id_model)}
-                    style={{ background: 'white', color: 'var(--br-orange)', borderColor: 'white', fontSize: '0.9rem', padding: '8px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontWeight: 'bold' }}
+                    style={{ background: 'white', color: 'var(--primary)', borderColor: 'white', fontSize: '0.9rem', padding: '8px 16px', boxShadow: '0 2px 4px rgba(0,0,0,0.2)', fontWeight: 'bold' }}
                   >
                     🚀 Aktivovat do produkce
                   </button>
@@ -197,7 +197,7 @@ function MlSector() {
                   <label style={{ fontSize: '0.85rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '1px' }}>
                     Metrika (Accuracy)
                   </label>
-                  <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: 'var(--vut-red)', marginTop: '10px' }}>
+                  <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: 'var(--status-fault)', marginTop: '10px' }}>
                     {(selectedModel.accuracy * 100).toFixed(1)} %
                   </div>
                 </div>
@@ -229,7 +229,7 @@ function MlSector() {
                   className="btn-diagnose" 
                   onClick={() => setIsTrainingModalOpen(true)}
                   disabled={selectedModel.training_status === 'training'}
-                  style={{ background: selectedModel.training_status === 'training' ? '#cbd5e1' : 'var(--vut-red)', padding: '12px 24px', fontSize: '1rem', cursor: selectedModel.training_status === 'training' ? 'not-allowed' : 'pointer' }}
+                  style={{ background: selectedModel.training_status === 'training' ? '#cbd5e1' : 'var(--status-fault)', padding: '12px 24px', fontSize: '1rem', cursor: selectedModel.training_status === 'training' ? 'not-allowed' : 'pointer' }}
                 >
                   {selectedModel.training_status === 'training' ? 'Trénink právě probíhá...' : '⚙️ Spustit přetrénování modelu'}
                 </button>
@@ -256,14 +256,14 @@ function MlSector() {
                       <tr>
                         <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Absolutní cesta k souboru</td>
                         <td>
-                          <code style={{ background: '#f1f5f9', padding: '6px 10px', borderRadius: '4px', color: 'var(--vut-red)', fontFamily: 'monospace', fontSize: '0.9rem', wordBreak: 'break-all' }}>
+                          <code style={{ background: '#f1f5f9', padding: '6px 10px', borderRadius: '4px', color: 'var(--status-fault)', fontFamily: 'monospace', fontSize: '0.9rem', wordBreak: 'break-all' }}>
                             {selectedModel.path_to_model}
                           </code>
                         </td>
                       </tr>
                       <tr>
                         <td style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Typ architektury</td>
-                        <td style={{ fontWeight: '600', color: 'var(--blue-primary)' }}>
+                        <td style={{ fontWeight: '600', color: '#2563eb' }}>
                           {selectedModel.name.includes('Bi-LSTM') ? 'Recurrent Neural Network (RNN)' : 
                            selectedModel.name.includes('CNN') ? 'Convolutional Neural Network (1D)' : 
                            selectedModel.name.includes('GAN') ? 'Generative Adversarial Network' : 'Neznámá'}

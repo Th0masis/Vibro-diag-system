@@ -69,7 +69,7 @@ function AiStatusBanner({ machineId }) {
       marginBottom: '15px'
     }}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <strong style={{ fontSize: '0.85rem', color: isError ? 'var(--vut-red)' : '#16a34a', display: 'flex', alignItems: 'center', gap: '6px' }}>
+        <strong style={{ fontSize: '0.85rem', color: isError ? 'var(--status-fault)' : 'var(--status-ok)', display: 'flex', alignItems: 'center', gap: '6px' }}>
           🧠 Výsledek AI Analýzy
         </strong>
         <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{latestDate}</span>
@@ -81,7 +81,7 @@ function AiStatusBanner({ machineId }) {
         {aiData.anomaly?.timestamp && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
             <span style={{ color: 'var(--text-muted)' }}>Anomálie:</span>
-            <span style={{ fontWeight: 'bold', color: isAnomalyDetected ? 'var(--vut-red)' : '#16a34a' }}>
+            <span style={{ fontWeight: 'bold', color: isAnomalyDetected ? 'var(--status-fault)' : 'var(--status-ok)' }}>
               {isAnomalyDetected ? 'Zjištěna anomálie' : 'V normě'} 
               <span style={{ fontWeight: 'normal', fontSize: '0.75rem', opacity: 0.7, marginLeft: '5px' }}>
                 (Skóre: {aiData.anomaly.value?.toFixed(2)})
@@ -94,7 +94,7 @@ function AiStatusBanner({ machineId }) {
         {aiData.fault?.timestamp && (
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
             <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '10px' }}>Detekce vady:</span>
-            <span style={{ fontWeight: 'bold', textAlign: 'right', color: isFaultClassified ? 'var(--vut-red)' : '#16a34a' }}>
+            <span style={{ fontWeight: 'bold', textAlign: 'right', color: isFaultClassified ? 'var(--status-fault)' : 'var(--status-ok)' }}>
               {aiData.fault.label} 
               <span style={{ fontWeight: 'normal', fontSize: '0.75rem', opacity: 0.7, marginLeft: '5px' }}>
                 ({(aiData.fault.confidence * 100).toFixed(1)} %)
@@ -114,7 +114,7 @@ function AiStatusBanner({ machineId }) {
         }}>
           <span style={{ color: 'var(--text-muted)' }}>Odhadovaná RUL:</span>
           {aiData.rul?.timestamp ? (
-            <span style={{ fontWeight: 'bold', color: 'var(--blue-primary)', display: 'flex', alignItems: 'center', gap: '5px' }}>
+            <span style={{ fontWeight: 'bold', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '5px' }}>
               ⏳ {aiData.rul.value} dní
             </span>
           ) : (

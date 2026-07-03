@@ -172,7 +172,7 @@ function UserManagement() {
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ marginBottom: '20px', color: 'var(--br-orange)' }}>New User</h2>
+            <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>New User</h2>
             <form onSubmit={handleAddUser}>
               <div className="form-group">
                 <input 
@@ -221,8 +221,8 @@ function UserManagement() {
       )}
       {editingUser && (
         <div className="modal-overlay">
-          <div className="modal-content add-user-modal" style={{ borderTop: '6px solid var(--br-orange)' }}>
-            <h2 style={{ marginBottom: '20px', color: 'var(--br-orange)' }}>Edit user</h2>
+          <div className="modal-content add-user-modal" style={{ borderTop: '6px solid var(--primary)' }}>
+            <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Edit user</h2>
             <form onSubmit={handleUpdateUser}>
               <div className="form-group">
                 <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
@@ -247,7 +247,7 @@ function UserManagement() {
                 />
               </div>
               <div className="form-group" style={{ marginTop: '20px', padding: '15px', background: '#fef2f2', borderRadius: '8px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--vut-red)', fontWeight: 'bold', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
+                <label style={{ fontSize: '0.8rem', color: 'var(--status-fault)', fontWeight: 'bold', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
                   Password change (optional)
                 </label>
                 <input 
@@ -255,7 +255,7 @@ function UserManagement() {
                   placeholder="Leave empty to keep old password"
                   value={editingUser.password || ''}
                   onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                  style={{ borderColor: 'var(--vut-red)' }}
+                  style={{ borderColor: 'var(--status-fault)' }}
                 />
                 <small style={{ display: 'block', textAlign: 'left', color: '#64748b', marginTop: '5px' }}>
                   If you fill this, the password will be changed
