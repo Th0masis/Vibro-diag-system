@@ -203,5 +203,12 @@ VALUES (
     '2026-04-23 06:46:51.150605+00'
 );
 
--- 8. Synchronizace sekvence
+-- 8. Vlozeni vychoziho katalogu ML modelu
+INSERT INTO ml_models (name, version, type, path_to_model, accuracy, description, is_active, training_status)
+VALUES
+    ('AE_ANOWGAN', '1.0', 'Anomaly Detection', 'models/AE_ANOWGAN/v1', 0.92, 'Detekce anomalii pomoci AE-AnoWGAN', true, 'ready'),
+    ('1D_CNN', '1.0', 'Fault Classification', 'models/1DCNN/v1/bearing_fault_model.pth', 0.95, 'Klasifikace poruch lozisek pomoci 1D CNN', true, 'ready'),
+    ('Bi-LSTM', '1.0', 'RUL Prediction', 'models/Bi-LSTM/v1', 0.90, 'Predikce zbytkove zivotnosti (RUL) pomoci Bi-LSTM', true, 'ready');
+
+-- 9. Synchronizace sekvence
 SELECT setval('users_id_user_seq', (SELECT MAX(id_user) FROM users));

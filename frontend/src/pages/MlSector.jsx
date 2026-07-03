@@ -59,10 +59,7 @@ function MlSector() {
     }
     
     try {
-      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-      
-      await axios.put(`:8000/models/${id_model}/activate`, {}, { headers });
+      await axios.put(`/models/${id_model}/activate`, {}, getAuthHeader());
       
       alert("Model byl úspěšně aktivován a je nyní v produkci.");
       await fetchModels(); // Ihned po aktivaci stáhneme čerstvá data

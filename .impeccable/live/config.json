@@ -1,0 +1,7 @@
+{
+  "cspChecked": false,
+  "files": ["frontend/index.html"],
+  "insertBefore": "</body>",
+  "commentSyntax": "html",
+  "framework": "vite-react"
+}

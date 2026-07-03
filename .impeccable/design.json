@@ -1,0 +1,224 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-03T00:00:00Z",
+  "title": "Design System: PulseGuard",
+  "extensions": {
+    "colorMeta": {
+      "primary-orange": {
+        "displayName": "Steady Orange",
+        "role": "primary",
+        "canonical": "oklch(56% 0.21 60)",
+        "tonalRamp": ["#FFEEDD", "#FFD4B3", "#FFB899", "#F07800", "#D96400", "#B85200"]
+      },
+      "accent-red": {
+        "displayName": "Decisive Red",
+        "role": "error",
+        "canonical": "oklch(45% 0.13 15)",
+        "tonalRamp": ["#FFEEEE", "#FFCCCC", "#FF9999", "#B83030", "#8C2424"]
+      },
+      "accent-green": {
+        "displayName": "Clear Green",
+        "role": "success",
+        "canonical": "oklch(45% 0.11 155)",
+        "tonalRamp": ["#E8F5E9", "#C8E6C9", "#A5D6A7", "#237A4A", "#1B5E20"]
+      },
+      "accent-yellow": {
+        "displayName": "Alert Yellow",
+        "role": "warning",
+        "canonical": "oklch(50% 0.15 55)",
+        "tonalRamp": ["#FFF3E0", "#FFE0B2", "#FFCC80", "#A06000", "#7A4500"]
+      },
+      "neutral-black": {
+        "displayName": "Pure Black",
+        "role": "text-primary",
+        "canonical": "oklch(10% 0 0)"
+      },
+      "neutral-bg-white": {
+        "displayName": "Clean White",
+        "role": "surface",
+        "canonical": "oklch(100% 0 0)"
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Display",
+        "purpose": "Hero section titles (rarely used in dashboard context)."
+      },
+      "headline": {
+        "displayName": "Headline",
+        "purpose": "Page titles, major section heads."
+      },
+      "title": {
+        "displayName": "Title",
+        "purpose": "Card titles, subsection heads, modal titles."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Paragraph text, data rows, primary content. Max line length: 65–75ch."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Form labels, button text, chip labels, badges."
+      }
+    },
+    "shadows": [
+      {
+        "name": "ambient-low",
+        "value": "0 2px 4px rgba(0, 0, 0, 0.06)",
+        "purpose": "Default shadow for cards, panels at rest. Conveys subtle elevation."
+      },
+      {
+        "name": "ambient-mid",
+        "value": "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+        "purpose": "Hover state shadow on cards and clickable elements. Signals interactivity."
+      },
+      {
+        "name": "lifted",
+        "value": "0 10px 15px -3px rgba(0, 0, 0, 0.1)",
+        "purpose": "Modal and popover shadows. Use sparingly; prefer inline panels."
+      }
+    ],
+    "motion": [
+      {
+        "name": "ease-standard",
+        "value": "cubic-bezier(0.4, 0, 0.2, 1)",
+        "purpose": "Default easing for state transitions (150-250ms)."
+      },
+      {
+        "name": "ease-out-expo",
+        "value": "cubic-bezier(0.16, 1, 0.3, 1)",
+        "purpose": "Exit animations (element leaving screen)."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "mobile",
+        "value": "640px",
+        "purpose": "Tablet breakpoint. Navigation may collapse."
+      },
+      {
+        "name": "desktop",
+        "value": "1024px",
+        "purpose": "Desktop. Full navigation visible."
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Main call-to-action button. Use for primary workflows (Diagnose, Activate, Save).",
+      "html": "<button class=\"ds-btn-primary\">DIAGNOSE</button>",
+      "css": ".ds-btn-primary { background-color: #F07800; color: #FFFFFF; padding: 12px 24px; border-radius: 6px; border: none; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; transition: background-color 0.2s ease, box-shadow 0.2s ease; outline: none; } .ds-btn-primary:hover { background-color: #D96400; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); } .ds-btn-primary:focus { outline: 3px solid #F07800; outline-offset: 8px; } .ds-btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Alternate action button. Use for non-primary CTAs (Cancel, Update, View Details).",
+      "html": "<button class=\"ds-btn-secondary\">UPDATE</button>",
+      "css": ".ds-btn-secondary { background-color: #FFFFFF; color: #F07800; padding: 12px 24px; border-radius: 6px; border: 2px solid #F07800; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 1rem; font-weight: 600; cursor: pointer; transition: all 0.2s ease; outline: none; } .ds-btn-secondary:hover { background-color: #F07800; color: #FFFFFF; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); } .ds-btn-secondary:focus { outline: 3px solid #F07800; outline-offset: 8px; } .ds-btn-secondary:disabled { opacity: 0.6; cursor: not-allowed; }"
+    },
+    {
+      "name": "Status Badge (OK)",
+      "kind": "chip",
+      "refersTo": "status-badge-ok",
+      "description": "Status indicator for nominal/healthy state. Icon + text + border.",
+      "html": "<span class=\"ds-badge ds-badge--ok\"><span class=\"ds-badge__icon\">✓</span> OK</span>",
+      "css": ".ds-badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 8px; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 600; border-left: 3px solid; } .ds-badge--ok { background-color: #E8F5E9; color: #237A4A; border-left-color: #237A4A; } .ds-badge__icon { font-size: 1.1em; }"
+    },
+    {
+      "name": "Status Badge (Warning)",
+      "kind": "chip",
+      "refersTo": "status-badge-warning",
+      "description": "Status indicator for warning/attention-needed state.",
+      "html": "<span class=\"ds-badge ds-badge--warning\"><span class=\"ds-badge__icon\">⚠</span> WARNING</span>",
+      "css": ".ds-badge--warning { background-color: #FFF3E0; color: #B87000; border-left-color: #B87000; }"
+    },
+    {
+      "name": "Status Badge (Fault)",
+      "kind": "chip",
+      "refersTo": "status-badge-fault",
+      "description": "Status indicator for fault/error state. Critical.",
+      "html": "<span class=\"ds-badge ds-badge--fault\"><span class=\"ds-badge__icon\">🔴</span> FAULT</span>",
+      "css": ".ds-badge--fault { background-color: #FFEBEE; color: #B83030; border-left-color: #B83030; } @keyframes pulse-subtle { 0%, 100% { opacity: 1; } 50% { opacity: 0.75; } } .ds-badge--fault { animation: pulse-subtle 2s ease-in-out infinite; } @media (prefers-reduced-motion: reduce) { .ds-badge--fault { animation: none; opacity: 1; } }"
+    },
+    {
+      "name": "Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "Flat card container with subtle border and hover elevation.",
+      "html": "<div class=\"ds-card\"><h3>Machine Status</h3><p>Status badge and details here.</p></div>",
+      "css": ".ds-card { background-color: #FFFFFF; border: 1px solid #E2E2E2; border-radius: 12px; padding: 16px; box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06); transition: box-shadow 0.2s ease, transform 0.2s ease; } .ds-card:hover { box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); transform: translateY(-2px); }"
+    },
+    {
+      "name": "Input Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Form input with visible label, helper text, and focus indicator.",
+      "html": "<div class=\"ds-form-group\"><label for=\"username\" class=\"ds-label\">Username</label><input type=\"text\" id=\"username\" class=\"ds-input\" placeholder=\"e.g., operator@factory.local\" /><span class=\"ds-helper-text\">Use your factory login credentials</span></div>",
+      "css": ".ds-form-group { margin-bottom: 20px; } .ds-label { display: block; margin-bottom: 8px; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 0.875rem; font-weight: 600; color: #111111; } .ds-input { width: 100%; padding: 12px 16px; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 1rem; border: 1px solid #E2E2E2; border-radius: 6px; background-color: #FFFFFF; color: #111111; transition: border-color 0.2s ease, box-shadow 0.2s ease; outline: none; } .ds-input:focus { border-color: #F07800; box-shadow: 0 0 0 4px rgba(240, 120, 0, 0.1); } .ds-helper-text { display: block; margin-top: 4px; font-size: 0.75rem; color: #555555; }"
+    },
+    {
+      "name": "Navigation Item",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "Sticky top navigation bar item. Active state has red underline.",
+      "html": "<nav class=\"ds-nav\"><a href=\"/\" class=\"ds-nav-item ds-nav-item--active\">Dashboard</a><a href=\"/machines\" class=\"ds-nav-item\">Machines</a></nav>",
+      "css": ".ds-nav { display: flex; gap: 0; background-color: #F07800; padding: 0 16px; } .ds-nav-item { padding: 12px 16px; text-decoration: none; color: #FFFFFF; font-family: 'Segoe UI', Roboto, -apple-system, sans-serif; font-size: 0.95rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px; transition: background-color 0.2s ease; cursor: pointer; position: relative; } .ds-nav-item:hover { background-color: rgba(0, 0, 0, 0.05); } .ds-nav-item--active::after { content: ''; position: absolute; bottom: 0; left: 0; width: 100%; height: 4px; background-color: #B83030; } .ds-nav-item:focus { outline: 3px solid #FFFFFF; outline-offset: -3px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "Industrial-grade diagnostic intelligence that fits in one box, runs forever without anyone babysitting it, and never pretends to be smarter than the data justifies.",
+    "overview": "PulseGuard's design is minimal, functional, and precise. Every pixel serves diagnosis, never decoration. The restrained palette features a single saturated orange (#F07800) for actions, semantic status colors (green/amber/red), and neutral grays. No gradients, no competing colors, no visual noise. The interface is deliberately austere—this austerity is the design.",
+    "keyCharacteristics": [
+      "Restrained color strategy (one accent, semantic states only)",
+      "Flat, no-decoration aesthetic",
+      "High contrast throughout (≥4.5:1 WCAG AA)",
+      "Semantic structure with status visible at <300ms",
+      "Precise typography hierarchy (fixed scale)",
+      "Keyboard-first interaction",
+      "Reduced motion support"
+    ],
+    "rules": [
+      {
+        "name": "The Minimalist Stack Rule",
+        "body": "No decorative font pairing. One family (Segoe UI / Roboto), five weights (400/500/600/700/800). Every scale is intentional and used consistently. Fixed rem/px scales allow predictable rendering on shop-floor displays.",
+        "section": "typography"
+      },
+      {
+        "name": "The One Voice Rule",
+        "body": "The primary orange (#F07800) appears on ≤10% of any screen. Its rarity signals importance. Every other accent is semantic (green=ok, red=fault, amber=warning).",
+        "section": "colors"
+      },
+      {
+        "name": "The Flat-By-Default Rule",
+        "body": "Surfaces are flat at rest (no shadow). Shadows appear only as response to state: :hover lifts the card, :focus adds a glow. Modals are architectural laziness; eliminate them in favor of inline panels.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do use the primary orange (#F07800) for ≤10% of any screen. Let it breathe.",
+      "Do use semantic colors (green/amber/red) for status ONLY.",
+      "Do display status with icon + text + border. Never rely on color alone.",
+      "Do maintain ≥4.5:1 text contrast on all backgrounds (WCAG AA).",
+      "Do keep body text at 1rem (16px) or larger.",
+      "Do use inline panels or routable pages instead of modals.",
+      "Do respect prefers-reduced-motion on all animations.",
+      "Do show confidence levels, timestamps, and signal quality on alerts."
+    ],
+    "donts": [
+      "Don't use gradients (linear, glass, or gradient text).",
+      "Don't use side-stripe borders as decorative accents.",
+      "Don't rely on color alone for status.",
+      "Don't use modals as the default UX pattern.",
+      "Don't animate layout properties (width, height, position).",
+      "Don't use small fonts (<14px) for body text.",
+      "Don't use soft shadows (>20px blur).",
+      "Don't add AI hype language ('Powered by Neural Networks', 'Deep Learning Magic').",
+      "Don't use hamburger menus on desktop.",
+      "Don't use placeholder text as the only label."
+    ]
+  }
+}
