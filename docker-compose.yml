@@ -1,0 +1,102 @@
+version: '3.8'
+
+services:
+  # =========================================================================
+  # DATABASE: PostgreSQL with TimescaleDB
+  # =========================================================================
+  db:
+    image: timescale/timescaledb:latest-pg15
+    container_name: vibro-db
+    environment:
+      POSTGRES_USER: vibro_user
+      POSTGRES_PASSWORD: vibro_password
+      POSTGRES_DB: vibro_diag
+      POSTGRES_INITDB_ARGS: "-c timezone=UTC"
+    volumes:
+      - vibro-db-data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/01-init.sql
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vibro_user -d vibro_diag"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - vibro-network
+
+  # =========================================================================
+  # BACKEND: FastAPI (Main REST API)
+  # =========================================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: vibro-backend
+    environment:
+      DATABASE_URL: postgresql://vibro_user:vibro_password@db:5432/vibro_diag
+      SECRET_KEY: your-secret-key-change-in-production
+      ALGORITHM: HS256
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./backend/data:/app/data
+    networks:
+      - vibro-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+
+  # =========================================================================
+  # ML SERVICE: FastAPI (Model Inference & Training)
+  # =========================================================================
+  ml_service:
+    build:
+      context: ./ml_service
+      dockerfile: Dockerfile
+    container_name: vibro-ml-service
+    environment:
+      BACKEND_URL: http://backend:8000
+      PYTHONUNBUFFERED: 1
+    ports:
+      - "8001:8001"
+    depends_on:
+      - backend
+    volumes:
+      - ./ml_service/models:/app/models
+      - ./ml_service/data:/app/data
+    networks:
+      - vibro-network
+    command: uvicorn main:app --host 0.0.0.0 --port 8001 --reload
+
+  # =========================================================================
+  # FRONTEND: React + Nginx
+  # =========================================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: vibro-frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+    networks:
+      - vibro-network
+    # Optional: disable for production (build once, push to registry)
+
+# =========================================================================
+# VOLUMES
+# =========================================================================
+volumes:
+  vibro-db-data:
+    driver: local
+
+# =========================================================================
+# NETWORKS
+# =========================================================================
+networks:
+  vibro-network:
+    driver: bridge
