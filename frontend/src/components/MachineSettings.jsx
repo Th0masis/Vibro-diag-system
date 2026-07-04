@@ -5,6 +5,8 @@ const MachineSettings = ({ machineId }) => {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [message, setMessage] = useState({ text: '', type: '' });
+  const [testingOpc, setTestingOpc] = useState(false);
+  const [testingFtp, setTestingFtp] = useState(false);
   
   // Stavy formulářů - odpovídají struktuře z backendu
   const [isActiveCollection, setIsActiveCollection] = useState(false); // NOVÝ STAV PRO TOGGLE
@@ -29,7 +31,7 @@ const MachineSettings = ({ machineId }) => {
         setFtp(response.data.ftp);
       } catch (error) {
         console.error("Chyba při načítání nastavení:", error);
-        setMessage({ text: 'Nepodařilo se načíst aktuální nastavení z databáze.', type: 'error' });
+        setMessage({ text: 'Could not load current settings from the database.', type: 'error' });
       } finally {
         setFetching(false);
       }
@@ -52,9 +54,9 @@ const MachineSettings = ({ machineId }) => {
         opc_ua: opcUa,
         ftp: ftp
       });
-      setMessage({ text: 'Konfigurace stroje byla úspěšně uložena do databáze.', type: 'success' });
+      setMessage({ text: 'Machine configuration saved successfully.', type: 'success' });
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || 'Chyba při ukládání dat.';
+      const errorMsg = error.response?.data?.detail || 'Failed to save settings.';
       setMessage({ text: errorMsg, type: 'error' });
     } finally {
       setLoading(false);
@@ -63,15 +65,19 @@ const MachineSettings = ({ machineId }) => {
 
   // 3. REÁLNÝ TEST PŘIPOJENÍ
   const handleTestConnection = async (type) => {
-    setMessage({ text: `Testuji spojení s ${type.toUpperCase()} (čekejte cca 3s)...`, type: 'info' });
+    const setTesting = type === 'opc' ? setTestingOpc : setTestingFtp;
+    setTesting(true);
+    setMessage({ text: '', type: '' });
     
     try {
       const payload = type === 'opc' ? opcUa : ftp;
       const response = await axios.post(`/machines/${machineId}/test-connection?type=${type}`, payload);
       setMessage({ text: response.data.message, type: 'success' });
     } catch (error) {
-      const errorMsg = error.response?.data?.detail || `Spojení s ${type.toUpperCase()} selhalo.`;
+      const errorMsg = error.response?.data?.detail || `${type.toUpperCase()} connection failed.`;
       setMessage({ text: errorMsg, type: 'error' });
+    } finally {
+      setTesting(false);
     }
   };
 
@@ -81,7 +87,7 @@ const MachineSettings = ({ machineId }) => {
     return { bg: '#dcfce7', color: '#166534', border: '1px solid #bbf7d0' };
   };
 
-  if (fetching) return <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Načítám konfiguraci stroje...</div>;
+  if (fetching) return <div style={{ padding: '20px', color: 'var(--text-muted)' }}>Loading machine configuration…</div>;
 
   return (
     <div>
@@ -116,11 +122,11 @@ const MachineSettings = ({ machineId }) => {
           transition: 'all 0.3s ease'
         }}>
           <div>
-            <div style={{ fontWeight: 'bold', color: isActiveCollection ? '#166534' : '#475569', fontSize: '1.1rem', marginBottom: '4px' }}>
-              {isActiveCollection ? 'Automatický sběr dat je AKTIVNÍ' : 'Automatický sběr dat je VYPNUTÝ'}
+            <div style={{ fontWeight: 'bold', color: isActiveCollection ? 'var(--status-ok)' : 'var(--text-muted)', fontSize: '1.1rem', marginBottom: '4px' }}>
+            {isActiveCollection ? 'Automatic data collection is ACTIVE' : 'Automatic data collection is OFF'}
             </div>
-            <div style={{ fontSize: '0.85rem', color: '#64748b' }}>
-              Určuje, zda bude backend v pravidelných intervalech (4h) stahovat RAW data a hodnoty přes OPC UA.
+            <div style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
+              Determines whether the backend will periodically (every 4 h) pull RAW data and OPC UA values.
             </div>
           </div>
           
@@ -152,14 +158,14 @@ const MachineSettings = ({ machineId }) => {
           
           {/* OPC UA Sekce */}
           <div className="detail-card card-tech">
-            <div className="card-title">OPC UA Komunikace</div>
+            <div className="card-title">OPC UA Communication</div>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px' }}>
-              Parametry pro živé vyčítání charakteristik z PLC.
+              Connection parameters for live characteristic readout from the PLC.
             </p>
 
             <div className="add-user-modal" style={{ maxWidth: '100%', padding: 0, boxShadow: 'none' }}>
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Adresa serveru (Endpoint URL)</label>
+                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Server address (Endpoint URL)</label>
                 <input 
                   type="text" 
                   value={opcUa.url} 
@@ -172,11 +178,14 @@ const MachineSettings = ({ machineId }) => {
             <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
               <button 
                 type="button" 
-                className="btn-update" 
+                className="btn-test-conn btn-test-conn--opc"
                 onClick={() => handleTestConnection('opc')}
-                style={{ width: '100%' }}
+                disabled={testingOpc}
               >
-                Testovat OPC UA
+                {testingOpc
+                  ? <><span className="loading-spinner" aria-hidden="true"></span>Testing…</>
+                  : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M5 12.55a11 11 0 0114.08 0"/><path d="M1.42 9a16 16 0 0121.16 0"/><path d="M8.53 16.11a6 6 0 016.95 0"/><circle cx="12" cy="20" r="1"/></svg>Test OPC UA</>
+                }
               </button>
             </div>
           </div>
@@ -185,12 +194,12 @@ const MachineSettings = ({ machineId }) => {
           <div className="detail-card card-sensors">
             <div className="card-title">FTP Server (RAW Data)</div>
             <p style={{ fontSize: '0.85rem', color: '#64748b', marginBottom: '20px' }}>
-              Přístup pro automatické stahování hrubých měření ze souborového systému PLC.
+              Access for automatic download of raw measurements from the PLC file system.
             </p>
 
             <div className="add-user-modal" style={{ maxWidth: '100%', padding: 0, boxShadow: 'none' }}>
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>IP Adresa (Host)</label>
+                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>IP Address (Host)</label>
                 <input 
                   type="text" 
                   value={ftp.host} 
@@ -201,7 +210,7 @@ const MachineSettings = ({ machineId }) => {
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                 <div className="form-group">
-                  <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Uživatel</label>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Username</label>
                   <input 
                     type="text" 
                     value={ftp.username} 
@@ -209,7 +218,7 @@ const MachineSettings = ({ machineId }) => {
                   />
                 </div>
                 <div className="form-group">
-                  <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Heslo</label>
+                  <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Password</label>
                   <input 
                     type="password" 
                     value={ftp.password} 
@@ -220,7 +229,7 @@ const MachineSettings = ({ machineId }) => {
               </div>
 
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Cílová složka na PLC</label>
+                <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Target folder on PLC</label>
                 <input 
                   type="text" 
                   value={ftp.directory} 
@@ -233,11 +242,14 @@ const MachineSettings = ({ machineId }) => {
             <div style={{ marginTop: 'auto', paddingTop: '20px', borderTop: '1px solid #f1f5f9' }}>
               <button 
                 type="button" 
-                className="btn-update" 
+                className="btn-test-conn btn-test-conn--ftp"
                 onClick={() => handleTestConnection('ftp')}
-                style={{ width: '100%', borderColor: 'var(--status-fault)', color: 'var(--status-fault)' }}
+                disabled={testingFtp}
               >
-                Testovat FTP
+                {testingFtp
+                  ? <><span className="loading-spinner" aria-hidden="true"></span>Testing…</>
+                  : <><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>Test FTP</>
+                }
               </button>
             </div>
           </div>
@@ -257,7 +269,7 @@ const MachineSettings = ({ machineId }) => {
               background: 'var(--primary)'
             }}
           >
-            {loading ? 'Ukládám do DB...' : 'Uložit novou konfiguraci'}
+            {loading ? 'Saving…' : 'Save configuration'}
           </button>
         </div>
       </form>

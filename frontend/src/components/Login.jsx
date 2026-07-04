@@ -31,7 +31,7 @@ function Login({ setToken }) {
       sessionStorage.setItem('token', token);
       setToken(token);
     } catch (err) {
-      setError('Nesprávné jméno nebo heslo');
+      setError('Incorrect username or password. Please try again.');
     } finally {
       setLoading(false);
     }
@@ -91,8 +91,11 @@ function Login({ setToken }) {
         {error && <p className="error-message" id="login-error" role="alert">{error}</p>}
 
         <button type="submit" className={`login-btn ${loading ? 'loading' : ''}`} aria-busy={loading}>
-          <span className="btn-text">Sign In</span>
-          {loading && <span className="loading-spinner" aria-hidden="true"></span>}
+          {loading ? (
+            <><span className="loading-spinner" aria-hidden="true"></span><span>Signing in…</span></>
+          ) : (
+            <><span>Sign In</span><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></>
+          )}
         </button>
       </form>
       <p className="footer-copyright">B&R Industrial Automation | VUT Brno</p>

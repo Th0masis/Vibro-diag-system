@@ -23,8 +23,8 @@ function MachineGraphs({ machineId }) {
     rms: { label: 'RMS (g)', db_key: 'rms' },
     peak: { label: 'Peak (g)', db_key: 'peak' },
     kurtosis: { label: 'Kurtosis (-)', db_key: 'kurtosis' },
-    skewness: { label: 'Šikmost (-)', db_key: 'skewness' },
-    envelope: { label: 'Obálka signálu', db_key: 'rms_acl_env' }
+    skewness: { label: 'Skewness (-)', db_key: 'skewness' },
+    envelope: { label: 'Signal envelope', db_key: 'rms_acl_env' }
   };
 
   const sensorColors = ['#0284c7', '#cd3808', '#10b981', '#8b5cf6', '#f59e0b', '#64748b'];
@@ -90,32 +90,21 @@ function MachineGraphs({ machineId }) {
       if (source === 'raw_analysis') {
         setSelectedMeasurementId(measId);
       } else {
-        alert("Tento bod je z IIoT Connectoru a neobsahuje zdrojový .csv soubor. Detailní analýza signálu je dostupná pouze u lokálních surových měření.");
+        alert("This point comes from the IIoT Connector and does not contain a raw .csv source file. Detailed signal analysis is only available for local raw recordings.");
       }
     }
   };
 
   return (
-    <div className="card-shadow" style={{ padding: '20px', background: 'white', borderRadius: '8px' }}>
+    <div className="card-shadow machine-graphs-card">
       
       {/* KLIKACÍ NÁZVY VŠECH PARAMETRŮ (TABS) */}
-      <div style={{ display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap', borderBottom: '1px solid #e2e8f0', paddingBottom: '15px' }}>
+      <div className="machine-graphs-metric-tabs">
         {Object.keys(metricsInfo).map(key => (
           <button
             key={key}
             onClick={() => setMetric(key)}
-            style={{
-              padding: '8px 16px',
-              borderRadius: '20px',
-              border: metric === key ? '1px solid #cd3808' : '1px solid #cbd5e1',
-              background: metric === key ? '#cd3808' : 'white',
-              color: metric === key ? 'white' : '#475569',
-              fontWeight: 'bold',
-              cursor: 'pointer',
-              fontSize: '0.85rem',
-              transition: 'all 0.15s ease-in-out',
-              boxShadow: metric === key ? '0 2px 4px rgba(205,56,8,0.2)' : 'none'
-            }}
+            className={`machine-graphs-metric-tab ${metric === key ? 'is-active' : ''}`}
           >
             {metricsInfo[key].label}
           </button>
@@ -123,32 +112,32 @@ function MachineGraphs({ machineId }) {
       </div>
 
       {/* SEKUNDÁRNÍ FILTRY (SENZOR A DATUM) */}
-      <div style={{ display: 'flex', gap: '20px', flexWrap: 'wrap', marginBottom: '25px', alignItems: 'flex-end' }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b' }}>Filtr senzoru:</label>
-          <select value={selectedSensor} onChange={(e) => setSelectedSensor(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#1e293b' }}>
-            <option value="all">Všechny senzory</option>
-            {uniqueSensors.map(s => <option key={s} value={s}>Senzor {s}</option>)}
+      <div className="machine-graphs-filters">
+        <div className="machine-graphs-filter-group">
+          <label className="machine-graphs-filter-label">Sensor filter:</label>
+          <select className="machine-graphs-filter-control" value={selectedSensor} onChange={(e) => setSelectedSensor(e.target.value)}>
+            <option value="all">All sensors</option>
+            {uniqueSensors.map(s => <option key={s} value={s}>Sensor {s}</option>)}
           </select>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b' }}>Od:</label>
-          <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} style={{ padding: '7px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#1e293b' }} />
+        <div className="machine-graphs-filter-group">
+          <label className="machine-graphs-filter-label">From:</label>
+          <input className="machine-graphs-filter-control" type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#64748b' }}>Do:</label>
-          <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} style={{ padding: '7px', borderRadius: '4px', border: '1px solid #cbd5e1', color: '#1e293b' }} />
+        <div className="machine-graphs-filter-group">
+          <label className="machine-graphs-filter-label">To:</label>
+          <input className="machine-graphs-filter-control" type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
         </div>
       </div>
 
       {/* VLASTNÍ GRAF */}
-      <div style={{ width: '100%', height: '400px' }}>
+      <div className="machine-graphs-plot-wrap">
         {loading ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Načítám data grafů...</div>
+          <div className="machine-graphs-state">Loading chart data…</div>
         ) : chartData.length === 0 ? (
-          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#64748b' }}>Žádná data pro vybrané období a filtry.</div>
+          <div className="machine-graphs-state">No data for the selected period and filters.</div>
         ) : (
           <ResponsiveContainer>
             <LineChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
@@ -158,7 +147,7 @@ function MachineGraphs({ machineId }) {
               
               <Tooltip 
                 contentStyle={{ borderRadius: '8px', border: 'none', boxShadow: '0 4px 6px -1px rgb(0 0 0 / 0.1)' }}
-                labelStyle={{ fontWeight: 'bold', color: '#1e293b', marginBottom: '5px' }}
+                labelStyle={{ fontWeight: 'bold', color: 'var(--text-main)', marginBottom: '5px' }}
               />
               <Legend wrapperStyle={{ paddingTop: '20px' }} />
 
@@ -186,7 +175,7 @@ function MachineGraphs({ machineId }) {
         )}
       </div>
 
-      <p style={{ textAlign: 'center', fontSize: '0.8rem', color: '#94a3b8', marginTop: '15px' }}>
+      <p className="machine-graphs-tip">
         <strong>Tip:</strong> Kliknutím na libovolný bod v grafu otevřete detailní diagnostické rozhraní (FFT/CWT).
       </p>
 

@@ -109,7 +109,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
       await fetchDetail(); 
       if (onProcessed) onProcessed(); 
     } catch (error) {
-      alert("Chyba při zpracování: " + error.message);
+      alert('Processing failed: ' + error.message);
     } finally {
       setIsProcessing(false);
     }
@@ -147,7 +147,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
       {/* --- HLAVIČKA --- */}
       <div style={headerStyle}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '20px' }}>
-          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Detail měření #{measurementId}</h2>
+          <h2 style={{ margin: 0, fontSize: '1.2rem' }}>Measurement #{measurementId} detail</h2>
           <button
             onClick={handleProcess}
             disabled={isProcessed || isProcessing}
@@ -194,7 +194,9 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
                     height: '100%', display: 'flex', flexDirection: 'column',
                     alignItems: 'center', justifyContent: 'center', color: '#94a3b8'
                   }}>
-                    <span style={{ fontSize: '3rem', marginBottom: '10px' }}>📊</span>
+                    <span style={{ fontSize: '3rem', marginBottom: '10px' }}>
+                      <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="12 3 20 7.5 20 16.5 12 21 4 16.5 4 7.5 12 3"/><polyline points="12 12.5 20 7.5"/><polyline points="12 12.5 12 21"/><polyline points="12 12.5 4 7.5"/></svg>
+                    </span>
                     <p style={{ fontSize: '1.1rem', fontWeight: '500' }}>Nejprve data zpracujte</p>
                     <p style={{ fontSize: '0.85rem', marginTop: '5px' }}>Použijte tlačítko 'Spustit analýzu' vpravo nahoře.</p>
                   </div>

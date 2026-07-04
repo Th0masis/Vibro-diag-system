@@ -95,7 +95,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       await axios.post(`/measurements/${id}/process`);
       await fetchData(); 
     } catch (error) {
-      alert("Chyba při zpracování: " + error.message);
+      alert('Processing failed: ' + error.message);
     } finally {
       setProcessingId(null);
     }
@@ -125,7 +125,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   return (
     <div className="history-container">
       {selectedMeasurementId && (
-        <div style={{ marginBottom: '16px' }}>
+        <div className="history-inline-detail">
           <MeasurementDetailModal
             measurementId={selectedMeasurementId}
             onClose={() => setSelectedMeasurementId(null)}
@@ -136,78 +136,69 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       )}
 
       {/* TOOLBAR S FILTRY - S flex layoutem */}
-      <div style={{ 
-        display: 'flex', gap: '20px', alignItems: 'flex-end', marginBottom: '20px', 
-        flexWrap: 'wrap', background: 'white', padding: '15px 20px', 
-        borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.1)' 
-      }}>
+      <div className="history-toolbar">
         
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold' }}>Senzor:</label>
-          <select value={filterSensor} onChange={(e) => setFilterSensor(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}>
-            <option value="all">Všechny senzory</option>
+        <div className="history-filter-group">
+          <label className="history-filter-label">Sensor:</label>
+          <select className="history-filter-control" value={filterSensor} onChange={(e) => setFilterSensor(e.target.value)}>
+            <option value="all">All sensors</option>
             {sensorList.map(s => <option key={s} value={s}>{s}</option>)}
           </select>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold' }}>Stav:</label>
-          <select value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }}>
-            <option value="all">Všechny stavy</option>
-            <option value="processed">✅ Zpracováno</option>
-            <option value="waiting">⏳ Čeká na analýzu</option>
+        <div className="history-filter-group">
+          <label className="history-filter-label">Status:</label>
+          <select className="history-filter-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
+            <option value="all">All</option>
+            <option value="processed">✅ Processed</option>
+            <option value="waiting">⏳ Awaiting analysis</option>
           </select>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '5px' }}>
-          <label style={{ fontSize: '0.8rem', color: '#64748b', fontWeight: 'bold' }}>Datum:</label>
-          <input type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} style={{ padding: '8px', borderRadius: '4px', border: '1px solid #cbd5e1', outline: 'none' }} />
+        <div className="history-filter-group">
+          <label className="history-filter-label">Date:</label>
+          <input className="history-filter-control" type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} />
         </div>
 
-        <div style={{ flex: 1 }}></div>
+        <div className="history-toolbar-spacer"></div>
 
         <button 
-          className="btn-diagnose" 
+          className={`btn-diagnose history-batch-button ${(isBatchProcessing || selectedIds.length === 0) ? 'history-batch-button--disabled' : ''}`}
           onClick={handleBatchProcess} 
           disabled={isBatchProcessing || selectedIds.length === 0}
-          style={{ 
-            padding: '10px 15px', height: 'fit-content',
-            opacity: (isBatchProcessing || selectedIds.length === 0) ? 0.5 : 1,
-            cursor: (isBatchProcessing || selectedIds.length === 0) ? 'not-allowed' : 'pointer'
-          }}
         >
           {isBatchProcessing 
-            ? `Zpracovávám (${processedCount}/${totalToProcess})` 
-            : `⚙️ Zpracovat vybrané (${selectedIds.length})`
+            ? `Processing (${processedCount}/${totalToProcess})…` 
+            : `Process selected (${selectedIds.length})`
           }
         </button>
       </div>
 
       {/* TABULKA HISTORIE */}
-      <div className="card-shadow" style={{ background: 'white', borderRadius: '8px', overflow: 'hidden' }}>
+      <div className="card-shadow history-table-card">
         {loading ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>Načítám historii...</div>
+          <div className="history-loading-state">Načítám historii...</div>
         ) : (
           <table className="machine-table">
             <thead>
               <tr>
-                <th style={{ width: '40px', textAlign: 'center' }}>
+                <th className="history-select-head">
                   <input 
                     type="checkbox" 
                     checked={isAllSelected}
                     onChange={handleSelectAll}
                     disabled={processableData.length === 0}
-                    style={{ cursor: processableData.length === 0 ? 'not-allowed' : 'pointer' }}
-                    title="Vybrat všechny ke zpracování"
+                    className={`history-checkbox ${processableData.length === 0 ? 'history-checkbox--disabled' : ''}`}
+                    title="Select all for processing"
                   />
                 </th>
-                <th>Čas měření</th>
-                <th>Senzor</th>
-                <th>Zdroj dat</th>
+                <th>Timestamp</th>
+                <th>Sensor</th>
+                <th>Data source</th>
                 <th>RMS [g]</th>
                 <th>Kurtosis</th>
-                <th>Stav</th>
-                <th className="text-right">Akce</th>
+                <th>Status</th>
+                <th className="text-right">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -216,43 +207,47 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                 
                 return (
                 <tr key={row.timestamp + row.sensor_name + row.source}>
-                  <td style={{ textAlign: 'center' }}>
+                  <td className="history-select-cell">
                     {canBeProcessed ? (
                       <input 
                         type="checkbox"
                         checked={selectedIds.includes(row.id_measurement)}
                         onChange={() => handleSelect(row.id_measurement)}
-                        style={{ cursor: 'pointer' }}
+                        className="history-checkbox"
                       />
                     ) : (
-                      <span style={{ color: '#cbd5e1' }}>-</span>
+                      <span className="history-unavailable-marker">-</span>
                     )}
                   </td>
-                  <td style={{ fontWeight: '500' }}>
+                  <td className="history-time-cell">
                     {new Date(row.timestamp).toLocaleString('cs-CZ', { 
                       day: '2-digit', month: '2-digit', year: 'numeric', 
                       hour: '2-digit', minute: '2-digit' 
                     })}
                   </td>
-                  <td>{row.sensor_name} <br/> <small style={{color: '#94a3b8'}}>{row.position}</small></td>
                   <td>
-                    <span className={`badge ${row.source === 'iiot_connector' ? 'badge-blue' : 'badge-orange'}`} style={{fontSize: '0.65rem'}}>
-                      {row.source === 'iiot_connector' ? 'IIoT Connector' : 'Surový záznam'}
+                    {row.sensor_name}
+                    <br/>
+                    <small className="history-sensor-position">{row.position}</small>
+                  </td>
+                  <td>
+                    <span className={`badge history-source-badge ${row.source === 'iiot_connector' ? 'badge-blue' : 'badge-orange'}`}>
+                      {row.source === 'iiot_connector' ? 'IIoT Connector' : 'Raw recording'}
                     </span>
                   </td>
-                  <td style={{ fontWeight: 'bold', color: '#1e293b' }}>
+                  <td className="history-rms-cell">
                     {row.rms ? row.rms.toFixed(4) : '-'}
                   </td>
                   <td>{row.kurtosis ? row.kurtosis.toFixed(2) : '-'}</td>
                   <td>
                     {row.rms ? (
-                      <span style={{ color: '#22c55e', fontSize: '0.85rem' }}>✅ Analyzováno</span>
+                      <span className="history-status history-status--processed">✅ Analyzováno</span>
                     ) : (
-                      <span style={{ color: '#94a3b8', fontSize: '0.85rem' }}>⏳ Čeká na zpracování</span>
+                      <span className="history-status history-status--waiting">⏳ Čeká na zpracování</span>
                     )}
                   </td>
                     <td className="text-right">
-                      <div style={{ display: 'flex', gap: '5px', justifyContent: 'flex-end' }}>
+                      <div className="history-actions-wrap">
                         {/* Tlačítko pro zpracování (ozubené kolo) - jen pro nezpracovaná surová data */}
                         {row.source === 'raw_analysis' && !row.rms && (
                           <button 
@@ -268,8 +263,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                         {/* Tlačítko pro detail (lupa) - ZOBRAZIT POUZE PRO raw_analysis */}
                         {row.source === 'raw_analysis' && (
                           <button 
-                            className="btn-action-small"
-                            style={{ background: '#3b82f6', color: 'white' }}
+                            className="btn-action-small history-detail-button"
                             title="Zobrazit detail a grafy"
                             onClick={() => setSelectedMeasurementId(row.id_measurement)}
                           >
@@ -285,13 +279,13 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
         )}
 
         {filteredData.length === 0 && !loading && (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#94a3b8' }}>
+          <div className="history-empty-state">
             Žádné záznamy neodpovídají filtrům.
           </div>
         )}
 
         {filteredData.length > limit && (
-          <div style={{ textAlign: 'center', padding: '20px', borderTop: '1px solid #f1f5f9' }}>
+          <div className="history-load-more-wrap">
             <button className="btn-cancel" onClick={() => setLimit(limit + 20)}>Načíst další...</button>
           </div>
         )}

@@ -13,7 +13,7 @@ function MachineSensors({ sensors, machineId, onRefresh }) {
       await axios.post(`/machines/${machineId}/sensors/${sensorToDetach.id_sensor}/detach`);
       onRefresh(); // Aktualizuje data v rodiči (MachineDetail)
     } catch (error) {
-      alert("Chyba při odpojování senzoru.");
+      alert('Failed to detach sensor. Please try again.');
     } finally {
       setSensorToDetach(null);
     }
@@ -22,40 +22,40 @@ function MachineSensors({ sensors, machineId, onRefresh }) {
   return (
     <div>
       {selectedSensor && (
-        <div className="card-shadow" style={{ background: 'white', borderRadius: '8px', padding: '16px', marginBottom: '16px', border: '1px solid var(--neutral-border)' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '16px', alignItems: 'center' }}>
-            <h2 style={{ margin: 0, color: 'var(--primary)', fontSize: '1.1rem' }}>Detail senzoru</h2>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="machine-sensors-detail-card">
+          <div className="machine-sensors-detail-header">
+            <h2 className="machine-sensors-detail-title">Sensor detail</h2>
+            <div className="machine-sensors-detail-actions">
               <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
-              <button className="btn-cancel" onClick={() => setSelectedSensor(null)}>Zavřít</button>
+              <button className="btn-cancel" onClick={() => setSelectedSensor(null)}>Close</button>
             </div>
           </div>
 
           <div className="detail-grid">
-            <div className="detail-item"><label>Sériové číslo</label><p>{selectedSensor.serial_number}</p></div>
+            <div className="detail-item"><label>Serial number</label><p>{selectedSensor.serial_number}</p></div>
             <div className="detail-item"><label>Model</label><p>{selectedSensor.description}</p></div>
-            <div className="detail-item"><label>Vzorkování</label><p>{selectedSensor.sampling_rate ? `${selectedSensor.sampling_rate} Hz` : '-'}</p></div>
-            <div className="detail-item"><label>Kalibrace</label><p>{selectedSensor.calibration_date || 'Neznámá'}</p></div>
-            <div className="detail-item"><label>Pozice</label><p>{selectedSensor.position || '-'}</p></div>
-            <div className="detail-item"><label>ID senzoru</label><p>#{selectedSensor.id_sensor}</p></div>
+            <div className="detail-item"><label>Sampling rate</label><p>{selectedSensor.sampling_rate ? `${selectedSensor.sampling_rate} Hz` : '-'}</p></div>
+            <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
+            <div className="detail-item"><label>Position</label><p>{selectedSensor.position || '-'}</p></div>
+            <div className="detail-item"><label>Sensor ID</label><p>#{selectedSensor.id_sensor}</p></div>
           </div>
         </div>
       )}
 
       <div className="table-wrapper">
         {sensors.length === 0 ? (
-          <div style={{ padding: '40px', textAlign: 'center', color: '#64748b' }}>
-            K tomuto stroji nejsou zatím přiřazeny žádné senzory.
+          <div className="machine-sensors-empty-state">
+            No sensors assigned to this machine yet.
           </div>
         ) : (
           <table>
             <thead>
               <tr>
-                <th>Sériové číslo</th>
-                <th>Model / Popis</th>
-                <th>Pozice na stroji</th>
+                <th>Serial number</th>
+                <th>Model / Description</th>
+                <th>Position on machine</th>
                 <th>Status</th>
-                <th style={{ textAlign: 'center' }}>Akce</th>
+                <th className="machine-sensors-actions-head">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -67,18 +67,18 @@ function MachineSensors({ sensors, machineId, onRefresh }) {
                   <td>{s.position || '—'}</td> 
                   <td>
                     <span className={`role-badge ${s.status}`}>
-                      {s.status === 'available' ? 'K dispozici' : s.status === 'active' ? 'Aktivní' : 'Údržba'}
+                      {s.status === 'available' ? 'Available' : s.status === 'active' ? 'Active' : 'Maintenance'}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
+                  <td className="machine-sensors-actions-cell">
+                    <div className="machine-sensors-actions-wrap">
                       <button className="btn-small-edit" onClick={() => setSelectedSensor(s)}>Detail</button>
                       <button 
                         className="btn-small-delete" 
                         onClick={() => setSensorToDetach(s)}
-                        title="Odpojit od stroje"
+                        title="Detach from machine"
                       >
-                        Odpojit
+                        Detach
                       </button>
                     </div>
                   </td>

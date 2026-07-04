@@ -53,31 +53,31 @@ function Machines() {
             // Obnovení seznamu
             fetchMachines();
         } catch (error) {
-            alert("Chyba při přidávání stroje: " + (error.response?.data?.detail || error.message));
+            alert('Failed to add machine: ' + (error.response?.data?.detail || error.message));
         }
     };
 
     return (
         <div className="page-container">
             <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ color: 'var(--text)', margin: 0 }}>Přehled strojů</h2>
+                <h2 style={{ color: 'var(--text)', margin: 0 }}>Machines</h2>
                 <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>
-                    + Přidat stroj
+                    + Add machine
                 </button>
             </div>
 
             <div className="table-wrapper">
                 {loading ? (
-                    <p style={{ padding: '20px' }}>Načítám seznam strojů...</p>
+                    <p style={{ padding: '20px' }}>Loading machines…</p>
                 ) : (
                     <table>
                         <thead>
                             <tr>
-                                <th>Název stroje</th>
-                                <th>Typ</th>
-                                <th>Lokace</th>
+                                <th>Machine name</th>
+                                <th>Type</th>
+                                <th>Location</th>
                                 <th>Status</th>
-                                <th style={{ textAlign: 'center' }}>Akce</th>
+                                <th style={{ textAlign: 'center' }}>Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -101,7 +101,7 @@ function Machines() {
                                             className="btn-small-edit" 
                                             onClick={() => handleOpenDetail(machine.id_machine)}
                                         >
-                                            Detail & Diagnostika
+                                            Open detail
                                         </button>
                                     </td>
                                 </tr>
@@ -115,15 +115,15 @@ function Machines() {
             {isAddModalOpen && (
                 <div className="modal-overlay">
                     <div className="modal-content add-user-modal">
-                        <h2 style={{ color: 'var(--primary)', marginBottom: '20px' }}>Nový stroj</h2>
+                        <h2 style={{ color: 'var(--primary)', marginBottom: '20px' }}>New machine</h2>
                         <form onSubmit={handleAddMachine}>
                             <div className="form-group">
-                                <label>Název stroje *</label>
+                                <label>Machine name *</label>
                                 <input 
                                     type="text" 
                                     value={newMachine.name}
                                     onChange={(e) => setNewMachine({...newMachine, name: e.target.value})}
-                                    placeholder="Např. CNC Frézka 01"
+                                    placeholder="e.g. CNC Mill 01"
                                     required 
                                 />
                             </div>
@@ -167,16 +167,16 @@ function Machines() {
                                     value={newMachine.status} 
                                     onChange={(e) => setNewMachine({...newMachine, status: e.target.value})}
                                 >
-                                    <option value="OK">OK (V pořádku)</option>
-                                    <option value="WARNING">WARNING (Varování)</option>
-                                    <option value="CRITICAL">CRITICAL (Kritický)</option>
-                                    <option value="OFFLINE">OFFLINE (Vypnuto)</option>
+                                    <option value="OK">OK</option>
+                                    <option value="WARNING">WARNING</option>
+                                    <option value="CRITICAL">CRITICAL</option>
+                                    <option value="OFFLINE">OFFLINE</option>
                                 </select>
                             </div>
 
                             <div className="modal-actions" style={{ marginTop: '30px' }}>
-                                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Zrušit</button>
-                                <button type="submit" className="btn-add-confirm">Přidat stroj</button>
+                                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                                <button type="submit" className="btn-add-confirm">Add machine</button>
                             </div>
                         </form>
                     </div>

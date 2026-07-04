@@ -45,7 +45,7 @@ function UserManagement() {
       setUsers(users.filter(u => u.id_user !== userToDelete));
       setUserToDelete(null); // Zavřít okno
     } catch (error) {
-      alert("Chyba při mazání uživatele: " + error.response?.data?.detail);
+      alert('Failed to delete user: ' + error.response?.data?.detail);
       setUserToDelete(null);
     }
   };
@@ -83,7 +83,7 @@ function UserManagement() {
       setEditingUser(null);
       fetchUsers();
     } catch (error) {
-      alert("Chyba při aktualizaci: " + error.response?.data?.detail);
+      alert('Update failed: ' + error.response?.data?.detail);
     }
   };
 
@@ -105,7 +105,7 @@ function UserManagement() {
   return (
     <div className="page-container">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ color: 'var(--br-orange-dark)', margin: 0 }}>User Management</h2>
+        <h2 style={{ color: 'var(--br-orange-dark)', margin: 0 }}>Team</h2>
         {isAdmin &&(
           <button 
             className="btn-diagnose" 
@@ -143,10 +143,10 @@ function UserManagement() {
                         {user.role}
                     </span>
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                     {formatDate(user.creation_time)}
                     </td>
-                    <td style={{ fontSize: '0.85rem', color: '#64748b' }}>
+                    <td style={{ fontSize: '0.85rem', color: 'var(--text-muted)' }}>
                     {formatDate(user.last_login)}
                     </td>
                     {isAdmin && (
@@ -166,8 +166,8 @@ function UserManagement() {
         isOpen={!!userToDelete}
         onClose={() => setUserToDelete(null)}
         onConfirm={handleDelete}
-        title="Potvrdit smazání uživatele"
-        message="Opravdu chcete tohoto uživatele trvale odstranit z evidence? Tuto akci nelze vzít zpět."
+        title="Confirm user deletion"
+        message="Are you sure you want to permanently remove this user? This action cannot be undone."
       />
       {isAddModalOpen && (
         <div className="modal-overlay">

@@ -7,8 +7,17 @@ import MeasurementsHistory from '../components/MeasurementsHistory';
 import MachineGraphs from '../components/MachineGraphs';
 import MachineSensors from '../components/MachineSensors';
 import MachineDiagnostics from '../components/MachineDiagnostics';
-// 1. PŘIDÁN IMPORT NOVÉ KOMPONENTY PRO NASTAVENÍ
-import MachineSettings from '../components/MachineSettings'; 
+import MachineSettings from '../components/MachineSettings';
+
+/* ── inline tab icons ── */
+const TabIcons = {
+  graphs:      (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="18" y="3" width="4" height="18"/><rect x="10" y="8" width="4" height="13"/><rect x="2" y="13" width="4" height="8"/></svg>),
+  diagnostics: (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>),
+  notes:       (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>),
+  history:     (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>),
+  sensors:     (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>),
+  settings:    (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>),
+};
 
 function MachineDetail() {
   const { id } = useParams();
@@ -35,18 +44,6 @@ function MachineDetail() {
     }
   };
 
-  const getSeverityStyles = (severity) => {
-    switch (severity) {
-      case 'CRITICAL': 
-        return { border: 'var(--status-fault)', bg: 'var(--status-fault-bg)', text: '#991b1b', icon: '🔴' };
-      case 'WARNING': 
-        return { border: 'var(--status-warning)', bg: 'var(--status-warning-bg)', text: '#92400e', icon: '🟠' };
-      case 'INFO': 
-      default: 
-        return { border: '#3b82f6', bg: '#eff6ff', text: '#1e40af', icon: '🔵' };
-    }
-  };
-
   useEffect(() => {
     fetchDetail();
   }, [id]);
@@ -65,7 +62,7 @@ function MachineDetail() {
       await axios.post(`/machines/${id}/sensors/${sensorId}/detach`);
       fetchDetail();
     } catch (error) {
-      alert("Chyba při odpojování.");
+      alert('Failed to detach sensor.');
     }
   };
 
@@ -75,7 +72,7 @@ function MachineDetail() {
       setAvailableSensors(res.data);
       setAssignForm({ sensor_id: '', position: '' });
       setIsAssignPanelOpen(true);
-    } catch (error) { alert("Chyba načítání senzorů"); }
+    } catch (error) { alert('Could not load available sensors.'); }
   };
 
   const handleAttachSensor = async (e) => {
@@ -84,38 +81,44 @@ function MachineDetail() {
       await axios.post(`/machines/${id}/sensors`, assignForm);
       setIsAssignPanelOpen(false);
       fetchDetail();
-    } catch (error) { alert("Chyba přiřazení"); }
+    } catch (error) { alert('Failed to assign sensor.'); }
   };
 
-  if (loading || !data) return <div className="page-container">Načítám...</div>;
+  if (loading || !data) return <div className="page-container"><div className="loading-message"><span className="loading-spinner" aria-hidden="true"></span><span>Loading machine…</span></div></div>;
 
   const { info, sensors, last_note } = data;
+  const noteSeverityClass = last_note
+    ? `machine-note-severity-${(last_note.severity || 'INFO').toLowerCase()}`
+    : 'machine-note-severity-none';
 
 return (
     <div className="page-container">
       
       {/* 1. HLAVIČKA - PŘESKLÁDANÁ */}
       <div className="machine-header-container">
-        {/* Levá část: Název, Status, Info */}
+        {/* Left: Name, Status, Meta */}
         <div className="machine-title-section">
           <h1>
             {info.name}
-            {/* Status Badge přímo vedle nadpisu */}
-            <span className={`role-badge ${info.status}`} style={{ fontSize: '0.9rem', padding: '4px 12px', borderRadius: '20px', verticalAlign: 'middle', marginLeft: '10px' }}>
+            <span className={`role-badge ${info.status} machine-detail-status-badge`}>
                {info.status}
             </span>
           </h1>
           <div className="machine-meta">
-            <span style={{ color: 'var(--text-main)', fontWeight: 'bold' }}>{info.type}</span>
-            <span style={{ margin: '0 10px' }}>•</span>
-            <span>📍 {info.location}</span>
+            <span className="machine-meta-type">{info.type}</span>
+            <span className="machine-meta-divider">·</span>
+            <span className="machine-meta-location">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'inline',verticalAlign:'middle',marginRight:'3px',marginBottom:'1px'}}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
+              {info.location}
+            </span>
           </div>
         </div>
 
-        {/* Pravá část: Tlačítko Zpět */}
+        {/* Right: Back button */}
         <div>
           <button onClick={() => navigate('/machines')} className="btn-back">
-            <span>↩</span> Zpět na seznam
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            Back
           </button>
         </div>
       </div>
@@ -125,13 +128,13 @@ return (
         
         {/* BOX 1: Technické údaje */}
         <div className="detail-card card-tech">
-          <div className="card-title" style={{ color: 'var(--primary)' }}>Technické údaje</div>
-          <div className="detail-grid" style={{ gap: '12px' }}>
-            <div className="detail-item"><label>ID Stroje</label><p style={{fontWeight:'bold'}}>#{info.id_machine}</p></div>
+          <div className="card-title card-title--primary">Technical info</div>
+          <div className="detail-grid detail-grid--compact">
+            <div className="detail-item"><label>ID Stroje</label><p className="detail-value-strong">#{info.id_machine}</p></div>
             <div className="detail-item"><label>Instalace</label><p>{info.installation_date}</p></div>
-            <div className="detail-item" style={{ gridColumn: 'span 2' }}>
+            <div className="detail-item detail-item--full">
                 <label>Popis zařízení</label>
-                <p style={{ fontSize: '0.9rem', color: '#475569', lineHeight: '1.5' }}>{info.description}</p>
+                <p className="detail-description-text">{info.description}</p>
             </div>
           </div>
         </div>
@@ -139,22 +142,25 @@ return (
         {/* BOX 2: Senzory */}
         <div className="detail-card card-sensors">
           <div className="card-title">
-             <span>Senzory ({sensors.length})</span>
-             <button className="btn-diagnose" onClick={openAssignPanel} style={{ fontSize: '0.75rem', padding: '5px 10px' }}>+ Přidat</button>
+             <span>Sensors ({sensors.length})</span>
+             <button className="btn-diagnose btn-diagnose--compact" onClick={openAssignPanel}>
+               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+               Add
+             </button>
           </div>
-          <div style={{ flex: 1, overflowY: 'auto', maxHeight: '150px', paddingRight: '5px' }}>
-            {sensors.length === 0 ? <p style={{ color: '#ccc', fontStyle: 'italic', fontSize: '0.9rem' }}>Bez senzorů</p> : (
-              <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          <div className="machine-sensor-list-wrap">
+            {sensors.length === 0 ? <p className="machine-sensor-empty">No sensors attached</p> : (
+              <ul className="machine-sensor-list">
                 {sensors.map(s => (
-                  <li key={s.id_sensor} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '10px 0', borderBottom: '1px solid #f1f5f9' }}>
-                    <div style={{ lineHeight: '1.2' }}>
-                      <div style={{ fontWeight: '600', fontSize: '0.9rem', color: '#334155' }}>{s.description}</div>
-                      <div style={{ fontSize: '0.75rem', color: '#94a3b8', fontFamily: 'monospace' }}>S/N: {s.serial_number}</div>
+                  <li key={s.id_sensor} className="machine-sensor-item">
+                    <div className="machine-sensor-item-main">
+                      <div className="machine-sensor-item-name">{s.description}</div>
+                      <div className="machine-sensor-item-serial">S/N: {s.serial_number}</div>
                     </div>
                     <button 
                       className="btn-detach"
                       onClick={() => handleDetachSensor(s.id_sensor)}
-                      title="Odpojit senzor"
+                      title="Detach sensor"
                     >
                       ✕
                     </button>
@@ -165,23 +171,23 @@ return (
           </div>
 
           {isAssignPanelOpen && (
-            <div style={{ marginTop: '12px', border: '1px solid var(--neutral-border)', borderRadius: '8px', padding: '12px', background: 'var(--neutral-bg-white)' }}>
-              <h3 style={{ margin: '0 0 10px 0', fontSize: '0.95rem', color: 'var(--primary)' }}>Montáž senzoru</h3>
+            <div className="machine-assign-panel">
+              <h3 className="machine-assign-panel-title">Attach sensor</h3>
               <form onSubmit={handleAttachSensor}>
                 <div className="form-group">
-                  <label>Vyberte senzor</label>
+                  <label>Select sensor</label>
                   <select value={assignForm.sensor_id} onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})} required>
-                    <option value="">-- Vybrat --</option>
+                    <option value="">-- Select --</option>
                     {availableSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.serial_number} - {s.description}</option>)}
                   </select>
                 </div>
                 <div className="form-group">
-                  <label>Pozice</label>
+                  <label>Position</label>
                   <input type="text" value={assignForm.position} onChange={(e) => setAssignForm({...assignForm, position: e.target.value})} required />
                 </div>
                 <div className="modal-actions">
-                  <button type="button" className="btn-cancel" onClick={() => setIsAssignPanelOpen(false)}>Zrušit</button>
-                  <button type="submit" className="btn-add-confirm">Namontovat</button>
+                  <button type="button" className="btn-cancel" onClick={() => setIsAssignPanelOpen(false)}>Cancel</button>
+                  <button type="submit" className="btn-add-confirm">Attach</button>
                 </div>
               </form>
             </div>
@@ -189,42 +195,33 @@ return (
         </div>
 
         {/* BOX 3: Nejnovější poznámka */}
-        <div className="detail-card card-note" 
-             style={{ 
-               borderTopColor: last_note ? getSeverityStyles(last_note.severity).border : '#cbd5e1' 
-             }}
-        >
-          <div className="card-title" style={{ color: last_note ? getSeverityStyles(last_note.severity).border : '#64748b' }}>
-            Poslední záznam
+        <div className={`detail-card card-note ${noteSeverityClass}`}>
+          <div className="card-title machine-note-title">
+            Latest note
           </div>
           
           {last_note ? (
-            <div style={{ display: 'flex', flexDirection: 'column', height: '100%', justifyContent: 'space-between' }}>
+            <div className="machine-note-content-wrap">
               <div>
-                <div style={{ 
-                    background: getSeverityStyles(last_note.severity).bg, 
-                    borderLeft: `4px solid ${getSeverityStyles(last_note.severity).border}`, 
-                    padding: '12px', 
-                    fontSize: '0.9rem', 
-                    fontStyle: 'italic',
-                    color: getSeverityStyles(last_note.severity).text,
-                    marginBottom: '10px',
-                    borderRadius: '0 4px 4px 0',
-                    maxHeight: '120px', 
-                    overflowY: 'auto'
-                }}>
+                <div className="machine-note-content">
                   "{last_note.content}"
                 </div>
               </div>
-              <div style={{ fontSize: '0.75rem', color: '#94a3b8', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <span style={{ fontWeight: '600', color: '#475569' }}>👤 {last_note.author}</span>
-                <span>🕒 {new Date(last_note.timestamp).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}</span>
+              <div className="machine-note-meta">
+                <span className="machine-note-author">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'inline',verticalAlign:'middle',marginRight:'3px'}}><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                  {last_note.author}
+                </span>
+                <span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'inline',verticalAlign:'middle',marginRight:'3px'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+                  {new Date(last_note.timestamp).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                </span>
               </div>
             </div>
           ) : (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#cbd5e1' }}>
-              <span style={{ fontSize: '2rem', marginBottom: '10px' }}>📝</span>
-              <span>Žádné poznámky</span>
+            <div className="machine-note-empty-state">
+              <svg className="machine-note-empty-icon" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+              <span>No notes yet</span>
             </div>
           )}
         </div>
@@ -234,13 +231,12 @@ return (
       {/* 3. TABS (Záložky) */}
       <div className="tabs-container">
         <div className="tabs-header">
-          <button className={`tab-btn ${activeTab === 'graphs' ? 'active' : ''}`} onClick={() => setActiveTab('graphs')}>Grafy</button>
-          <button className={`tab-btn ${activeTab === 'diagnostics' ? 'active' : ''}`} onClick={() => setActiveTab('diagnostics')}>Diagnostika (ML)</button>
-          <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>Deník údržby</button>
-          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>Historie měření</button>
-          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>Senzory (Detail)</button>
-          {/* 2. PŘIDÁNO TLAČÍTKO PRO NOVOU ZÁLOŽKU */}
-          <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>Nastavení</button>
+          <button className={`tab-btn ${activeTab === 'graphs' ? 'active' : ''}`} onClick={() => setActiveTab('graphs')}>{TabIcons.graphs} Charts</button>
+          <button className={`tab-btn ${activeTab === 'diagnostics' ? 'active' : ''}`} onClick={() => setActiveTab('diagnostics')}>{TabIcons.diagnostics} AI Analysis</button>
+          <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>{TabIcons.notes} Maintenance Log</button>
+          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>{TabIcons.history} History</button>
+          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>{TabIcons.sensors} Sensors</button>
+          <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{TabIcons.settings} Settings</button>
         </div>
 
         <div className="tab-content">

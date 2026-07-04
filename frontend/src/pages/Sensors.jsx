@@ -58,7 +58,7 @@ function Sensors() {
       });
       fetchData();
     } catch (error) {
-      alert("Chyba při registraci: " + error.response?.data?.detail);
+      alert('Failed to register sensor: ' + error.response?.data?.detail);
     }
   };
 
@@ -74,7 +74,7 @@ function Sensors() {
       setSelectedSensor(null);
       fetchData();
     } catch (error) {
-      alert("Chyba při aktualizaci.");
+      alert('Update failed.');
     }
   };
 
@@ -84,7 +84,7 @@ function Sensors() {
       setSensorToDelete(null);
       fetchData();
     } catch (error) {
-      alert("Chyba při mazání.");
+      alert('Delete failed.');
     }
   };
 
@@ -112,7 +112,7 @@ function Sensors() {
     <div className="page-container">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
         <h2 style={{ color: 'var(--text)', margin: 0 }}>Správa senzorů</h2>
-        <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>+ Registrovat senzor</button>
+        <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>+ Register sensor</button>
       </div>
 
       <div className="table-wrapper">
@@ -143,7 +143,7 @@ function Sensors() {
                   <td style={{ textAlign: 'center' }}>
                     <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
                       <button className="btn-small-edit" onClick={() => setSelectedSensor(s)}>Detail</button>
-                      <button className="btn-small-delete" onClick={() => setSensorToDelete(s.id_sensor)}>Smazat</button>
+                      <button className="btn-small-delete" onClick={() => setSensorToDelete(s.id_sensor)}>Delete</button>
                     </div>
                   </td>
                 </tr>
@@ -259,15 +259,15 @@ function Sensors() {
         isOpen={!!sensorToDelete}
         onClose={() => setSensorToDelete(null)}
         onConfirm={confirmDelete}
-        title="Potvrdit smazání senzoru"
-        message="Opravdu chcete tento senzor trvale odstranit z evidence? Tuto akci nelze vzít zpět."
+        title="Confirm sensor deletion"
+        message="Are you sure you want to permanently delete this sensor? This cannot be undone."
       />
 
       {/* MODAL: REGISTRACE NOVÉHO */}
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--primary)' }}>Nový senzor</h2>
+            <h2 style={{ color: 'var(--primary)' }}>New sensor</h2>
             <form onSubmit={handleAddSensor}>
               <div className="form-group">
                 <label>Sériové číslo *</label>

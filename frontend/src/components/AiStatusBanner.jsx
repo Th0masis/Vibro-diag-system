@@ -1,6 +1,21 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
+const AiIcon = () => (
+  <svg className="ai-banner-icon" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <path d="M9.5 2A2.5 2.5 0 0112 4.5v15a2.5 2.5 0 01-5 0v-15A2.5 2.5 0 019.5 2z"/>
+    <path d="M14.5 8A2.5 2.5 0 0117 10.5v9a2.5 2.5 0 01-5 0v-9A2.5 2.5 0 0114.5 8z"/>
+    <path d="M4.5 13A2.5 2.5 0 017 15.5v4a2.5 2.5 0 01-5 0v-4A2.5 2.5 0 014.5 13z"/>
+  </svg>
+);
+
+function formatDate(ts) {
+  if (!ts) return '';
+  try {
+    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+  } catch { return ts; }
+}
+
 function AiStatusBanner({ machineId }) {
   const [aiData, setAiData] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -10,120 +25,76 @@ function AiStatusBanner({ machineId }) {
       try {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        
         const res = await axios.get(`/machines/${machineId}/latest-ai`, { headers });
         setAiData(res.data);
       } catch (err) {
-        console.error("Chyba při načítání AI dat pro stroj", machineId);
+        console.error('AI data fetch error for machine', machineId);
       } finally {
         setLoading(false);
       }
     };
-
     fetchAiData();
   }, [machineId]);
 
   if (loading) {
-    return (
-      <div style={{ background: '#f8fafc', padding: '10px 15px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '15px', animation: 'pulse 1.5s infinite' }}>
-        Načítám AI diagnostiku...
-      </div>
-    );
+    return <div className="ai-banner ai-banner--loading">Loading AI diagnostics…</div>;
   }
 
-  // Zkontrolujeme, jestli máme data alespoň z jedné analýzy
-  const hasData = aiData && (
-    (aiData.anomaly?.timestamp) || 
-    (aiData.fault?.timestamp) || 
-    (aiData.rul?.timestamp)
-  );
+  const hasData = aiData && (aiData.anomaly?.timestamp || aiData.fault?.timestamp || aiData.rul?.timestamp);
 
   if (!hasData) {
     return (
-      <div style={{ background: '#f8fafc', padding: '10px 15px', borderRadius: '6px', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '15px', border: '1px dashed #cbd5e1' }}>
-        <i>🧠 AI diagnostika zatím neproběhla.</i>
+      <div className="ai-banner ai-banner--empty">
+        No AI analysis run yet
       </div>
     );
   }
 
-  // Zjistíme nejnovější datum z dostupných analýz
-  const timestamps = [
-    aiData.anomaly?.timestamp, 
-    aiData.fault?.timestamp, 
-    aiData.rul?.timestamp
-  ].filter(Boolean);
-  const latestDate = timestamps.sort().reverse()[0];
+  const timestamps = [aiData.anomaly?.timestamp, aiData.fault?.timestamp, aiData.rul?.timestamp].filter(Boolean);
+  const latestDate = [...timestamps].sort().reverse()[0];
 
-  // LOGIKA BAREV
-  const isAnomalyDetected = aiData.anomaly?.label === "Zjištěna anomálie";
-  const isFaultClassified = aiData.fault?.label && !aiData.fault.label.toLowerCase().includes("zdrav");
+  const isAnomalyDetected = aiData.anomaly?.label === 'Anomaly detected';
+  const isFaultClassified = aiData.fault?.label && !aiData.fault.label.toLowerCase().includes('zdrav');
   const isError = isAnomalyDetected || isFaultClassified;
 
   return (
-    <div style={{ 
-      background: isError ? '#fff5f5' : '#f0fdf4', 
-      border: `1px solid ${isError ? '#fecaca' : '#bbf7d0'}`,
-      padding: '12px 15px', 
-      borderRadius: '8px', 
-      marginTop: '15px',
-      marginBottom: '15px'
-    }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '8px' }}>
-        <strong style={{ fontSize: '0.85rem', color: isError ? 'var(--status-fault)' : 'var(--status-ok)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-          🧠 Výsledek AI Analýzy
-        </strong>
-        <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{latestDate}</span>
+    <div className={`ai-banner ${isError ? 'ai-banner--error' : 'ai-banner--ok'}`}>
+      <div className="ai-banner-header">
+        <div className="ai-banner-header-left">
+          <AiIcon />
+          <span className="ai-banner-title">AI Diagnostics</span>
+        </div>
+        <span className="ai-banner-timestamp">{formatDate(latestDate)}</span>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: '6px', fontSize: '0.85rem', color: 'var(--text-main)' }}>
-        
-        {/* Detekce Anomálií (AE_ANOWGAN) */}
+      <div className="ai-banner-metrics">
         {aiData.anomaly?.timestamp && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-            <span style={{ color: 'var(--text-muted)' }}>Anomálie:</span>
-            <span style={{ fontWeight: 'bold', color: isAnomalyDetected ? 'var(--status-fault)' : 'var(--status-ok)' }}>
-              {isAnomalyDetected ? 'Zjištěna anomálie' : 'V normě'} 
-              <span style={{ fontWeight: 'normal', fontSize: '0.75rem', opacity: 0.7, marginLeft: '5px' }}>
-                (Skóre: {aiData.anomaly.value?.toFixed(2)})
-              </span>
+          <div className="ai-metric">
+            <span className="ai-metric-label">Anomaly</span>
+            <span className={`ai-metric-value ${isAnomalyDetected ? 'ai-metric-value--bad' : 'ai-metric-value--good'}`}>
+              {isAnomalyDetected ? 'Detected' : 'None'}
+              <span className="ai-metric-confidence">({aiData.anomaly.value?.toFixed(2)})</span>
             </span>
           </div>
         )}
 
-        {/* Klasifikace poruchy (1D_CNN) */}
         {aiData.fault?.timestamp && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-            <span style={{ color: 'var(--text-muted)', whiteSpace: 'nowrap', marginRight: '10px' }}>Detekce vady:</span>
-            <span style={{ fontWeight: 'bold', textAlign: 'right', color: isFaultClassified ? 'var(--status-fault)' : 'var(--status-ok)' }}>
-              {aiData.fault.label} 
-              <span style={{ fontWeight: 'normal', fontSize: '0.75rem', opacity: 0.7, marginLeft: '5px' }}>
-                ({(aiData.fault.confidence * 100).toFixed(1)} %)
-              </span>
+          <div className="ai-metric">
+            <span className="ai-metric-label">Fault class</span>
+            <span className={`ai-metric-value ${isFaultClassified ? 'ai-metric-value--bad' : 'ai-metric-value--good'}`}>
+              {aiData.fault.label}
+              <span className="ai-metric-confidence">({(aiData.fault.confidence * 100).toFixed(0)}%)</span>
             </span>
           </div>
         )}
 
-        {/* RUL - Životnost (Bi-LSTM) - VŽDY ZOBRAZENO */}
-        <div style={{ 
-          display: 'flex', 
-          justifyContent: 'space-between', 
-          alignItems: 'center', 
-          marginTop: '4px', 
-          paddingTop: '6px', 
-          borderTop: `1px solid ${isError ? '#fecaca' : '#bbf7d0'}` 
-        }}>
-          <span style={{ color: 'var(--text-muted)' }}>Odhadovaná RUL:</span>
-          {aiData.rul?.timestamp ? (
-            <span style={{ fontWeight: 'bold', color: '#2563eb', display: 'flex', alignItems: 'center', gap: '5px' }}>
-              ⏳ {aiData.rul.value} dní
-            </span>
-          ) : (
-            <span style={{ fontStyle: 'italic', color: 'var(--text-muted)', fontSize: '0.8rem' }}>
-              Nebylo spuštěno
-            </span>
-          )}
+        <div className="ai-metric">
+          <span className="ai-metric-label">RUL estimate</span>
+          {aiData.rul?.timestamp
+            ? <span className="ai-metric-value ai-metric-value--rul">{aiData.rul.value} days</span>
+            : <span className="ai-metric-value ai-metric-value--muted">Not run</span>
+          }
         </div>
-
       </div>
     </div>
   );

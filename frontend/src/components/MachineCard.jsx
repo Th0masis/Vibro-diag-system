@@ -11,7 +11,6 @@ function MachineCard({ machine }) {
   const [sensors, setSensors] = useState([]); 
 
   const machineStatus = (machine.status || '').toUpperCase();
-  const statusColor = machineStatus === 'OK' ? '#22c55e' : machineStatus === 'WARNING' ? '#ff8200' : '#B83030';
   const statusClass = machineStatus === 'OK' ? 'ok' : machineStatus === 'WARNING' ? 'warning' : 'fault';
   const lineColors = ['#334155', '#3b82f6', '#E4002B', '#ff8200'];
 
@@ -71,20 +70,20 @@ function MachineCard({ machine }) {
     });
   };
 
+  const machineCardStatusClass = `machine-card-pro--${statusClass}`;
+
   return (
-    <div className="detail-card" style={{ 
-      borderTop: `4px solid ${statusColor}`, 
-      padding: '15px', 
-      display: 'flex', 
-      flexDirection: 'column',
-      height: '100%' 
-    }}>
+    <div className={`detail-card machine-card-pro ${machineCardStatusClass}`}>
       
       {/* 1. HLAVIČKA */}
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '5px' }}>
-        <div>
-          <h3 style={{ margin: 0, fontSize: '1.2rem', color: '#1e293b' }} className="truncate">{machine.name}</h3>
-          <span style={{ fontSize: '0.8rem', color: '#64748b' }} className="truncate">{machine.type}</span>
+      <div className="machine-card-pro-header">
+        <div className="machine-card-pro-title-wrap">
+          <h3 className="machine-card-pro-title truncate">{machine.name}</h3>
+          <div className="machine-card-pro-meta-row">
+            <span className="machine-card-pro-type truncate">{machine.type}</span>
+            <span className="machine-card-pro-meta-dot">•</span>
+            <span className="machine-card-pro-meta-id">#{machine.id_machine}</span>
+          </div>
         </div>
         <span 
           className={`status-badge status-${statusClass}`}
@@ -104,12 +103,12 @@ function MachineCard({ machine }) {
       <AiStatusBanner machineId={machine.id_machine} />
 
       {/* 3. HLAVNÍ TĚLO KARTY */}
-      <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: '15px', flex: 1 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+      <div className="machine-card-pro-body">
+        <div className="machine-card-pro-main">
           
           {/* Mini Graf */}
-          <div style={{ height: '90px', position: 'relative', border: '1px solid #f1f5f9', borderRadius: '6px', padding: '5px' }}>
-             <span style={{ position: 'absolute', top: 2, left: 4, fontSize: '0.65rem', color: '#94a3b8', zIndex: 10 }}>RMS Trend</span>
+          <div className="machine-card-pro-graph">
+             <span className="machine-card-pro-graph-label">RMS Trend</span>
              {graphData.length > 0 ? (
                <ResponsiveContainer width="100%" height="100%">
                  <LineChart data={graphData}>
@@ -149,27 +148,24 @@ function MachineCard({ machine }) {
                  </LineChart>
                </ResponsiveContainer>
              ) : (
-               <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '0.7rem', color: '#cbd5e1' }}>Bez dat</div>
+               <div className="machine-card-pro-empty">Bez dat</div>
              )}
           </div>
 
-          <div style={{ background: '#f8fafc', borderRadius: '6px', padding: '8px', fontSize: '0.75rem', color: '#475569', flex: 1, borderLeft: `2px solid ${machine.last_note ? '#cbd5e1' : 'transparent'}` }}>
-            <div style={{ fontWeight: '600', marginBottom: '2px', fontSize: '0.7rem', color: '#94a3b8' }}>
-               Poslední servis: {machine.last_note_time ? new Date(machine.last_note_time).toLocaleDateString() : '-'}
+          <div className={`machine-card-pro-note ${machine.last_note ? 'machine-card-pro-note--filled' : ''}`}>
+            <div className="machine-card-pro-note-meta">
+              Service note{machine.last_note_time ? ` · ${new Date(machine.last_note_time).toLocaleDateString()}` : ''}
             </div>
-            <div style={{ display: '-webkit-box', WebkitLineClamp: '3', WebkitBoxOrient: 'vertical', overflow: 'hidden', fontStyle: machine.last_note ? 'normal' : 'italic' }}>
-              {machine.last_note || "Žádné záznamy."}
+            <div className={`truncate-multiline-3 ${machine.last_note ? '' : 'machine-card-pro-note-empty'}`}>
+              {machine.last_note || "No entries yet."}
             </div>
           </div>
         </div>
 
-        <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-          <CompactBtn label="Detail" icon="🔍" onClick={() => goToDetail('history')} />
-          <CompactBtn label="Grafy" icon="📈" onClick={() => goToDetail('graphs')} />
-          <CompactBtn label="Historie" icon="📅" onClick={() => goToDetail('history')} />
-          <CompactBtn label="Senzory" icon="📡" onClick={() => goToDetail('sensors')} />
-          <div style={{ flex: 1 }}></div> 
-          <CompactBtn label="AI Diag." icon="🚀" primary onClick={() => goToDetail('diagnostics')} />
+        <div className="machine-card-pro-actions">
+          <CompactBtn label="History" icon="history" onClick={() => goToDetail('history')} />
+          <CompactBtn label="Trend" icon="trend" onClick={() => goToDetail('graphs')} />
+          <CompactBtn label="AI Diag." icon="ai" primary onClick={() => goToDetail('diagnostics')} />
         </div>
       </div>
 
@@ -177,30 +173,31 @@ function MachineCard({ machine }) {
   );
 }
 
+const ICONS = {
+  history: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+    </svg>
+  ),
+  trend: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
+    </svg>
+  ),
+  ai: (
+    <svg xmlns="http://www.w3.org/2000/svg" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+    </svg>
+  ),
+};
+
 const CompactBtn = ({ label, icon, onClick, primary }) => (
   <button 
+    className={`compact-btn-pro ${primary ? 'compact-btn-pro--primary' : ''}`}
     onClick={onClick}
-    style={{
-      border: primary ? 'none' : '1px solid #e2e8f0',
-      background: primary ? '#E4002B' : 'white',
-      color: primary ? 'white' : '#475569',
-      borderRadius: '4px',
-      padding: '6px 4px',
-      fontSize: '0.75rem',
-      fontWeight: '600',
-      cursor: 'pointer',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: '6px',
-      transition: '0.2s',
-      width: '100%'
-    }}
-    onMouseEnter={(e) => e.currentTarget.style.background = primary ? '#b91c1c' : '#f1f5f9'}
-    onMouseLeave={(e) => e.currentTarget.style.background = primary ? '#E4002B' : 'white'}
     title={label}
   >
-    <span>{icon}</span> {label}
+    {ICONS[icon]} {label}
   </button>
 );
 

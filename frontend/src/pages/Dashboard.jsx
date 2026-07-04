@@ -37,7 +37,7 @@ function Dashboard({ token }) {
       <div className="page-container">
         <div className="loading-message">
           <span className="loading-spinner" aria-hidden="true"></span>
-          <span>Loading machinery diagnostics dashboard...</span>
+          <span>Loading machines…</span>
         </div>
       </div>
     );
@@ -63,10 +63,12 @@ function Dashboard({ token }) {
     return (
       <div className="page-container">
         <div className="empty-state">
-          <div className="empty-state-icon">📭</div>
-          <h2 className="empty-state-title">No machines registered</h2>
+          <div className="empty-state-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/><line x1="12" y1="12" x2="12" y2="16"/><line x1="10" y1="14" x2="14" y2="14"/></svg>
+          </div>
+          <h2 className="empty-state-title">No machines yet</h2>
           <p className="empty-state-description">
-            Once machinery is registered and connected, their status and diagnostics will appear here.
+            Add a machine to start collecting vibration data and running AI diagnostics.
           </p>
         </div>
       </div>
@@ -86,24 +88,38 @@ function Dashboard({ token }) {
 
   return (
     <div className="page-container">
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px', borderBottom: '2px solid #f1f5f9', paddingBottom: '10px' }}>
-        <h1 style={{ margin: 0, color: 'var(--text-main)' }}>
-          Přehled stavu strojů
-        </h1>
-        <div style={{ display: 'flex', gap: '10px', fontSize: '0.85rem' }} aria-live="polite">
-          <span className="status-badge status-ok">OK: {summary.ok}</span>
-          <span className="status-badge status-warning">Varování: {summary.warning}</span>
-          <span className="status-badge status-fault">Porucha: {summary.fault}</span>
-          <span style={{ color: '#64748b', alignSelf: 'center' }}>Celkem: <strong>{machines.length}</strong></span>
+      <div className="dashboard-pro-header">
+        <div className="dashboard-pro-title-block">
+          <h1 className="dashboard-pro-title">Fleet Overview</h1>
+          <p className="dashboard-pro-subtitle">Live machinery status, vibration trends and AI diagnostic signals across the plant.</p>
+        </div>
+        <div className="dashboard-pro-summary" aria-live="polite" role="status" aria-label="Machine fleet status">
+          <div className="status-stat">
+            <span className="status-stat-dot status-stat-dot--ok" aria-hidden="true"></span>
+            <strong className="status-stat-count" style={summary.ok > 0 ? {color:'#059669'} : undefined}>{summary.ok}</strong>
+            <span className="status-stat-label">OK</span>
+          </div>
+          <span className="status-stat-divider" aria-hidden="true"></span>
+          <div className="status-stat">
+            <span className="status-stat-dot status-stat-dot--warning" aria-hidden="true"></span>
+            <strong className="status-stat-count" style={summary.warning > 0 ? {color:'#B45309'} : undefined}>{summary.warning}</strong>
+            <span className="status-stat-label">Warning</span>
+          </div>
+          <span className="status-stat-divider" aria-hidden="true"></span>
+          <div className="status-stat">
+            <span className="status-stat-dot status-stat-dot--fault" aria-hidden="true"></span>
+            <strong className="status-stat-count" style={summary.fault > 0 ? {color:'#DC2626'} : undefined}>{summary.fault}</strong>
+            <span className="status-stat-label">Fault</span>
+          </div>
+          <span className="status-stat-divider" aria-hidden="true"></span>
+          <div className="status-stat">
+            <strong className="status-stat-count">{machines.length}</strong>
+            <span className="status-stat-label">Total</span>
+          </div>
         </div>
       </div>
       
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fill, minmax(380px, 1fr))', 
-        gap: '20px',
-        alignItems: 'stretch' 
-      }} role="region" aria-label="Machine status cards">
+      <div className="dashboard-pro-grid" role="region" aria-label="Machine status cards">
         {machines.map(m => (
           <MachineCard 
             key={m.id_machine} 
