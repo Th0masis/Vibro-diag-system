@@ -733,25 +733,28 @@ def add_service_note(machine_id: int, note: dict, token: str = Depends(oauth2_sc
     """
     Uloží novou provozní/servisní poznámku ke stroji. Autor se automaticky páruje přes sub z JWT.
     """
-    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Invalid or expired token.")
     username = payload.get("sub")
     
     with engine.connect() as conn:
         user_query = text("SELECT id_user FROM users WHERE username = :name")
         user_id = conn.execute(user_query, {"name": username}).scalar()
         if not user_id:
-             raise HTTPException(status_code=401, detail="Neznámý uživatel")
+             raise HTTPException(status_code=401, detail="Unknown user.")
 
         query = text("""
             INSERT INTO service_notes (id_machine, id_user, content, severity, timestamp)
-            VALUES (:mid, :uid, :content, :severity, :now)
+            VALUES (:mid, :uid, :content, :severity::severity_type, :now)
         """)
         conn.execute(query, {
             "mid": machine_id, "uid": user_id, "content": note['content'],
             "severity": note.get('severity', 'INFO'), "now": datetime.now(timezone.utc)
         })
         conn.commit()
-        return {"message": "Poznámka uložena"}
+        return {"message": "Note saved"}
 
 @app.delete("/machines/{machine_id}/notes/{note_id}")
 def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oauth2_scheme)):
