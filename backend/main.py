@@ -754,7 +754,7 @@ def add_service_note(machine_id: int, note: dict, token: str = Depends(oauth2_sc
 
         query = text("""
             INSERT INTO service_notes (id_machine, id_user, content, severity, timestamp)
-            VALUES (:mid, :uid, :content, :severity::severity_type, :now)
+            VALUES (:mid, :uid, :content, CAST(:severity AS severity_type), :now)
         """)
         conn.execute(query, {
             "mid": machine_id, "uid": user_id, "content": note['content'],
