@@ -34,7 +34,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setAnomalyResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert("Chyba při spouštění detekce anomálií: " + (error.response?.data?.detail || error.message));
+      alert('Anomaly detection failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setAnomalyLoading(false);
     }
@@ -52,7 +52,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setClassResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert("Chyba při klasifikaci poruchy: " + (error.response?.data?.detail || error.message));
+      alert('Fault classification failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setClassLoading(false);
     }
@@ -70,143 +70,121 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setRulResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert("Chyba při predikci životnosti: " + (error.response?.data?.detail || error.message));
+      alert('RUL prediction failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setRulLoading(false);
     }
   };
 
   return (
-    <div style={{ width: '100%', margin: '0 auto', display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: '20px', alignItems: 'start' }}>
+    <div className="diag-grid">
       
       {/* =====================================================================
-         SEKCE 1: DETEKCE ANOMÁLIÍ (AE_ANOWGAN)
+         1. ANOMALY DETECTION (AE_ANOWGAN)
          ===================================================================== */}
-      <div className="detail-card card-sensors" style={{ borderTop: '4px solid var(--primary)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
-              1. Detekce Anomálií
-            </h2>
-            <span className="role-badge active">AE_ANOWGAN (CWT)</span>
+      <div className="detail-card diag-card">
+        <div className="diag-card-header">
+          <div>
+            <h2 className="diag-card-title">Anomaly Detection</h2>
+            <p className="diag-card-desc">
+              Auto-Encoder GAN converts the signal to a time–frequency representation and computes an Anomaly Score from the reconstruction error.
+            </p>
+          </div>
+          <span className="role-badge active diag-model-badge">AE_ANOWGAN · CWT</span>
         </div>
-
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
-          Unsupervised Auto-Encoder GAN model. Převádí signál na časově-frekvenční reprezentaci (TFR) a počítá Anomaly Score na základě chyby rekonstrukce.
-        </p>
 
         {anomalyResult ? (
-          <div style={{ background: '#f8fafc', padding: '15px', borderRadius: '8px', border: '1px solid #e2e8f0', marginBottom: '15px' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'var(--text-muted)', fontWeight: 600 }}>Anomaly Score:</span>
-              <span style={{ fontSize: '1.5rem', fontWeight: 'bold', color: anomalyResult.is_anomaly ? 'var(--status-fault)' : 'var(--status-ok)' }}>
-                {anomalyResult.anomaly_score?.toFixed(4)}
-              </span>
+          <div className={`diag-result diag-result--${anomalyResult.is_anomaly ? 'fault' : 'ok'}`}>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Anomaly score</span>
+              <span className="diag-result-value">{anomalyResult.anomaly_score?.toFixed(4)}</span>
             </div>
-            <div style={{ marginTop: '10px', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <span style={{ color: 'var(--text-muted)' }}>Status:</span>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Status</span>
               <span className={`role-badge ${anomalyResult.is_anomaly ? 'FAULT' : 'OK'}`}>
-                {anomalyResult.is_anomaly ? 'ZJIŠTĚNA ANOMÁLIE' : 'ZDRÁVÝ CHOD'}
+                {anomalyResult.is_anomaly ? 'Anomaly detected' : 'Healthy'}
               </span>
             </div>
-            <button onClick={() => setAnomalyResult(null)} className="btn-cancel" style={{ marginTop: '15px', width: '100%', padding: '8px' }}>
-              Resetovat výsledek
+            <button onClick={() => setAnomalyResult(null)} className="btn-cancel diag-reset-btn">
+              Clear result
             </button>
           </div>
         ) : (
-          <button 
-            className="btn-diagnose" 
-            onClick={runAnomalyDetection} 
-            disabled={anomalyLoading}
-            style={{ width: '100%' }}
-          >
-            {anomalyLoading ? '⏳ Generuji CWT a počítám skóre...' : '🔍 Spustit detekci anomálií'}
+          <button className="btn-diagnose diag-run-btn" onClick={runAnomalyDetection} disabled={anomalyLoading}>
+            {anomalyLoading
+              ? <><span className="loading-spinner" aria-hidden="true"></span>Computing…</>
+              : 'Run anomaly detection'}
           </button>
         )}
       </div>
 
       {/* =====================================================================
-         SEKCE 2: KLASIFIKACE PORUCH (1D_CNNwWGN)
+         2. FAULT CLASSIFICATION (1D_CNNwWGN)
          ===================================================================== */}
-      <div className="detail-card card-tech" style={{ borderTop: '4px solid var(--status-fault)' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
-              2. Klasifikace Poruchy
-            </h2>
-            <span className="role-badge active">1D_CNNwWGN (FFT)</span>
+      <div className="detail-card diag-card">
+        <div className="diag-card-header">
+          <div>
+            <h2 className="diag-card-title">Fault Classification</h2>
+            <p className="diag-card-desc">
+              1D-CNN trained with WGAN identifies the exact bearing fault type from the FFT frequency spectrum.
+            </p>
+          </div>
+          <span className="role-badge FAULT diag-model-badge">1D_CNN · FFT</span>
         </div>
-
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
-          Konvoluční neuronová síť 1D trénovaná pomocí WGAN. Určuje přesný typ mechanické závady ložiska z frekvenčního spektra (FFT).
-        </p>
 
         {classResult ? (
-          <div style={{ background: '#fff5f5', padding: '15px', borderRadius: '8px', border: '1px solid #fecaca', marginBottom: '15px' }}>
-            <div style={{ textAlign: 'center', marginBottom: '15px' }}>
-              <span style={{ color: 'var(--status-fault)', fontWeight: 600, display: 'block', marginBottom: '5px' }}>Detekovaný typ poruchy:</span>
-              <span style={{ fontSize: '1.6rem', fontWeight: 'bold', color: '#9f2222' }}>
-                {classResult.fault_type}
-              </span>
+          <div className="diag-result diag-result--fault">
+            <div className="diag-result-row">
+              <span className="diag-result-label">Fault type</span>
+              <span className="diag-result-value diag-result-value--large">{classResult.fault_type}</span>
             </div>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: 'white', padding: '10px', borderRadius: '6px' }}>
-              <span style={{ color: 'var(--text-muted)', fontSize: '0.9rem' }}>Jistota modelu (Confidence):</span>
-              <strong style={{ color: 'var(--text-main)' }}>{(classResult.confidence * 100).toFixed(1)} %</strong>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Confidence</span>
+              <span className="diag-result-value">{(classResult.confidence * 100).toFixed(1)} %</span>
             </div>
-            <button onClick={() => setClassResult(null)} className="btn-cancel" style={{ marginTop: '15px', width: '100%', padding: '8px' }}>
-              Resetovat výsledek
+            <button onClick={() => setClassResult(null)} className="btn-cancel diag-reset-btn">
+              Clear result
             </button>
           </div>
         ) : (
-          <button 
-            className="btn-diagnose" 
-            onClick={runClassification} 
-            disabled={classLoading}
-            style={{ width: '100%', background: 'var(--status-fault)' }}
-          >
-            {classLoading ? '⏳ Klasifikuji poruchu...' : '🏷️ Spustit klasifikaci poruchy'}
+          <button className="btn-diagnose diag-run-btn diag-run-btn--fault" onClick={runClassification} disabled={classLoading}>
+            {classLoading
+              ? <><span className="loading-spinner" aria-hidden="true"></span>Classifying…</>
+              : 'Run fault classification'}
           </button>
         )}
       </div>
 
       {/* =====================================================================
-         SEKCE 3: PREDIKCE RUL (Bi-LSTM)
+         3. RUL PREDICTION (Bi-LSTM)
          ===================================================================== */}
-      <div className="detail-card card-note" style={{ borderTop: '4px solid #2563eb' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
-            <h2 className="card-title" style={{ margin: 0, color: 'var(--text-main)', fontSize: '1.4rem' }}>
-              3. Predikce Životnosti (RUL)
-            </h2>
-            <span className="role-badge user">Bi-LSTM Ensemble</span>
+      <div className="detail-card diag-card">
+        <div className="diag-card-header">
+          <div>
+            <h2 className="diag-card-title">RUL Prediction</h2>
+            <p className="diag-card-desc">
+              Bi-LSTM ensemble evaluates time-series trends. The model variant (inner / outer ring) is selected automatically from the classification result.
+            </p>
+          </div>
+          <span className="role-badge user diag-model-badge">Bi-LSTM · Ensemble</span>
         </div>
 
-        <p style={{ color: 'var(--text-muted)', fontSize: '0.95rem', marginBottom: '20px' }}>
-          Rekurentní neuronové sítě vyhodnocující časové řady. Automaticky se zvolí specifický model (Vnitřní/Vnější kroužek) dle výsledku klasifikace.
-        </p>
-
         {rulResult ? (
-          <div style={{ background: '#e0f2fe', padding: '20px', borderRadius: '8px', border: '1px solid #bae6fd', marginBottom: '15px' }}>
-             <div style={{ textAlign: 'center' }}>
-                <span style={{ fontSize: '0.95rem', color: '#1e40af', textTransform: 'uppercase', letterSpacing: '1px', fontWeight: 600 }}>
-                  Zbývající užitečná životnost (RUL)
-                </span>
-                <div style={{ fontSize: '3.5rem', fontWeight: 'bold', color: '#2563eb', margin: '10px 0' }}>
-                    {rulResult.rul_value} {rulResult.unit}
-                </div>
-                <div style={{ fontSize: '0.85rem', color: '#1e40af', opacity: 0.8 }}>
-                    Použitý model: <strong>{rulResult.used_model}</strong>
-                </div>
+          <div className="diag-result diag-result--info">
+            <div className="diag-rul-display">
+              <span className="diag-rul-label">Remaining Useful Life</span>
+              <span className="diag-rul-value">{rulResult.rul_value} <span className="diag-rul-unit">{rulResult.unit}</span></span>
+              <span className="diag-rul-model">Model: {rulResult.used_model}</span>
             </div>
-            <button onClick={() => setRulResult(null)} className="btn-cancel" style={{ marginTop: '20px', width: '100%', padding: '8px', background: 'white', color: '#1e40af' }}>
-              Resetovat výsledek
+            <button onClick={() => setRulResult(null)} className="btn-cancel diag-reset-btn">
+              Clear result
             </button>
           </div>
         ) : (
-          <button 
-            className="btn-diagnose" 
-            onClick={runRULAnalysis} 
-            disabled={rulLoading}
-            style={{ width: '100%', background: '#2563eb' }}
-          >
-            {rulLoading ? '⏳ Analyzuji časové řady...' : '⏱️ Odhadnout zbývající životnost'}
+          <button className="btn-diagnose diag-run-btn diag-run-btn--info" onClick={runRULAnalysis} disabled={rulLoading}>
+            {rulLoading
+              ? <><span className="loading-spinner" aria-hidden="true"></span>Analysing…</>
+              : 'Estimate remaining life'}
           </button>
         )}
       </div>
