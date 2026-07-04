@@ -1,103 +1,348 @@
-# VibroDiag Deployment Guide
+# Deployment Guide
 
-This document describes how to deploy the full VibroDiag stack:
+## Quick Start (Recommended)
 
-- Frontend (React + Nginx)
-- Backend API (FastAPI)
-- ML service (FastAPI + PyTorch)
-- Database (TimescaleDB/PostgreSQL)
+### Docker Compose (All-in-One)
 
-## 1. Architecture and Ports
-
-Recommended default ports:
-
-- Frontend: 80 (container) or 5173 (dev server)
-- Backend API: 8000
-- ML service: 8001
-- TimescaleDB: 5432
-
-Runtime flow:
-
-1. Frontend calls Backend using VITE_API_URL.
-2. Backend calls ML service using ML_SERVICE_URL.
-3. Backend writes and reads data from TimescaleDB.
-4. ML service calls Backend on startup to sync active model paths.
-
-## 2. Prerequisites
-
-- Docker Desktop (recommended) or local Python + Node runtime
-- Python 3.11 for backend and ML service (if running without Docker)
-- Node.js 22 (matches frontend Dockerfile)
-- Access to CSV measurement files used by backend and ML service
-
-## 3. Environment Variables
-
-### Backend required variables
-
-Backend reads:
-
-- SECRET_KEY
-- ALGORITHM
-- ACCESS_TOKEN_EXPIRE_MINUTES
-- DATABASE_URL (default: postgresql://admin:secret@localhost:5432/vibro_diag)
-- ML_SERVICE_URL (default: http://localhost:8001)
-- BACKEND_URL (default: http://localhost:8000)
-
-Create backend/.env:
-
-```env
-SECRET_KEY=replace_with_long_random_value
-ALGORITHM=HS256
-ACCESS_TOKEN_EXPIRE_MINUTES=120
-DATABASE_URL=postgresql://admin:secret@db:5432/vibro_diag
-ML_SERVICE_URL=http://ml_service:8001
-BACKEND_URL=http://backend:8000
+```bash
+cd Vibro-diag-system
+docker-compose up
 ```
 
-### ML service variables
+**That's it!** All services start automatically:
+- Frontend: `http://localhost`
+- Backend: `http://localhost:8000/docs`
+- ML Service: `http://localhost:8001/docs`
+- Database: PostgreSQL on `:5432`
 
-ML service reads:
+### Services
 
-- BACKEND_URL (default: http://localhost:8000)
+| Service | Port | Status |
+|---------|------|--------|
+| Nginx (Frontend) | 80 | ✅ Ready |
+| FastAPI (Backend) | 8000 | ✅ Ready |
+| FastAPI (ML Service) | 8001 | ✅ Ready |
+| PostgreSQL 15 + TimescaleDB | 5432 | ✅ Ready |
 
-Create ml_service/.env:
+---
 
-```env
-BACKEND_URL=http://backend:8000
+## Environment Configuration
+
+### Docker Compose (Automatic)
+
+All variables are pre-configured in `docker-compose.yml`:
+
+```yaml
+db:
+  environment:
+    POSTGRES_USER: vibro_user
+    POSTGRES_PASSWORD: vibro_password
+    POSTGRES_DB: vibro_diag
+
+backend:
+  environment:
+    DATABASE_URL: postgresql://vibro_user:vibro_password@db:5432/vibro_diag
+    SECRET_KEY: your-secret-key-change-in-production
+    ALGORITHM: HS256
+    ACCESS_TOKEN_EXPIRE_MINUTES: 30
+    PYTHONUNBUFFERED: 1
 ```
 
-### Frontend variables
+**For Production**: Change `SECRET_KEY` to a secure random value.
 
-Already present:
+### Customization
 
-- frontend/.env.development
-- frontend/.env.production
+Edit `docker-compose.yml` to:
+- Change ports (e.g., `80:8000` for frontend on port 8000)
+- Change database credentials
+- Add environment variables
+- Mount custom volumes
 
-Set VITE_API_URL to your backend address.
+---
 
-## 4. Database Deployment and Initialization
+## Database
 
-Use a TimescaleDB image, because init.sql executes CREATE EXTENSION timescaledb.
+### Automatic Initialization
 
-```powershell
-docker network create vibro-net
+`init.sql` runs automatically on first `docker-compose up`:
+- Creates all tables (users, machines, sensors, measurements)
+- Creates TimescaleDB hypertables for time-series compression
+- Creates required PostgreSQL types (status_type, severity_type)
+- Inserts sample data
 
-docker run -d --name vibro-db --network vibro-net \
-  -e POSTGRES_USER=admin \
-  -e POSTGRES_PASSWORD=secret \
-  -e POSTGRES_DB=vibro_diag \
-  -p 5432:5432 \
-  timescale/timescaledb:2.17.2-pg16
+### Manual Database Access
+
+```bash
+# Connect to PostgreSQL
+docker-compose exec db psql -U vibro_user -d vibro_diag
+
+# Run SQL query
+docker-compose exec db psql -U vibro_user -d vibro_diag -c "SELECT COUNT(*) FROM measurements;"
+
+# Backup database
+docker-compose exec db pg_dump -U vibro_user vibro_diag > backup.sql
+
+# Restore database
+cat backup.sql | docker-compose exec -T db psql -U vibro_user -d vibro_diag
 ```
 
-Initialize schema:
+---
 
-```powershell
-docker cp init.sql vibro-db:/init.sql
-docker exec -it vibro-db psql -U admin -d vibro_diag -f /init.sql
+## Production Deployment
+
+### 1. SSL/HTTPS Setup
+
+Update `frontend/nginx.conf`:
+
+```nginx
+server {
+    listen 443 ssl http2;
+    ssl_certificate /etc/nginx/certs/certificate.crt;
+    ssl_certificate_key /etc/nginx/certs/private.key;
+    
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+}
 ```
 
-## 5. Deploy with Docker (Recommended)
+Add certificates to docker-compose:
+
+```yaml
+volumes:
+  - ./certs:/etc/nginx/certs
+```
+
+### 2. Secure Backend
+
+Update `docker-compose.yml`:
+
+```yaml
+backend:
+  environment:
+    SECRET_KEY: $(openssl rand -hex 32)  # Generate secure key
+    DATABASE_URL: postgresql://vibro_user:secure_password@db:5432/vibro_diag
+```
+
+### 3. Database Persistence
+
+Ensure volume is persisted:
+
+```yaml
+volumes:
+  vibro-db-data:
+    driver: local
+```
+
+Data survives container restarts.
+
+### 4. Resource Limits
+
+Constrain services to prevent resource exhaustion:
+
+```yaml
+backend:
+  deploy:
+    resources:
+      limits:
+        cpus: '2'
+        memory: 2G
+      reservations:
+        cpus: '1'
+        memory: 1G
+```
+
+### 5. Health Checks
+
+All services include health checks:
+
+```yaml
+db:
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U vibro_user"]
+    interval: 10s
+    timeout: 5s
+    retries: 5
+```
+
+---
+
+## Scaling
+
+### Run Multiple Backend Instances
+
+Use `docker-compose.override.yml`:
+
+```yaml
+version: '3.8'
+services:
+  backend:
+    deploy:
+      replicas: 3
+  
+  backend-lb:
+    image: nginx:latest
+    ports:
+      - "8000:80"
+    volumes:
+      - ./nginx-lb.conf:/etc/nginx/nginx.conf
+```
+
+### Load Balancer Config
+
+`nginx-lb.conf`:
+
+```nginx
+upstream backend {
+    server backend:8000;
+    server backend:8000;
+    server backend:8000;
+}
+
+server {
+    listen 80;
+    location / {
+        proxy_pass http://backend;
+    }
+}
+```
+
+---
+
+## Monitoring
+
+### Logs
+
+```bash
+docker-compose logs -f              # All services
+docker-compose logs -f backend      # Backend only
+docker-compose logs backend --tail 50
+```
+
+### Container Status
+
+```bash
+docker-compose ps
+docker-compose stats
+```
+
+### Database Metrics
+
+```bash
+docker-compose exec db psql -U vibro_user -d vibro_diag -c "
+  SELECT schemaname, tablename, pg_size_pretty(pg_total_relation_size(schemaname||'.'||tablename)) 
+  FROM pg_tables 
+  ORDER BY pg_total_relation_size(schemaname||'.'||tablename) DESC;"
+```
+
+---
+
+## Troubleshooting
+
+### Container Won't Start
+
+```bash
+docker-compose logs backend  # Check error logs
+docker-compose down -v       # Remove and restart fresh
+docker-compose up
+```
+
+### Database Connection Error
+
+```bash
+# Verify database is running
+docker-compose ps
+
+# Test connection
+docker-compose exec backend python -c \
+  "import psycopg2; psycopg2.connect('postgresql://vibro_user:vibro_password@db:5432/vibro_diag')"
+```
+
+### Frontend Not Serving React Routes
+
+Verify `nginx.conf` has SPA fallback:
+
+```nginx
+location / {
+    try_files $uri $uri/ /index.html;
+}
+```
+
+Rebuild frontend image:
+
+```bash
+docker-compose up --build frontend
+```
+
+### Out of Memory
+
+Increase Docker Desktop allocation:
+- Docker Desktop Settings → Resources → Memory (e.g., 4GB)
+
+Or limit containers in `docker-compose.yml`.
+
+---
+
+## Maintenance
+
+### Backup
+
+```bash
+# Database backup
+docker-compose exec db pg_dump -U vibro_user vibro_diag > backup-$(date +%Y%m%d).sql
+
+# Full backup (including models)
+tar -czf backup-$(date +%Y%m%d).tar.gz \
+  docker-compose.yml \
+  backend/ \
+  frontend/ \
+  ml_service/ \
+  backup-*.sql
+```
+
+### Updates
+
+```bash
+# Pull latest code
+git pull
+
+# Rebuild images
+docker-compose build
+
+# Restart services
+docker-compose up -d
+```
+
+### Clean Up
+
+```bash
+# Remove stopped containers
+docker container prune
+
+# Remove unused images
+docker image prune
+
+# Remove unused volumes
+docker volume prune
+```
+
+---
+
+## Kubernetes Deployment (Advanced)
+
+Generate Kubernetes manifests from docker-compose:
+
+```bash
+kompose convert -f docker-compose.yml -o k8s/
+kubectl apply -f k8s/
+```
+
+See [k8s/README.md](../k8s/README.md) for full Kubernetes setup.
+
+---
+
+**Last Updated**: 2026-07-05  
+**Docker Compose Version**: 3.8+
 
 From repository root:
 
