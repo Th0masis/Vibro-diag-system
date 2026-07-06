@@ -2359,6 +2359,431 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   white-space: nowrap;
 }
 
+/* =========================================================================== */
+/* ML SECTOR PAGE POLISH — Production-grade ML model management UI */
+/* =========================================================================== */
+
+/* Page Header — Prominent and clear */
+.ml-sector-page .machine-header-container {
+  background: linear-gradient(135deg, #FFFFFF 0%, #F5F9FC 100%);
+  border-bottom: 1px solid #E2E8F0;
+  padding: 2.5rem 2rem;
+  margin-bottom: 2rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+.ml-sector-page .machine-title-section h1 {
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #111111;
+  margin: 0;
+  line-height: 1.3;
+  letter-spacing: -0.02em;
+}
+
+.ml-sector-page .machine-meta {
+  font-size: 0.95rem;
+  color: #6B7280;
+  margin-top: 0.5rem;
+  font-weight: 500;
+}
+
+/* Main Layout — Two-column with better balance */
+.ml-sector-layout {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 2rem;
+  align-items: start;
+}
+
+@media (max-width: 1100px) {
+  .ml-sector-layout {
+    grid-template-columns: 300px 1fr;
+    gap: 1.5rem;
+  }
+}
+
+@media (max-width: 900px) {
+  .ml-sector-layout {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Model Catalog Card — Clean and organized */
+.ml-sector-catalog-card {
+  position: sticky;
+  top: 100px;
+  height: fit-content;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.ml-sector-catalog-header {
+  background: linear-gradient(to right, #F8FAFC, #F5F9FC);
+  border-bottom: 1px solid #E2E8F0;
+  padding: 1.2rem 1.5rem;
+}
+
+.ml-sector-catalog-header .card-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111111;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+/* Model List — Better visual separation and hover states */
+.ml-sector-catalog-list {
+  padding: 0.75rem;
+  max-height: 600px;
+  overflow-y: auto;
+}
+
+.ml-model-list-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: #FFFFFF;
+  border: 1px solid #E9EFF5;
+  border-radius: 6px;
+  padding: 1rem;
+  margin-bottom: 0.6rem;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  font-family: inherit;
+}
+
+.ml-model-list-item:hover {
+  background: #F8FAFC;
+  border-color: #D1D5DB;
+  transform: translateX(4px);
+}
+
+.ml-model-list-item.is-selected {
+  background: #FFF3E0;
+  border-color: #F07800;
+  border-width: 2px;
+  padding: calc(1rem - 1px);
+  box-shadow: inset 0 0 0 1px rgba(240, 120, 0, 0.1);
+}
+
+.ml-model-list-item-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+
+.ml-model-list-item-name {
+  font-weight: 600;
+  color: #111111;
+  font-size: 0.95rem;
+  line-height: 1.3;
+}
+
+.ml-model-list-item-name.is-selected {
+  color: #F07800;
+  font-weight: 700;
+}
+
+.ml-model-list-item-version {
+  font-size: 0.8rem;
+  color: #9CA3AF;
+  font-weight: 400;
+  margin-left: 0.35rem;
+}
+
+.ml-model-list-item-type {
+  font-size: 0.8rem;
+  color: #9CA3AF;
+  display: block;
+}
+
+.ml-model-status-badge {
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 0.3rem 0.65rem;
+  border-radius: 4px;
+  white-space: nowrap;
+  letter-spacing: 0.5px;
+}
+
+.ml-model-status-badge.available {
+  background: #ECFDF5;
+  color: #237A4A;
+}
+
+.ml-model-status-badge--training {
+  background: #FEF3C7;
+  color: #92400E;
+  animation: pulse-badge 2s infinite;
+}
+
+.ml-model-status-badge.STOPPED {
+  background: #F3F4F6;
+  color: #6B7280;
+}
+
+@keyframes pulse-badge {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* Model Detail Panel — Rich information hierarchy */
+.ml-sector-detail-card {
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
+  padding: 2rem;
+  background: #FFFFFF;
+}
+
+.ml-sector-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 2rem;
+  padding-bottom: 1.5rem;
+  border-bottom: 2px solid #F5F9FC;
+  margin-bottom: 2rem;
+}
+
+.ml-sector-detail-header-main {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+
+.ml-sector-detail-model-name {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #111111;
+  margin: 0;
+  letter-spacing: -0.02em;
+  line-height: 1.3;
+}
+
+.ml-sector-detail-version-badge {
+  background: #F5F9FC;
+  color: #111111;
+  border: 1px solid #E2E8F0;
+  padding: 0.5rem 0.9rem;
+  border-radius: 6px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.ml-sector-detail-model-type {
+  font-size: 1rem;
+  color: #6B7280;
+  font-weight: 500;
+  margin-top: 0.35rem;
+}
+
+.ml-sector-detail-cta-wrap {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.ml-sector-training-badge {
+  background: #FEF3C7;
+  color: #92400E;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.ml-sector-production-badge {
+  background: #ECFDF5;
+  color: #237A4A;
+  padding: 0.6rem 1rem;
+  border-radius: 6px;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.ml-sector-activate-btn {
+  padding: 0.65rem 1.3rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Detail Body — Organized sections with clear hierarchy */
+.ml-sector-detail-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+/* Metrics Grid — Side-by-side metric cards */
+.ml-sector-metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 1.5rem;
+}
+
+.ml-sector-metric-card {
+  background: #F8FAFC;
+  border: 1px solid #E9EFF5;
+  border-radius: 6px;
+  padding: 1.3rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.ml-sector-metric-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #6B7280;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.ml-sector-metric-value {
+  font-size: 1.9rem;
+  font-weight: 700;
+  color: #111111;
+  line-height: 1.2;
+}
+
+.ml-sector-date-main {
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #111111;
+}
+
+.ml-sector-date-sub {
+  font-size: 0.85rem;
+  color: #9CA3AF;
+}
+
+/* Training Box — Feature highlight */
+.ml-sector-training-box {
+  background: linear-gradient(135deg, #FFF3E0 0%, #FFFBF0 100%);
+  border: 1px solid #FFE4B5;
+  border-radius: 8px;
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.ml-sector-training-title {
+  font-size: 1.1rem;
+  font-weight: 700;
+  color: #111111;
+  margin: 0;
+  letter-spacing: -0.01em;
+}
+
+.ml-sector-training-description {
+  font-size: 0.95rem;
+  line-height: 1.6;
+  color: #555555;
+  margin: 0;
+}
+
+.ml-sector-train-btn {
+  align-self: flex-start;
+  padding: 0.75rem 1.5rem;
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-top: 0.5rem;
+  border-radius: 6px;
+}
+
+.ml-sector-train-btn.is-disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background: #D1D5DB;
+  color: #6B7280;
+}
+
+/* Section Blocks — Description and technical info */
+.ml-sector-section-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+}
+
+.ml-sector-section-block .card-title {
+  font-size: 1.05rem;
+  font-weight: 700;
+  color: #111111;
+  margin: 0;
+}
+
+.ml-sector-description-box {
+  background: #F8FAFC;
+  border-left: 3px solid #F07800;
+  border-radius: 4px;
+  padding: 1rem 1.2rem;
+  line-height: 1.6;
+  color: #555555;
+  font-size: 0.95rem;
+}
+
+/* Technical Parameters Table — Clean and readable */
+.table-wrapper {
+  overflow-x: auto;
+  border-radius: 6px;
+  border: 1px solid #E9EFF5;
+}
+
+.ml-sector-param-key {
+  background: #F8FAFC;
+  font-weight: 600;
+  color: #111111;
+  font-size: 0.9rem;
+  padding: 0.9rem 1.2rem;
+  border-right: 1px solid #E9EFF5;
+  min-width: 160px;
+}
+
+.ml-sector-param-key--narrow {
+  min-width: 120px;
+}
+
+.ml-sector-param-value {
+  padding: 0.9rem 1.2rem;
+  color: #555555;
+  font-size: 0.9rem;
+}
+
+.ml-sector-model-path {
+  background: #F5F5F5;
+  border-radius: 4px;
+  padding: 0.35rem 0.6rem;
+  font-size: 0.8rem;
+  font-family: 'Monaco', 'Menlo', monospace;
+  color: #111111;
+  word-break: break-all;
+}
+
+.ml-sector-arch-value {
+  font-weight: 500;
+  color: #111111;
+}
+
+/* Error State */
+.ml-sector-error {
+  background: #FEF2F2;
+  border: 1px solid #FCA5A5;
+  border-radius: 8px;
+  padding: 2rem;
+  color: #991B1B;
+  font-size: 1rem;
+  text-align: center;
+}
+
 .ai-metric-value {
   font-weight: 600;
   font-size: 0.76rem;
