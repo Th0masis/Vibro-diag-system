@@ -133,37 +133,38 @@ body {
 
 /* --- NAVIGAČNÍ MENU --- */
 .nav-menu {
-  background: #FFFFFF;
-  padding: 0 2rem;
+  background: linear-gradient(to right, #FFFFFF 0%, #F5F9FC 100%);
+  padding: 0.5rem 2rem;
   display: flex;
   justify-content: center;
   gap: 0;
-  border-bottom: 1px solid #E9EFF5;
+  border-bottom: 2px solid #E2E8F0;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
 }
 
 .nav-item {
-  padding: 0.85rem 1.1rem;
+  padding: 1rem 1.4rem;
   text-decoration: none;
   color: #4B5563;
-  font-weight: 500;
-  font-size: 0.875rem;
-  transition: color 0.15s ease;
+  font-weight: 600;
+  font-size: 0.95rem;
+  transition: all 0.2s ease;
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  border-radius: 0;
+  gap: 8px;
+  border-radius: 6px 6px 0 0;
   /* underline lives on the item itself, overlapping the nav border */
-  border-bottom: 2px solid transparent;
-  margin-bottom: -1px;
+  border-bottom: 3px solid transparent;
+  margin-bottom: -2px;
 }
 
 .nav-icon {
-  width: 15px;
-  height: 15px;
+  width: 18px;
+  height: 18px;
   flex-shrink: 0;
-  opacity: 0.6;
-  transition: opacity 0.15s ease;
+  opacity: 0.7;
+  transition: opacity 0.2s ease, transform 0.2s ease;
 }
 
 .nav-item:hover .nav-icon,
@@ -173,16 +174,18 @@ body {
 
 /* Hover state — text only, no background */
 .nav-item:hover {
-  background: none;
+  background: rgba(240, 120, 0, 0.06);
   color: #111827;
+  transform: translateY(-1px);
 }
 
-/* Active state — brand colour text + 2 px underline flush to nav bottom */
+/* Active state — brand colour text + 3 px underline flush to nav bottom */
 .nav-item.active {
-  background: none;
+  background: rgba(240, 120, 0, 0.1);
   color: var(--primary);
-  font-weight: 600;
-  border-bottom: 2px solid var(--primary);
+  font-weight: 700;
+  border-bottom: 3px solid var(--primary);
+  box-shadow: 0 2px 0 rgba(240, 120, 0, 0.15);
 }
 
 /* No pseudo-element needed — underline is on the element itself */
