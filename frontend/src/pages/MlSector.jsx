@@ -12,17 +12,15 @@ function MlSector() {
   const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
 
   const getAuthHeader = () => {
-    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+    // axios defaults are already set by App.jsx, just use them
+    return { withCredentials: true };
   };
 
   // Funkce vytažená ven z useEffect, abychom ji mohli volat po aktivaci nebo zavření modalu
   const fetchModels = async () => {
     try {
-      const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
-
-      const res = await axios.get('/ml-models', getAuthHeader());
+      const config = getAuthHeader();
+      const res = await axios.get('/ml-models', config);
       
       setModels(res.data);
       
