@@ -27,6 +27,7 @@ function MachineDetail() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
+  const [preselectedSensorId, setPreselectedSensorId] = useState(null);
 
   // Stavy pro přiřazování senzoru
   const [isAssignPanelOpen, setIsAssignPanelOpen] = useState(false);
@@ -82,6 +83,11 @@ function MachineDetail() {
       setIsAssignPanelOpen(false);
       fetchDetail();
     } catch (error) { alert('Failed to assign sensor.'); }
+  };
+
+  const openSensorDetail = (sensorId) => {
+    setPreselectedSensorId(sensorId);
+    setActiveTab('sensors');
   };
 
   if (loading || !data) return <div className="page-container"><div className="loading-message"><span className="loading-spinner" aria-hidden="true"></span><span>Loading machine…</span></div></div>;
@@ -157,6 +163,13 @@ return (
                       <div className="machine-sensor-item-name">{s.description}</div>
                       <div className="machine-sensor-item-serial">S/N: {s.serial_number}</div>
                     </div>
+                    <button
+                      className="btn-small-edit"
+                      onClick={() => openSensorDetail(s.id_sensor)}
+                      title="Open sensor detail"
+                    >
+                      Detail
+                    </button>
                     <button 
                       className="btn-detach"
                       onClick={() => handleDetachSensor(s.id_sensor)}
@@ -253,7 +266,9 @@ return (
             <MachineSensors 
                 sensors={sensors}             
                 machineId={info.id_machine}   
-                onRefresh={fetchDetail}       
+                onRefresh={fetchDetail}
+                preselectedSensorId={preselectedSensorId}
+                onPreselectedSensorHandled={() => setPreselectedSensorId(null)}
             />
           )}
           {/* 3. PŘIDÁNO VYKRESLENÍ NOVÉ KOMPONENTY */}

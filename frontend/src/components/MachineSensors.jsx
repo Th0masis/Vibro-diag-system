@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 import ConfirmModal from './ConfirmModal';
 
-function MachineSensors({ sensors, machineId, onRefresh }) {
+function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, onPreselectedSensorHandled }) {
   // Stavy pro panely
   const [selectedSensor, setSelectedSensor] = useState(null); // Pro detail
   const [sensorToDetach, setSensorToDetach] = useState(null); // Pro odpojení
@@ -18,6 +18,16 @@ function MachineSensors({ sensors, machineId, onRefresh }) {
       setSensorToDetach(null);
     }
   };
+
+  useEffect(() => {
+    if (!preselectedSensorId) return;
+
+    const sensor = sensors.find((s) => s.id_sensor === preselectedSensorId);
+    if (sensor) {
+      setSelectedSensor(sensor);
+      if (onPreselectedSensorHandled) onPreselectedSensorHandled();
+    }
+  }, [preselectedSensorId, sensors, onPreselectedSensorHandled]);
 
   return (
     <div>
