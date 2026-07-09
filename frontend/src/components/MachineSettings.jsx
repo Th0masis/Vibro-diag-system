@@ -74,6 +74,10 @@ const MachineSettings = ({ machineId }) => {
       const response = await axios.post(`/machines/${machineId}/test-connection?type=${type}`, payload);
       setMessage({ text: response.data.message, type: 'success' });
     } catch (error) {
+      if (error.response?.status === 401) {
+        setMessage({ text: 'Your session has expired. Please sign in again.', type: 'error' });
+        return;
+      }
       const errorMsg = error.response?.data?.detail || `${type.toUpperCase()} connection failed.`;
       setMessage({ text: errorMsg, type: 'error' });
     } finally {

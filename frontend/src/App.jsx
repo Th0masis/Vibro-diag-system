@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { BrowserRouter, Routes, Route, NavLink, Navigate } from 'react-router-dom';
 import { jwtDecode } from 'jwt-decode';
 import axios from 'axios';
@@ -16,43 +16,82 @@ import PulseGuardLogoNoText from './assets/logo-pulseguard_notext.svg';
 import BrLogo from './assets/logo-br.svg';
 import VutLogo from './assets/logo-vut.svg';
 
+function decodeValidToken(rawToken) {
+  if (!rawToken) return null;
+
+  try {
+    const decoded = jwtDecode(rawToken);
+    const expMs = decoded?.exp ? decoded.exp * 1000 : null;
+    if (expMs && expMs <= Date.now()) return null;
+    return decoded;
+  } catch {
+    return null;
+  }
+}
+
 function App() {
   const [token, setToken] = useState(() => {
     // Set auth header synchronously on init so child components' useEffects
     // have the header available immediately on hard refresh.
     const t = sessionStorage.getItem('token');
-    if (t) axios.defaults.headers.common['Authorization'] = `Bearer ${t}`;
+    const decoded = decodeValidToken(t);
+
+    if (!decoded) {
+      sessionStorage.removeItem('token');
+      delete axios.defaults.headers.common['Authorization'];
+      return null;
+    }
+
+    axios.defaults.headers.common['Authorization'] = `Bearer ${t}`;
     return t;
   });
   const [currentUser, setCurrentUser] = useState(() => {
-    const t = sessionStorage.getItem('token');
-    if (!t) return null;
-    try {
-      const decoded = jwtDecode(t);
-      return { name: decoded.sub, role: decoded.role };
-    } catch {
-      return null;
-    }
+    const decoded = decodeValidToken(sessionStorage.getItem('token'));
+    if (!decoded) return null;
+    return { name: decoded.sub, role: decoded.role };
   });
+
+  const handleLogout = useCallback(() => {
+    sessionStorage.removeItem('token');
+    setToken(null);
+    setCurrentUser(null);
+    delete axios.defaults.headers.common['Authorization'];
+  }, []);
 
   useEffect(() => {
     if (token) {
-      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
-      try {
-        const decoded = jwtDecode(token);
-        setCurrentUser({ name: decoded.sub, role: decoded.role });
-      } catch (e) {
-        console.error("Chyba dekódování:", e);
+      const decoded = decodeValidToken(token);
+      if (!decoded) {
         handleLogout();
+        return;
       }
-    }
-  }, [token]);
 
-  const handleLogout = () => {
-    sessionStorage.removeItem('token');
-    setToken(null);
-    delete axios.defaults.headers.common['Authorization'];
-  };
+      axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      setCurrentUser({ name: decoded.sub, role: decoded.role });
+    }
+  }, [token, handleLogout]);
+
+  useEffect(() => {
+    const interceptorId = axios.interceptors.response.use(
+      (response) => response,
+      (error) => {
+        const status = error?.response?.status;
+        const detail = String(error?.response?.data?.detail || '');
+        const isAuthError = status === 401 && /(token|not authenticated|neplatný|expirovaný)/i.test(detail);
+
+        if (isAuthError) {
+          handleLogout();
+        }
+
+        return Promise.reject(error);
+      }
+    );
+
+    return () => {
+      axios.interceptors.response.eject(interceptorId);
+    };
+  }, [handleLogout]);
+
   return (
     <BrowserRouter>
       <div className="app-layout">
@@ -123,11 +162,11 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard token={token} />} />
               <Route path="/machines" element={<Machines />} />
+              <Route path="/machines/:id" element={<MachineDetail />} />
               <Route path="/sensors" element={<Sensors />} />
               <Route path="/ml-sector" element={<MlSector />} />
               <Route path="/users" element={<UserManagement />} />
               <Route path="*" element={<Navigate to="/" />} />
-              <Route path="/machines/:id" element={<MachineDetail />} />
             </Routes>
           </main>
 
