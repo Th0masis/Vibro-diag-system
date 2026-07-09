@@ -12,7 +12,7 @@ from typing import Optional, List
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, Query
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from sqlalchemy import create_engine, text
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from asyncua import Client, ua
-from ftplib import FTP_TLS
+from ftplib import FTP, FTP_TLS, error_perm
 
 from auth import verify_password, create_access_token, get_password_hash
 import seed
@@ -63,6 +63,13 @@ class FTPSettings(BaseModel):
     username: Optional[str] = ""
     password: Optional[str] = ""
     directory: Optional[str] = ""
+
+class TestConnectionPayload(BaseModel):
+    url: Optional[str] = None
+    host: Optional[str] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    directory: Optional[str] = None
 
 class MachineSettingsUpdate(BaseModel):
     is_active_collection: bool
@@ -673,7 +680,7 @@ def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, rol
         return {"message": "Nastavení stroje bylo úspěšně aktualizováno."}   
 
 @app.post("/machines/{machine_id}/test-connection")
-async def test_machine_connection(machine_id: int, type: str, payload: dict, role: str = Depends(get_current_user_role)):
+async def test_machine_connection(machine_id: int, type: str, payload: TestConnectionPayload, role: str = Depends(get_current_user_role)):
     """
     Asynchronní test konektivity k síťovému rozhraní PLC (buď test OPC UA handshake, nebo FTP TLS login).
     """
@@ -681,7 +688,7 @@ async def test_machine_connection(machine_id: int, type: str, payload: dict, rol
         raise HTTPException(status_code=403, detail="Nemáte oprávnění testovat spojení.")
 
     if type == "opc":
-        url = payload.get("url")
+        url = payload.url
         try:
             client = Client(url=url)
             await asyncio.wait_for(client.connect(), timeout=3.0)
@@ -693,22 +700,90 @@ async def test_machine_connection(machine_id: int, type: str, payload: dict, rol
             raise HTTPException(status_code=400, detail=f"Chyba připojení: {str(e)}")
 
     elif type == "ftp":
-        host = payload.get("host")
-        user = payload.get("username")
-        pwd = payload.get("password")
+        host = (payload.host or "").strip()
+        user = (payload.username or "").strip()
+        pwd = payload.password or ""
+        directory = (payload.directory or "").strip()
+
+        if not host:
+            raise HTTPException(status_code=400, detail="FTP host není vyplněn.")
+
+        # Pokud není uživatel zadán, zkusíme standardní anonymní přihlášení.
+        if not user:
+            user = "anonymous"
+            if not pwd:
+                pwd = "anonymous@"
+
         try:
             def try_ftp():
-                ctx = ssl.create_default_context()
+                # Create SSL context with legacy server support
+                ctx = ssl.SSLContext(ssl.PROTOCOL_TLS_CLIENT)
                 ctx.check_hostname = False
                 ctx.verify_mode = ssl.CERT_NONE
-                ctx.minimum_version = ssl.TLSVersion.TLSv1
-                ftp = FTP_TLS(context=ctx, timeout=3.0) 
-                ftp.connect(host, 21)
-                ftp.login(user, pwd)
-                ftp.quit()
+                # Allow legacy DH keys
+                ctx.set_ciphers('DEFAULT@SECLEVEL=1')
+
+                errors = []
+
+                # Režim 1: Explicit FTPES (AUTH TLS + login + PROT P)
+                try:
+                    ftp = FTP_TLS(context=ctx, timeout=30.0)
+                    ftp.connect(host, 21, timeout=30.0)
+                    ftp.auth()
+                    ftp.login(user, pwd)
+                    ftp.prot_p()
+                    if directory:
+                        ftp.cwd(directory)
+                    ftp.quit()
+                    return
+                except Exception as e:
+                    errors.append(f"FTPES(AUTH TLS): {str(e)}")
+
+                # Režim 2: Explicit FTPES bez PROT P (některé legacy PLC servery)
+                try:
+                    ftp = FTP_TLS(context=ctx, timeout=30.0)
+                    ftp.connect(host, 21, timeout=30.0)
+                    ftp.auth()
+                    ftp.login(user, pwd)
+                    if directory:
+                        ftp.cwd(directory)
+                    ftp.quit()
+                    return
+                except Exception as e:
+                    errors.append(f"FTPES(no PROT): {str(e)}")
+
+                # Režim 3: Plain FTP (bez TLS) - část PLC serverů je jen FTP
+                try:
+                    ftp = FTP(timeout=30.0)
+                    ftp.connect(host, 21, timeout=30.0)
+                    ftp.login(user, pwd)
+                    if directory:
+                        ftp.cwd(directory)
+                    ftp.quit()
+                    return
+                except Exception as e:
+                    errors.append(f"FTP plain: {str(e)}")
+
+                # Pokud jde o autentizační chybu, vracíme uživatelsky čitelnou zprávu.
+                if any("530" in err or "authorization failed" in err.lower() for err in errors):
+                    raise HTTPException(
+                        status_code=400,
+                        detail="FTP přihlášení selhalo (530). Zkontrolujte username/password a oprávnění účtu na PLC FTP serveru."
+                    )
+
+                raise HTTPException(status_code=400, detail=f"Chyba připojení FTP: {' | '.join(errors)}")
             
             await asyncio.to_thread(try_ftp)
             return {"status": "success", "message": "FTP spojení navázáno a ověřeno."}
+        except HTTPException:
+            raise
+        except error_perm as e:
+            if str(e).startswith("530"):
+                raise HTTPException(
+                    status_code=400,
+                    detail="FTP přihlášení selhalo (530). Zkontrolujte username/password a oprávnění účtu na PLC FTP serveru."
+                )
+            raise HTTPException(status_code=400, detail=f"Chyba připojení FTP: {str(e)}")
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Chyba připojení FTP: {str(e)}")
     else:
