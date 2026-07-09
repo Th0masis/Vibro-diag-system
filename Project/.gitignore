@@ -1,0 +1,41 @@
+## B&R Automation Studio generated outputs
+Temp/
+Binaries/
+Diagnosis/
+
+## User/workstation-specific files
+*.set
+*.isopen
+LastUser.*
+
+## Build/linker/object artifacts
+*.o
+*.ox
+*.br
+*.map
+*.lst
+*.mak
+*.opt
+*.xml.gz
+*.gz
+*.fw
+*.fw.gz
+*.pci
+*.pci.gz
+*.epl
+*.epl.gz
+*.archive
+
+## Automation Studio transient folders (defense in depth if Temp is narrowed later)
+Temp/Includes/
+Temp/Objects/
+Temp/Transfer/
+Temp/Settings/
+Temp/mappView/
+
+## Generic editor/OS noise
+*.tmp
+*.bak
+*.swp
+Thumbs.db
+.DS_Store
