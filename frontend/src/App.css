@@ -1939,7 +1939,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .status-stat-count {
   font-size: 1rem;
-  font-weight: 500;
+  font-weight: 700;
   color: #0F172A;
   line-height: 1;
 }
