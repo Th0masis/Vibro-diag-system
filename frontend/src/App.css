@@ -527,9 +527,7 @@ button {
 .diag-rul-label {
   font-size: 0.8rem;
   font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #3B82F6;
+  color: #4B6FA8;
 }
 
 .diag-rul-value {
@@ -629,7 +627,7 @@ th {
   font-weight: 600;
   font-size: 0.78rem;
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.02em;
   border-bottom: 2px solid #E2E8F0;
 }
 
@@ -2606,11 +2604,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .ai-banner-title {
-  font-size: 0.68rem;
-  font-weight: 700;
+  font-size: 0.72rem;
+  font-weight: 600;
   color: #6B7280;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
 }
 
 .ai-banner-timestamp {
@@ -2643,12 +2639,11 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 /* Page Header — Prominent and clear */
 .ml-sector-page .machine-header-container {
-  background: linear-gradient(135deg, #FFFFFF 0%, #F5F9FC 100%);
-  border-bottom: 1px solid #E2E8F0;
+  background: #ffffff;
+  border: 1px solid #E2E8F0;
   padding: 2.5rem 2rem;
   margin-bottom: 2rem;
   border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
 }
 
 .ml-sector-page .machine-title-section h1 {
@@ -2700,7 +2695,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .ml-sector-catalog-header {
-  background: linear-gradient(to right, #F8FAFC, #F5F9FC);
+  background: #F8FAFC;
   border-bottom: 1px solid #E2E8F0;
   padding: 1.2rem 1.5rem;
 }
@@ -2945,7 +2940,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 /* Training Box — Feature highlight */
 .ml-sector-training-box {
-  background: linear-gradient(135deg, #FFF3E0 0%, #FFFBF0 100%);
+  background: #FFF9F0;
   border: 1px solid #FFE4B5;
   border-radius: 8px;
   padding: 1.5rem;
