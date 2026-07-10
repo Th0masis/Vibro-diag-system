@@ -133,13 +133,12 @@ body {
 
 /* --- NAVIGAČNÍ MENU --- */
 .nav-menu {
-  background: linear-gradient(to right, #FFFFFF 0%, #F5F9FC 100%);
+  background: #ffffff;
   padding: 0.5rem 2rem;
   display: flex;
   justify-content: center;
   gap: 0;
-  border-bottom: 2px solid #E2E8F0;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+  border-bottom: 1px solid #E2E8F0;
 }
 
 .nav-item {
@@ -571,6 +570,19 @@ button {
   background: #7F1D1D;
 }
 
+.diag-run-btn--primary {
+  background: var(--primary);
+  color: #ffffff;
+  border-color: var(--primary);
+  box-shadow: 0 6px 18px rgba(240, 120, 0, 0.24);
+}
+
+.diag-run-btn--primary:hover:not(:disabled) {
+  background: var(--primary-hover);
+  border-color: var(--primary-hover);
+  box-shadow: 0 8px 22px rgba(217, 100, 0, 0.28);
+}
+
 .diag-run-btn--info {
   background: #2563EB;
 }
@@ -650,11 +662,10 @@ tr:hover {
 .login-card {
   background: white;
   padding: 2.5rem;
-  border-radius: 16px;
-  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.10);
   width: 90%;
   max-width: 400px;
-  border: 1px solid #E2E8F0;
   animation: fadeInScale 0.4s ease-out;
 }
 .login-logo-header {
@@ -868,11 +879,11 @@ tr:hover {
 
 /* Malá tlačítka v tabulce */
 .btn-small-edit, .btn-small-delete {
-  padding: 4px 8px;
-  border-radius: 4px;
-  font-weight: 500;
+  padding: 6px 10px;
+  border-radius: 8px;
+  font-weight: 600;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
   background: white;
   font-size: 0.75rem;
   border: 1px solid var(--neutral-border-dark);
@@ -1142,6 +1153,22 @@ tr:hover {
 
 .tab-btn.active .tab-icon { opacity: 1; }
 
+.tab-btn--priority {
+  color: #9A3412;
+  background: rgba(240, 120, 0, 0.08);
+}
+
+.tab-btn--priority:hover {
+  color: #7C2D12;
+  background: rgba(240, 120, 0, 0.14);
+}
+
+.tab-btn--priority.active {
+  color: #7C2D12;
+  background: #FFF7ED;
+  box-shadow: 0 1px 3px rgba(240, 120, 0, 0.18), 0 0 0 1px rgba(240, 120, 0, 0.28);
+}
+
 .tab-content {
   background: white;
   padding: var(--space-6) var(--space-8);
@@ -1156,11 +1183,10 @@ tr:hover {
   justify-content: space-between;
   align-items: flex-start;
   margin-bottom: var(--space-6);
-  background: linear-gradient(135deg, #FFFCF7 0%, #FFFFFF 55%);
+  background: #ffffff;
   padding: 1.25rem 1.5rem;
   border-radius: 12px;
-  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
-  border: 1px solid #EAE4DA;
+  border: 1px solid #E2E8F0;
 }
 
 .machine-title-section h1 {
@@ -1230,10 +1256,12 @@ tr:hover {
   background: #fff;
 }
 
-/* Card accent variants — subtle left indicators */
-.card-tech { border-left: 3px solid #E2E8F0; }
-.card-sensors { border-left: 3px solid #E2E8F0; }
-.card-note { border-left: 3px solid #E2E8F0; }
+/* Card variants — keep full-frame borders to avoid stripe accents */
+.card-tech,
+.card-sensors,
+.card-note {
+  border-color: #E2E8F0;
+}
 
 .card-title {
   margin-top: 0;
@@ -1258,14 +1286,14 @@ tr:hover {
   background: none;
   border: 1px solid #e2e8f0;
   color: #475569;
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
+  width: 44px;
+  height: 44px;
+  border-radius: 8px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
   flex-shrink: 0;
   padding: 0;
 }
@@ -1307,18 +1335,6 @@ tr:hover {
   height: 100%; /* Aby byly všechny karty v řádku stejně vysoké */
   justify-content: space-between;
   transition: transform 0.2s, box-shadow 0.2s;
-}
-
-.detail-card:hover {
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0,0,0,0.1);
-}
-
-/* Upravíme tlačítko btn-back, aby v dashboardu vypadalo jako akční tlačítko */
-.btn-back {
-  /* ... stávající styly ... */
-  border: 1px solid #e2e8f0;
-  padding: 10px;
 }
 
 /* ==========================================================================
@@ -1452,10 +1468,9 @@ textarea:focus-visible,
 /* --- ERROR STATES --- */
 .error-message,
 [role="alert"] {
-  background-color: #FFEBEE;
-  border: 1px solid #FFCDD2;
-  border-left: 4px solid #B83030;
-  color: #B83030;
+  background-color: #FEF2F2;
+  border: 1.5px solid #FECACA;
+  color: #991B1B;
   padding: 12px 16px;
   border-radius: 8px;
   display: flex;
@@ -1857,9 +1872,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   gap: var(--space-5);
   margin-bottom: var(--space-5);
   padding: 1.25rem 1.5rem;
-  border: 1px solid #EAE4DA;
+  border: 1px solid #E2E8F0;
   border-radius: 12px;
-  background: linear-gradient(135deg, #FFFCF7 0%, #FFFFFF 55%);
+  background: #ffffff;
 }
 
 .dashboard-pro-title-block {
@@ -1887,9 +1902,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   display: flex;
   align-items: center;
   gap: 0;
-  background: #FFFDF9;
-  border: 1px solid #EAE4DA;
-  border-radius: 10px;
+  background: #F9FAFB;
+  border: 1px solid #E2E8F0;
+  border-radius: 8px;
   padding: 4px 8px;
 }
 
@@ -1942,9 +1957,17 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .dashboard-pro-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
   gap: var(--space-5);
   align-items: stretch;
+}
+
+/* DM Mono for numeric data, IDs, sensor readings */
+.machine-card-pro-meta-id,
+.detail-value-strong,
+.diag-rul-value,
+.status-stat-count {
+  font-family: 'DM Mono', 'Courier New', monospace;
 }
 
 /* ==========================================================================
@@ -1960,13 +1983,13 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .machine-card-pro--warning {
-  border-left: 3px solid #F59E0B;
-  padding-left: calc(0.9rem - 2px);
+  background: #FFFBEB;
+  border-color: #FDE68A;
 }
 
 .machine-card-pro--fault {
-  border-left: 3px solid #EF4444;
-  padding-left: calc(0.9rem - 2px);
+  background: #FEF2F2;
+  border-color: #FECACA;
 }
 
 .machine-card-pro-header {
@@ -2025,6 +2048,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   display: flex;
   flex-direction: column;
   gap: 0.62rem;
+  min-width: 0;
 }
 
 .machine-card-pro-graph {
@@ -2035,6 +2059,13 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   height: 96px;
   background: #FCFCFC;
   overflow: hidden;
+  min-width: 0;
+  width: 100%;
+}
+
+.machine-card-pro-graph .recharts-responsive-container {
+  min-width: 0;
+  min-height: 72px;
 }
 
 .machine-card-pro-graph-label {
@@ -2042,11 +2073,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   top: 3px;
   left: 6px;
   z-index: 10;
-  font-size: 0.6rem;
-  color: #CBD5E1;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  font-weight: 600;
+  font-size: 0.62rem;
+  color: #94A3B8;
+  font-weight: 500;
 }
 
 .machine-card-pro-empty {
@@ -2077,10 +2106,8 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .machine-card-pro-note-meta {
   font-weight: 600;
-  font-size: 0.65rem;
+  font-size: 0.68rem;
   color: #9CA3AF;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
   display: flex;
   align-items: center;
   gap: 4px;
@@ -2112,16 +2139,17 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   border: 1px solid #e2e8f0;
   background: #ffffff;
   color: #475569;
-  border-radius: 10px;
-  padding: 5px 4px;
+  border-radius: 8px;
+  min-height: 44px;
+  padding: 8px 10px;
   font-size: 0.75rem;
-  font-weight: 700;
+  font-weight: 600;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 5px;
-  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
 }
 
 .compact-btn-pro:hover {
@@ -2137,6 +2165,16 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .compact-btn-pro--primary:hover {
   background: var(--primary-hover);
+}
+
+/* Unified action-icon sizing and stroke vocabulary */
+.compact-btn-pro svg,
+.sensor-btn svg,
+.btn-diagnose--compact svg {
+  width: 16px;
+  height: 16px;
+  stroke-width: 2;
+  flex-shrink: 0;
 }
 
 @media (max-width: 960px) {
@@ -2187,7 +2225,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .card-title--primary {
-  color: var(--primary);
+  color: var(--neutral-dark-gray);
 }
 
 .detail-grid--compact {
@@ -2200,6 +2238,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .detail-value-strong {
   font-weight: 700;
+  font-family: 'DM Mono', 'Courier New', monospace;
+  font-size: 1rem;
+  color: var(--neutral-black);
 }
 
 .detail-description-text {
@@ -2209,10 +2250,154 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .btn-diagnose--compact {
-  font-size: 0.7rem;
-  padding: 4px 8px;
-  height: auto;
-  min-height: auto;
+  min-height: 44px;
+  min-width: 44px;
+  font-size: 0.75rem;
+  padding: 8px 12px;
+}
+
+/* ==========================================================================
+   17A. SERVICE NOTES RESPONSIVE LAYOUT
+   ========================================================================== */
+.service-notes-layout {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(420px, 2fr);
+  gap: 24px;
+}
+
+.service-notes-heading {
+  margin-top: 0;
+  color: var(--text-main);
+}
+
+.service-notes-form {
+  background: #f8fafc;
+  padding: 20px;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.service-notes-field {
+  margin-bottom: 15px;
+}
+
+.service-notes-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 0.9rem;
+  color: var(--text-muted);
+}
+
+.service-notes-severity-row {
+  display: flex;
+  gap: 10px;
+}
+
+.service-notes-textarea {
+  width: 100%;
+  padding: 10px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  resize: vertical;
+}
+
+.service-notes-submit {
+  width: 100%;
+}
+
+.service-notes-list {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  max-height: 500px;
+  overflow-y: auto;
+  padding-right: 10px;
+}
+
+.service-notes-item {
+  display: flex;
+  gap: 15px;
+  padding: 15px;
+  background: #ffffff;
+  border: 1px solid #f1f5f9;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0,0,0,0.02);
+}
+
+.service-notes-item-time {
+  min-width: 90px;
+  text-align: right;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.service-notes-item-date {
+  font-weight: 700;
+  color: #64748b;
+}
+
+.service-notes-item-content {
+  flex: 1;
+  border: 1px solid;
+  border-radius: 8px;
+  padding: 12px;
+}
+
+.service-notes-item-header {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 8px;
+  align-items: flex-start;
+}
+
+.service-notes-author {
+  font-weight: 700;
+  color: var(--text-main);
+  margin-right: 10px;
+}
+
+.service-notes-delete {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: #cbd5e1;
+  font-size: 1.2rem;
+  line-height: 0.5;
+  padding: 0 5px;
+}
+
+.service-notes-delete:hover {
+  color: var(--status-fault);
+}
+
+.service-notes-text {
+  margin: 0;
+  color: #334155;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+@media (max-width: 1100px) {
+  .service-notes-layout {
+    grid-template-columns: 1fr;
+    gap: 18px;
+  }
+
+  .service-notes-item {
+    flex-direction: column;
+    gap: 10px;
+  }
+
+  .service-notes-item-time {
+    min-width: auto;
+    text-align: left;
+  }
+}
+
+@media (max-width: 640px) {
+  .service-notes-severity-row {
+    flex-direction: column;
+  }
 }
 
 .machine-sensor-list-wrap {
@@ -2299,13 +2484,13 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .machine-note-content {
   background: var(--machine-note-bg, #f8fafc);
-  border-left: 4px solid var(--machine-note-accent, #cbd5e1);
+  border: 1px solid var(--machine-note-accent, #cbd5e1);
   padding: 12px;
   font-size: 0.9rem;
   font-style: italic;
   color: var(--machine-note-text, #475569);
   margin-bottom: 10px;
-  border-radius: 0 4px 4px 0;
+  border-radius: 6px;
   max-height: 120px;
   overflow-y: auto;
 }
@@ -2816,8 +3001,8 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .ml-sector-description-box {
   background: #F8FAFC;
-  border-left: 3px solid #F07800;
-  border-radius: 4px;
+  border: 1px solid #F07800;
+  border-radius: 6px;
   padding: 1rem 1.2rem;
   line-height: 1.6;
   color: #555555;
@@ -3101,8 +3286,12 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   text-align: center;
 }
 
-.history-checkbox {
+input.history-checkbox {
   cursor: pointer;
+  width: 16px !important;
+  height: 16px !important;
+  min-width: 16px !important;
+  min-height: 16px !important;
 }
 
 .history-checkbox--disabled {
@@ -3257,6 +3446,40 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   align-items: center;
   justify-content: center;
   color: #64748b;
+}
+
+.machine-graphs-detail-legend {
+  margin-top: 10px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  justify-content: center;
+  color: #64748b;
+  font-size: 0.78rem;
+}
+
+.machine-graphs-detail-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.machine-graphs-detail-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.machine-graphs-detail-dot--available {
+  background: #0ea5e9;
+  border: 1px solid #ffffff;
+  box-shadow: 0 0 0 1px rgba(14, 165, 233, 0.4);
+}
+
+.machine-graphs-detail-dot--unavailable {
+  background: #ffffff;
+  border: 2px solid #94a3b8;
 }
 
 .machine-graphs-tip {

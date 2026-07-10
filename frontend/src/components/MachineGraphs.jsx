@@ -29,6 +29,18 @@ function MachineGraphs({ machineId }) {
 
   const sensorColors = ['#0284c7', '#cd3808', '#10b981', '#8b5cf6', '#f59e0b', '#64748b'];
 
+  const renderSensorDot = (sensorName, sensorColor) => (props) => {
+    const { cx, cy, payload } = props;
+    if (cx == null || cy == null || !payload) return null;
+
+    const hasDetail = payload[`${sensorName}_source`] === 'raw_analysis';
+    if (hasDetail) {
+      return <circle cx={cx} cy={cy} r={3.4} fill={sensorColor} stroke="#ffffff" strokeWidth={1.4} />;
+    }
+
+    return <circle cx={cx} cy={cy} r={3.4} fill="#ffffff" stroke="#94a3b8" strokeWidth={2} />;
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
@@ -86,12 +98,8 @@ function MachineGraphs({ machineId }) {
     const measId = payload[`${sensorName}_id`];
     const source = payload[`${sensorName}_source`];
 
-    if (measId) {
-      if (source === 'raw_analysis') {
-        setSelectedMeasurementId(measId);
-      } else {
-        alert("This point comes from the IIoT Connector and does not contain a raw .csv source file. Detailed signal analysis is only available for local raw recordings.");
-      }
+    if (measId && source === 'raw_analysis') {
+      setSelectedMeasurementId(measId);
     }
   };
 
@@ -153,18 +161,36 @@ function MachineGraphs({ machineId }) {
 
               {uniqueSensors.map((sensorName, index) => {
                 if (selectedSensor !== 'all' && selectedSensor !== sensorName) return null;
+                const sensorColor = sensorColors[index % sensorColors.length];
                 return (
                   <Line 
                     key={sensorName}
                     type="monotone" 
                     dataKey={sensorName} 
                     name={`Senzor ${sensorName}`}
-                    stroke={sensorColors[index % sensorColors.length]} 
+                    stroke={sensorColor} 
                     strokeWidth={2.5}
-                    dot={{ r: 4, strokeWidth: 2, fill: 'white' }}
-                    activeDot={{ 
-                      r: 7, cursor: 'pointer', strokeWidth: 2, stroke: 'white',
-                      onClick: (e, payload) => handleDotClick(payload.payload, sensorName)
+                    dot={renderSensorDot(sensorName, sensorColor)}
+                    activeDot={(props) => {
+                      const pointPayload = props?.payload;
+                      const source = pointPayload?.[`${sensorName}_source`];
+                      const isClickable = source === 'raw_analysis';
+
+                      return (
+                        <circle
+                          cx={props.cx}
+                          cy={props.cy}
+                          r={7}
+                          fill={sensorColor}
+                          stroke="white"
+                          strokeWidth={2}
+                          style={{
+                            cursor: isClickable ? 'pointer' : 'not-allowed',
+                            opacity: isClickable ? 1 : 0.45
+                          }}
+                          onClick={isClickable ? () => handleDotClick(pointPayload, sensorName) : undefined}
+                        />
+                      );
                     }}
                     connectNulls={true}
                   />
@@ -175,8 +201,19 @@ function MachineGraphs({ machineId }) {
         )}
       </div>
 
+      <div className="machine-graphs-detail-legend" role="note" aria-label="Detail analysis availability legend">
+        <span className="machine-graphs-detail-legend-item">
+          <span className="machine-graphs-detail-dot machine-graphs-detail-dot--available" aria-hidden="true"></span>
+          Detail analysis available (FFT/CWT)
+        </span>
+        <span className="machine-graphs-detail-legend-item">
+          <span className="machine-graphs-detail-dot machine-graphs-detail-dot--unavailable" aria-hidden="true"></span>
+          Detail analysis unavailable (IIoT point)
+        </span>
+      </div>
+
       <p className="machine-graphs-tip">
-        <strong>Tip:</strong> Kliknutím na libovolný bod v grafu otevřete detailní diagnostické rozhraní (FFT/CWT).
+        <strong>Tip:</strong> Click any point to open detail diagnostics. Filled dots open FFT/CWT, hollow dots are IIoT-only points.
       </p>
 
       {/* ZOBRAZENÍ MODALU */}

@@ -105,26 +105,26 @@ function Sensors() {
   // Pomocná funkce pro získání názvu stroje podle ID
   const getMachineName = (id) => {
     const machine = machines.find(m => m.id_machine === id);
-    return machine ? machine.name : 'Nepřiřazen';
+    return machine ? machine.name : 'Unassigned';
   };
 
   return (
     <div className="page-container">
       <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ color: 'var(--text)', margin: 0 }}>Správa senzorů</h2>
+        <h2 style={{ color: 'var(--text)', margin: 0 }}>Sensor Management</h2>
         <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>+ Register sensor</button>
       </div>
 
       <div className="table-wrapper">
-        {loading ? ( <p style={{ padding: '20px' }}>Načítám data...</p> ) : (
+        {loading ? ( <p style={{ padding: '20px' }}>Loading data...</p> ) : (
           <table>
             <thead>
               <tr>
-                <th>Sériové číslo</th>
-                <th>Model / Popis</th>
-                <th>Přiřazený stroj</th>
+                <th>Serial number</th>
+                <th>Model / Description</th>
+                <th>Assigned machine</th>
                 <th>Status</th>
-                <th style={{ textAlign: 'center' }}>Akce</th>
+                <th style={{ textAlign: 'center' }}>Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -133,11 +133,11 @@ function Sensors() {
                   <td><strong>{s.serial_number}</strong></td>
                   <td>{s.description}</td>
                   <td style={{ color: s.id_machine ? 'var(--text)' : '#94a3b8' }}>
-                    {s.id_machine ? getMachineName(s.id_machine) : '— Sklad —'}
+                    {s.id_machine ? getMachineName(s.id_machine) : '— Warehouse —'}
                   </td>
                   <td>
                     <span className={`role-badge ${s.status}`}>
-                      {s.status === 'available' ? 'K dispozici' : s.status === 'active' ? 'Aktivní' : 'Údržba'}
+                      {s.status === 'available' ? 'Available' : s.status === 'active' ? 'Active' : 'Maintenance'}
                     </span>
                   </td>
                   <td style={{ textAlign: 'center' }}>
@@ -153,59 +153,59 @@ function Sensors() {
         )}
       </div>
 
-      {/* MODAL: DETAIL SENZORU */}
+      {/* MODAL: SENSOR DETAIL */}
       {selectedSensor && !editingSensor && (
         <div className="modal-overlay">
           <div className="modal-content sensor-detail-card">
             <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, color: 'var(--primary)' }}>Detail senzoru</h2>
+              <h2 style={{ margin: 0, color: 'var(--primary)' }}>Sensor detail</h2>
               <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
             </div>
             <div className="detail-grid">
               <div className="detail-item"><label>S/N</label><p>{selectedSensor.serial_number}</p></div>
               <div className="detail-item"><label>Model</label><p>{selectedSensor.description}</p></div>
-              <div className="detail-item"><label>Vzorkování</label><p>{selectedSensor.sampling_rate} Hz</p></div>
-              <div className="detail-item"><label>Kalibrace</label><p>{selectedSensor.calibration_date || 'Neznámá'}</p></div>
+              <div className="detail-item"><label>Sampling</label><p>{selectedSensor.sampling_rate} Hz</p></div>
+              <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
               
-              {/* Zobrazení názvu stroje v detailu */}
+              {/* Show assigned machine in detail */}
               <div className="detail-item" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '10px', borderRadius: '6px' }}>
-                  <label>Umístění</label>
+                  <label>Placement</label>
                   <p style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                     {selectedSensor.id_machine ? (
                         <>
                           <span style={{ fontWeight: 'bold' }}>{getMachineName(selectedSensor.id_machine)}</span>
                           <span style={{ color: '#64748b' }}>📍 {selectedSensor.position}</span>
                         </>
-                    ) : 'Sklad (Nepřiřazen)'}
+                    ) : 'Warehouse (Unassigned)'}
                   </p>
               </div>
             </div>
             <div className="modal-actions" style={{ marginTop: '30px' }}>
-              <button className="btn-update" onClick={() => setEditingSensor(selectedSensor)}>Upravit údaje</button>
-              <button className="btn-cancel" onClick={() => setSelectedSensor(null)}>Zavřít</button>
+              <button className="btn-update" onClick={() => setEditingSensor(selectedSensor)}>Edit details</button>
+              <button className="btn-cancel" onClick={() => setSelectedSensor(null)}>Close</button>
             </div>
           </div>
         </div>
       )}
 
-      {/* MODAL: EDITACE */}
+      {/* MODAL: EDIT */}
       {editingSensor && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--primary)' }}>Upravit senzor</h2>
+            <h2 style={{ color: 'var(--primary)' }}>Edit sensor</h2>
             <form onSubmit={handleUpdateSensor}>
               <div className="form-group">
-                <label>Sériové číslo (S/N)</label>
+                <label>Serial number (S/N)</label>
                 <input type="text" value={editingSensor.serial_number} disabled style={{ background: '#f1f5f9' }} />
               </div>
 
               <div className="form-group">
-                <label>Přiřazený stroj</label>
+                <label>Assigned machine</label>
                 <select 
                     value={editingSensor.id_machine || ''} 
                     onChange={(e) => handleMachineChange(e, setEditingSensor, editingSensor)}
                 >
-                    <option value="">-- Nepřiřazeno (Sklad) --</option>
+                    <option value="">-- Unassigned (Warehouse) --</option>
                     {machines.map(m => (
                         <option key={m.id_machine} value={m.id_machine}>
                             {m.name} (ID: {m.id_machine})
@@ -214,7 +214,7 @@ function Sensors() {
                 </select>
               </div>
 
-              {/* Pozice a Status se zobrazí, jen pokud je vybrán stroj, nebo naopak */}
+              {/* Placement and status depend on assigned machine */}
               <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
                   <div className="form-group">
                     <label>Status</label>
@@ -222,32 +222,31 @@ function Sensors() {
                         value={editingSensor.status} 
                         onChange={(e) => setEditingSensor({...editingSensor, status: e.target.value})}
                     >
-                        {/* Logika: Pokud je vybrán stroj, neměl by být Available. Pokud není stroj, musí být Available. */}
-                        <option value="available" disabled={!!editingSensor.id_machine}>K dispozici (Sklad)</option>
-                        <option value="active" disabled={!editingSensor.id_machine}>Aktivní (V provozu)</option>
-                        <option value="maintenance">Údržba</option>
+                        <option value="available" disabled={!!editingSensor.id_machine}>Available (Warehouse)</option>
+                        <option value="active" disabled={!editingSensor.id_machine}>Active (In operation)</option>
+                        <option value="maintenance">Maintenance</option>
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>Pozice na stroji</label>
+                    <label>Machine position</label>
                     <input 
                         type="text" 
                         value={editingSensor.position || ''} 
                         onChange={(e) => setEditingSensor({...editingSensor, position: e.target.value})}
-                        placeholder={editingSensor.id_machine ? "Povinné" : "Nerelevantní"}
+                        placeholder={editingSensor.id_machine ? "Required" : "Not applicable"}
                         disabled={!editingSensor.id_machine}
                     />
                   </div>
               </div>
 
               <div className="form-group">
-                <label>Popis / Model</label>
+                <label>Description / Model</label>
                 <input type="text" value={editingSensor.description} onChange={(e) => setEditingSensor({...editingSensor, description: e.target.value})} required />
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setEditingSensor(null)}>Zpět</button>
-                <button type="submit" className="btn-add-confirm">Uložit změny</button>
+                <button type="button" className="btn-cancel" onClick={() => setEditingSensor(null)}>Back</button>
+                <button type="submit" className="btn-add-confirm">Save changes</button>
               </div>
             </form>
           </div>
@@ -263,24 +262,24 @@ function Sensors() {
         message="Are you sure you want to permanently delete this sensor? This cannot be undone."
       />
 
-      {/* MODAL: REGISTRACE NOVÉHO */}
+      {/* MODAL: REGISTER NEW SENSOR */}
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
             <h2 style={{ color: 'var(--primary)' }}>New sensor</h2>
             <form onSubmit={handleAddSensor}>
               <div className="form-group">
-                <label>Sériové číslo *</label>
+                <label>Serial number *</label>
                 <input type="text" onChange={(e) => setNewSensor({...newSensor, serial_number: e.target.value})} required />
               </div>
               
               <div className="form-group">
-                <label>Přiřadit ke stroji (Volitelné)</label>
+                <label>Assign to machine (optional)</label>
                 <select 
                     value={newSensor.id_machine} 
                     onChange={(e) => handleMachineChange(e, setNewSensor, newSensor)}
                 >
-                    <option value="">-- Nepřiřazeno (Sklad) --</option>
+                    <option value="">-- Unassigned (Warehouse) --</option>
                     {machines.map(m => (
                         <option key={m.id_machine} value={m.id_machine}>{m.name}</option>
                     ))}
@@ -289,10 +288,10 @@ function Sensors() {
 
               {newSensor.id_machine && (
                   <div className="form-group">
-                    <label>Pozice na stroji *</label>
+                  <label>Machine position *</label>
                     <input 
                         type="text" 
-                        placeholder="Např. Ložisko 1" 
+                    placeholder="e.g. Bearing 1" 
                         value={newSensor.position}
                         onChange={(e) => setNewSensor({...newSensor, position: e.target.value})}
                         required
@@ -301,7 +300,7 @@ function Sensors() {
               )}
 
               <div className="form-group">
-                <label>Popis *</label>
+                <label>Description *</label>
                 <input type="text" onChange={(e) => setNewSensor({...newSensor, description: e.target.value})} required />
               </div>
               
@@ -311,14 +310,14 @@ function Sensors() {
                     <input type="number" onChange={(e) => setNewSensor({...newSensor, sampling_rate: e.target.value})} />
                 </div>
                 <div className="form-group">
-                    <label>Kalibrace</label>
+                    <label>Calibration</label>
                     <input type="date" onChange={(e) => setNewSensor({...newSensor, calibration_date: e.target.value})} />
                 </div>
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Zrušit</button>
-                <button type="submit" className="btn-add-confirm">Registrovat</button>
+                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                <button type="submit" className="btn-add-confirm">Register</button>
               </div>
             </form>
           </div>

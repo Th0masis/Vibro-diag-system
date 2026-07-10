@@ -1,7 +1,7 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
-import { LineChart, Line, YAxis, ResponsiveContainer, Tooltip } from 'recharts';
+import { LineChart, Line, YAxis, ResponsiveContainer } from 'recharts';
 // Importujeme nový pásek pro AI diagnostiku
 import AiStatusBanner from './AiStatusBanner'; // Ujisti se, že cesta odpovídá umístění souboru
 
@@ -9,6 +9,8 @@ function MachineCard({ machine }) {
   const navigate = useNavigate();
   const [graphData, setGraphData] = useState([]);
   const [sensors, setSensors] = useState([]); 
+  const [graphReady, setGraphReady] = useState(false);
+  const graphHostRef = useRef(null);
 
   const machineStatus = (machine.status || '').toUpperCase();
   const statusClass = machineStatus === 'OK' ? 'ok' : machineStatus === 'WARNING' ? 'warning' : 'fault';
@@ -60,6 +62,27 @@ function MachineCard({ machine }) {
     fetchMiniGraph();
   }, [machine.id_machine]);
 
+  useEffect(() => {
+    const host = graphHostRef.current;
+    if (!host) return;
+
+    const updateReady = () => {
+      const rect = host.getBoundingClientRect();
+      setGraphReady(rect.width > 0 && rect.height > 0);
+    };
+
+    updateReady();
+
+    if (typeof ResizeObserver === 'undefined') {
+      return;
+    }
+
+    const observer = new ResizeObserver(() => updateReady());
+    observer.observe(host);
+
+    return () => observer.disconnect();
+  }, [graphData.length]);
+
   const goToDetail = (tabName) => {
     navigate(`/machines/${machine.id_machine}`, { state: { tab: tabName } });
   };
@@ -91,9 +114,15 @@ function MachineCard({ machine }) {
           aria-label={`Machine status: ${machineStatus}`}
         >
           <span aria-hidden="true">
-            {machineStatus === 'OK' && '✓'}
-            {machineStatus === 'WARNING' && '⚠'}
-            {machineStatus !== 'OK' && machineStatus !== 'WARNING' && '🔴'}
+            {machineStatus === 'OK' && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+            )}
+            {machineStatus === 'WARNING' && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+            )}
+            {machineStatus !== 'OK' && machineStatus !== 'WARNING' && (
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+            )}
           </span>
           {machineStatus}
         </span>
@@ -107,17 +136,12 @@ function MachineCard({ machine }) {
         <div className="machine-card-pro-main">
           
           {/* Mini Graf */}
-          <div className="machine-card-pro-graph">
+           <div className="machine-card-pro-graph" ref={graphHostRef}>
              <span className="machine-card-pro-graph-label">RMS Trend</span>
-             {graphData.length > 0 ? (
-               <ResponsiveContainer width="100%" height="100%">
+             {graphData.length > 0 && graphReady ? (
+               <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={72}>
                  <LineChart data={graphData}>
                    <YAxis domain={['auto', 'auto']} hide />
-                   <Tooltip 
-                      contentStyle={{ fontSize: '0.7rem', padding: '5px', border: 'none', boxShadow: '0 2px 5px rgba(0,0,0,0.1)' }}
-                      labelStyle={{ display: 'none' }}
-                      formatter={(val, name) => [val.toFixed(3), name]}
-                   />
                    {sensors.map((sensorName, index) => (
                      <Line 
                         key={sensorName}
@@ -138,7 +162,7 @@ function MachineCard({ machine }) {
                               if (source === 'raw_analysis') {
                                 goToMeasurementDetail(measId);
                               } else {
-                                alert("Tento bod pochází z průběžného měření (IIoT Connector) a neobsahuje zdrojový soubor s vysokofrekvenčním záznamem pro detailní analýzu.");
+                                alert("This point comes from IIoT Connector data and does not include a raw source file for detailed signal analysis.");
                               }
                             }
                           }
@@ -148,7 +172,7 @@ function MachineCard({ machine }) {
                  </LineChart>
                </ResponsiveContainer>
              ) : (
-               <div className="machine-card-pro-empty">Bez dat</div>
+               <div className="machine-card-pro-empty">No data</div>
              )}
           </div>
 
@@ -165,7 +189,7 @@ function MachineCard({ machine }) {
         <div className="machine-card-pro-actions">
           <CompactBtn label="History" icon="history" onClick={() => goToDetail('history')} />
           <CompactBtn label="Trend" icon="trend" onClick={() => goToDetail('graphs')} />
-          <CompactBtn label="AI Diag." icon="ai" primary onClick={() => goToDetail('diagnostics')} />
+          <CompactBtn label="AI Analysis" icon="ai" primary onClick={() => goToDetail('diagnostics')} />
         </div>
       </div>
 
@@ -175,17 +199,17 @@ function MachineCard({ machine }) {
 
 const ICONS = {
   history: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
     </svg>
   ),
   trend: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>
     </svg>
   ),
   ai: (
-    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
     </svg>
   ),

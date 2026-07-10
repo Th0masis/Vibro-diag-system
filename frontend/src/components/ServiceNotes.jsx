@@ -56,58 +56,56 @@ function ServiceNotes({ machineId, onNoteAdded }) {
   };
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '30px' }}>
+    <div className="service-notes-layout">
       
       {/* ... Levá část formuláře beze změn ... */}
       <div>
-         <h3 style={{ marginTop: 0, color: 'var(--text-main)' }}>Nový záznam</h3>
-         <form onSubmit={handleSubmit} style={{ background: '#f8fafc', padding: '20px', borderRadius: '8px', border: '1px solid #e2e8f0' }}>
+        <h3 className="service-notes-heading">New record</h3>
+        <form onSubmit={handleSubmit} className="service-notes-form">
             {/* ... inputy formuláře (zkopíruj si z minula) ... */}
-            <div style={{ marginBottom: '15px' }}>
-            <label style={{ display: 'block', marginBottom: '5px', fontSize: '0.9rem', color: 'var(--text-muted)' }}>Severity</label>
-            <div style={{ display: 'flex', gap: '10px' }}>
+            <div className="service-notes-field">
+            <label className="service-notes-label">Severity</label>
+            <div className="service-notes-severity-row">
               {['INFO', 'WARNING', 'CRITICAL'].map(lev => (
                 <button key={lev} type="button" onClick={() => setSeverity(lev)} style={{ flex: 1, padding: '8px', border: `1px solid ${severity === lev ? (lev==='INFO'?'#3b82f6':lev==='WARNING'?'var(--status-warning)':'var(--status-fault)') : '#cbd5e1'}`, background: severity === lev ? '#fff' : '#f1f5f9', color: severity === lev ? 'black' : '#64748b', borderRadius: '6px', cursor: 'pointer', fontWeight: severity===lev?'bold':'normal' }}>{lev}</button>
               ))}
             </div>
           </div>
-          <div style={{ marginBottom: '15px' }}>
-            <textarea rows="5" value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Write details here…" style={{ width: '100%', padding: '10px', borderRadius: '6px', border: '1px solid #cbd5e1', resize: 'vertical' }} required />
+          <div className="service-notes-field">
+            <textarea rows="5" value={newNote} onChange={(e) => setNewNote(e.target.value)} placeholder="Write details here…" className="service-notes-textarea" required />
           </div>
-          <button type="submit" className="btn-diagnose" style={{ width: '100%' }}>Save note</button>
+          <button type="submit" className="btn-diagnose service-notes-submit">Save note</button>
          </form>
       </div>
 
-      {/* Pravá část Historie */}
+      {/* Right: History */}
       <div>
-        <h3 style={{ marginTop: 0, color: 'var(--text-main)' }}>Historie údržby</h3>
-        {loading ? <p>Načítám...</p> : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: '15px', maxHeight: '500px', overflowY: 'auto', paddingRight: '10px' }}>
+        <h3 className="service-notes-heading">Maintenance history</h3>
+        {loading ? <p>Loading...</p> : (
+          <div className="service-notes-list">
             {notes.map(note => {
                 const style = getSeverityStyle(note.severity);
                 return (
-                  <div key={note.id_note} style={{ display: 'flex', gap: '15px', padding: '15px', background: 'white', border: '1px solid #f1f5f9', borderRadius: '8px', boxShadow: '0 1px 3px rgba(0,0,0,0.02)' }}>
-                    <div style={{ minWidth: '90px', textAlign: 'right', fontSize: '0.85rem', color: 'var(--text-muted)' }}>
-                      <div style={{ fontWeight: 'bold', color: '#64748b' }}>{new Date(note.timestamp).toLocaleDateString()}</div>
+                  <div key={note.id_note} className="service-notes-item">
+                    <div className="service-notes-item-time">
+                      <div className="service-notes-item-date">{new Date(note.timestamp).toLocaleDateString()}</div>
                       <div>{new Date(note.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                     </div>
-                    <div style={{ flex: 1, borderLeft: `3px solid ${style.border}`, paddingLeft: '15px' }}>
-                      <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px', alignItems: 'flex-start' }}>
+                    <div className="service-notes-item-content" style={{ borderColor: style.border }}>
+                      <div className="service-notes-item-header">
                         <div>
-                            <span style={{ fontWeight: 'bold', color: 'var(--text-main)', marginRight: '10px' }}>{note.author}</span>
+                            <span className="service-notes-author">{note.author}</span>
                             <span style={{ fontSize: '0.7rem', padding: '2px 8px', borderRadius: '10px', background: style.bg, color: style.color, border: `1px solid ${style.border}` }}>{note.severity}</span>
                         </div>
                         <button 
                             onClick={() => handleDeleteClick(note.id_note)}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#cbd5e1', fontSize: '1.2rem', lineHeight: '0.5', padding: '0 5px' }}
-                            title="Smazat záznam"
-                          onMouseOver={(e) => e.target.style.color = 'var(--status-fault)'}
-                            onMouseOut={(e) => e.target.style.color = '#cbd5e1'}
+                            className="service-notes-delete"
+                          title="Delete record"
                         >
                             ×
                         </button>
                       </div>
-                      <p style={{ margin: 0, color: '#334155', lineHeight: '1.5', whiteSpace: 'pre-wrap' }}>{note.content}</p>
+                      <p className="service-notes-text">{note.content}</p>
                     </div>
                   </div>
                 )
@@ -116,14 +114,14 @@ function ServiceNotes({ machineId, onNoteAdded }) {
         )}
       </div>
 
-      {/* 5. VLOŽENÍ UNIVERZÁLNÍHO MODÁLU */}
+      {/* 5. Reusable confirmation modal */}
       <ConfirmModal 
         isOpen={!!noteToDelete} // Otevřeno, pokud máme ID ke smazání
         onClose={() => setNoteToDelete(null)}
         onConfirm={performDelete}
-        title="Smazat poznámku"
+        title="Delete note"
         message="Are you sure you want to permanently delete this maintenance record? This cannot be undone."
-        confirmText="Smazat záznam"
+        confirmText="Delete record"
       />
 
     </div>

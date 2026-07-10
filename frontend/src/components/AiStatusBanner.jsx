@@ -77,7 +77,24 @@ function AiStatusBanner({ machineId }) {
   const timestamps = [aiData.anomaly?.timestamp, aiData.fault?.timestamp, aiData.rul?.timestamp].filter(Boolean);
   const latestDate = [...timestamps].sort().reverse()[0];
 
-  const isAnomalyDetected = aiData.anomaly?.label === 'Anomaly detected';
+  const ANOMALY_THRESHOLD = 0.75;
+  const anomalyScore = Number(aiData.anomaly?.value);
+  const hasAnomalyScore = Number.isFinite(anomalyScore);
+  const anomalyLabel = (aiData.anomaly?.label || '').toLowerCase();
+  const labelSignalsAnomaly =
+    anomalyLabel.includes('anomaly') ||
+    anomalyLabel.includes('anom') ||
+    anomalyLabel.includes('fault') ||
+    anomalyLabel.includes('porucha');
+  const labelSignalsHealthy =
+    anomalyLabel.includes('healthy') ||
+    anomalyLabel.includes('zdrav') ||
+    anomalyLabel.includes('normal') ||
+    anomalyLabel.includes('none');
+
+  const isAnomalyDetected = hasAnomalyScore
+    ? anomalyScore > ANOMALY_THRESHOLD
+    : (labelSignalsAnomaly && !labelSignalsHealthy);
   const isFaultClassified = aiData.fault?.label && !aiData.fault.label.toLowerCase().includes('zdrav');
   const isError = isAnomalyDetected || isFaultClassified;
 

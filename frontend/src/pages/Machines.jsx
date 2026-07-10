@@ -129,48 +129,48 @@ function Machines() {
                             </div>
 
                             <div className="form-group">
-                                <label>Popis *</label>
+                                <label>Description *</label>
                                 <input 
                                     type="text" 
                                     value={newMachine.description}
                                     onChange={(e) => setNewMachine({...newMachine, description: e.target.value})}
-                                    placeholder="Zde zadejte popis stroje"
+                                    placeholder="Enter machine description"
                                     required 
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label>Typ zařízení *</label>
+                                <label>Device type *</label>
                                 <input 
                                     type="text" 
                                     value={newMachine.type}
                                     onChange={(e) => setNewMachine({...newMachine, type: e.target.value})}
-                                    placeholder="Např. Frézka, Lis, Kompresor..."
+                                    placeholder="e.g. Mill, Press, Compressor"
                                     required 
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label>Lokace / Umístění *</label>
+                                <label>Location *</label>
                                 <input 
                                     type="text" 
                                     value={newMachine.location}
                                     onChange={(e) => setNewMachine({...newMachine, location: e.target.value})}
-                                    placeholder="Např. Hala A, Linka 3"
+                                    placeholder="e.g. Hall A, Line 3"
                                     required 
                                 />
                             </div>
 
                             <div className="form-group">
-                                <label>Počáteční status</label>
+                                <label>Initial status</label>
                                 <select 
                                     value={newMachine.status} 
                                     onChange={(e) => setNewMachine({...newMachine, status: e.target.value})}
                                 >
                                     <option value="OK">OK</option>
                                     <option value="WARNING">WARNING</option>
-                                    <option value="CRITICAL">CRITICAL</option>
-                                    <option value="OFFLINE">OFFLINE</option>
+                                    <option value="FAULT">FAULT</option>
+                                    <option value="STOPPED">STOPPED</option>
                                 </select>
                             </div>
 

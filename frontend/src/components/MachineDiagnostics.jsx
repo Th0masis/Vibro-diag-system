@@ -139,10 +139,10 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             </button>
           </div>
         ) : (
-          <button className="btn-diagnose diag-run-btn diag-run-btn--info" onClick={runManualCollectAndAi} disabled={collectLoading}>
+          <button className="btn-diagnose diag-run-btn diag-run-btn--primary" onClick={runManualCollectAndAi} disabled={collectLoading}>
             {collectLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Collecting + analysing…</>
-              : 'Collect from PLC and run AI'}
+              : 'Run AI pipeline'}
           </button>
         )}
       </div>
@@ -181,7 +181,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
           <button className="btn-diagnose diag-run-btn" onClick={runAnomalyDetection} disabled={anomalyLoading}>
             {anomalyLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Computing…</>
-              : 'Run anomaly detection'}
+              : 'Run anomaly analysis'}
           </button>
         )}
       </div>
@@ -252,7 +252,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
           <button className="btn-diagnose diag-run-btn diag-run-btn--info" onClick={runRULAnalysis} disabled={rulLoading}>
             {rulLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Analysing…</>
-              : 'Estimate remaining life'}
+              : 'Run RUL estimation'}
           </button>
         )}
       </div>

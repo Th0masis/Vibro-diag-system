@@ -19,6 +19,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   // --- FILTRY ---
   const [filterStatus, setFilterStatus] = useState('all'); 
   const [filterSensor, setFilterSensor] = useState('all');
+  const [filterSource, setFilterSource] = useState('all');
   const [filterDate, setFilterDate] = useState(''); 
   const [filterTime, setFilterTime] = useState('');
 
@@ -58,11 +59,12 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   }, [data]);
 
   const filteredData = useMemo(() => {
-    return data.filter(item => {
-      const isProcessed = !!item.rms;
+    const filtered = data.filter(item => {
+      const isProcessed = item.rms != null;
       if (filterStatus === 'processed' && !isProcessed) return false;
       if (filterStatus === 'waiting' && isProcessed) return false;
       if (filterSensor !== 'all' && item.sensor_name !== filterSensor) return false;
+      if (filterSource !== 'all' && item.source !== filterSource) return false;
       if (filterDate && !item.timestamp.startsWith(filterDate)) return false;
       if (filterTime) {
         const itemTime = new Date(item.timestamp).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
@@ -70,11 +72,20 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       }
       return true;
     });
-  }, [data, filterStatus, filterSensor, filterDate, filterTime]);
+
+    const sorted = [...filtered].sort((a, b) => {
+      if (filterSource === 'all' && a.source !== b.source) {
+        return a.source === 'raw_analysis' ? -1 : 1;
+      }
+      return new Date(b.timestamp) - new Date(a.timestamp);
+    });
+
+    return sorted;
+  }, [data, filterStatus, filterSensor, filterSource, filterDate, filterTime]);
 
   // --- LOGIKA PRO CHECKBOXY ---
   const processableData = useMemo(() => {
-    return filteredData.slice(0, limit).filter(d => d.source === 'raw_analysis' && !d.rms);
+    return filteredData.slice(0, limit).filter(d => d.source === 'raw_analysis' && d.rms == null);
   }, [filteredData, limit]);
 
   const isAllSelected = processableData.length > 0 && processableData.every(d => selectedIds.includes(d.id_measurement));
@@ -161,6 +172,15 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
         </div>
 
         <div className="history-filter-group">
+          <label className="history-filter-label">Source:</label>
+          <select className="history-filter-control" value={filterSource} onChange={(e) => setFilterSource(e.target.value)}>
+            <option value="all">All (raw first)</option>
+            <option value="raw_analysis">Raw recording</option>
+            <option value="iiot_connector">IIoT Connector</option>
+          </select>
+        </div>
+
+        <div className="history-filter-group">
           <label className="history-filter-label">Date:</label>
           <input className="history-filter-control" type="date" value={filterDate} onChange={(e) => setFilterDate(e.target.value)} />
         </div>
@@ -208,10 +228,11 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
             </thead>
             <tbody>
               {filteredData.slice(0, limit).map((row) => {
-                const canBeProcessed = row.source === 'raw_analysis' && !row.rms;
+                const canBeProcessed = row.source === 'raw_analysis' && row.rms == null;
+                const rowKey = `${row.source}-${row.id_measurement}-${row.timestamp}`;
                 
                 return (
-                <tr key={row.timestamp + row.sensor_name + row.source}>
+                <tr key={rowKey}>
                   <td className="history-select-cell">
                     {canBeProcessed ? (
                       <input 
@@ -241,11 +262,11 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                     </span>
                   </td>
                   <td className="history-rms-cell">
-                    {row.rms ? row.rms.toFixed(4) : '-'}
+                    {row.rms != null ? row.rms.toFixed(4) : '-'}
                   </td>
-                  <td>{row.kurtosis ? row.kurtosis.toFixed(2) : '-'}</td>
+                  <td>{row.kurtosis != null ? row.kurtosis.toFixed(2) : '-'}</td>
                   <td>
-                    {row.rms ? (
+                    {row.rms != null ? (
                       <span className="history-status history-status--processed">Analyzed</span>
                     ) : (
                       <span className="history-status history-status--waiting">Awaiting analysis</span>
@@ -254,7 +275,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                     <td className="text-right">
                       <div className="history-actions-wrap">
                         {/* Tlačítko pro zpracování (ozubené kolo) - jen pro nezpracovaná surová data */}
-                        {row.source === 'raw_analysis' && !row.rms && (
+                        {row.source === 'raw_analysis' && row.rms == null && (
                           <button 
                             className="btn-action-small"
                             title="Run signal analysis"

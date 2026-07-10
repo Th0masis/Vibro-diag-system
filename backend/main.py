@@ -39,6 +39,10 @@ DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vib
 TRACE_BUFFER_CHANNEL_MAP = os.getenv("TRACE_BUFFER_CHANNEL_MAP", "1:66,2:67,3:70,4:71")
 TRACE_BUFFER_LENGTH = int(os.getenv("TRACE_BUFFER_LENGTH", "4097"))
 
+ANOMALY_THRESHOLD = 0.75
+FAULT_RUL_DAYS = 7.0
+FAULT_CONFIDENCE = 0.90
+
 
 def translate_path_for_ml(path: str) -> str:
     """
@@ -56,6 +60,92 @@ def translate_path_for_ml(path: str) -> str:
         return f"/app/backend_data/{normalized[len('/app/data/'):] }"
 
     return path
+
+
+def _to_float(value):
+    try:
+        if value is None:
+            return None
+        return float(value)
+    except Exception:
+        return None
+
+
+def _label_signals_fault(label: Optional[str]) -> bool:
+    if not label:
+        return False
+    txt = str(label).lower()
+    healthy_tokens = ["normal", "healthy", "zdrav"]
+    fault_tokens = ["porucha", "fault", "race", "ball", "inner", "outer", "anom"]
+    if any(token in txt for token in healthy_tokens):
+        return False
+    return any(token in txt for token in fault_tokens)
+
+
+def recalculate_machine_status(conn, machine_id: int) -> str:
+    """
+    Přepočítá a uloží status stroje podle posledních AI výstupů.
+    Pravidla:
+    - FAULT: RUL <= 7 dní, nebo anomálie + vysoce jistá klasifikovaná porucha.
+    - WARNING: anomálie, nebo klasifikovaná porucha.
+    - OK: bez anomálie i bez poruchy.
+    """
+    query_anomaly = text("""
+        SELECT ar.prediction_value, ar.prediction_label
+        FROM analysis_results ar
+        JOIN measurements m ON ar.id_measurement = m.id_measurement
+        JOIN sensors s ON m.id_sensor = s.id_sensor
+        WHERE s.id_machine = :mid AND ar.prediction_type = 'Anomaly Detection'
+        ORDER BY ar.timestamp DESC
+        LIMIT 1
+    """)
+    anomaly_row = conn.execute(query_anomaly, {"mid": machine_id}).fetchone()
+
+    query_fault = text("""
+        SELECT ar.prediction_label, ar.confidence
+        FROM analysis_results ar
+        JOIN measurements m ON ar.id_measurement = m.id_measurement
+        JOIN sensors s ON m.id_sensor = s.id_sensor
+        WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
+        ORDER BY ar.timestamp DESC
+        LIMIT 1
+    """)
+    fault_row = conn.execute(query_fault, {"mid": machine_id}).fetchone()
+
+    query_rul = text("""
+        SELECT ar.prediction_value
+        FROM analysis_results ar
+        JOIN measurements m ON ar.id_measurement = m.id_measurement
+        JOIN sensors s ON m.id_sensor = s.id_sensor
+        WHERE s.id_machine = :mid AND ar.prediction_type = 'RUL Prediction'
+        ORDER BY ar.timestamp DESC
+        LIMIT 1
+    """)
+    rul_row = conn.execute(query_rul, {"mid": machine_id}).fetchone()
+
+    anomaly_score = _to_float(anomaly_row[0]) if anomaly_row else None
+    anomaly_label = anomaly_row[1] if anomaly_row else None
+    anomaly_by_score = anomaly_score is not None and anomaly_score > ANOMALY_THRESHOLD
+    anomaly_by_label = _label_signals_fault(anomaly_label)
+    is_anomaly = anomaly_by_score or anomaly_by_label
+
+    fault_label = fault_row[0] if fault_row else None
+    fault_conf = _to_float(fault_row[1]) if fault_row else None
+    has_fault = _label_signals_fault(fault_label)
+    high_conf_fault = has_fault and fault_conf is not None and fault_conf >= FAULT_CONFIDENCE
+
+    rul_days = _to_float(rul_row[0]) if rul_row else None
+    low_rul = rul_days is not None and rul_days <= FAULT_RUL_DAYS
+
+    new_status = "OK"
+    if low_rul or (is_anomaly and high_conf_fault):
+        new_status = "FAULT"
+    elif is_anomaly or has_fault:
+        new_status = "WARNING"
+
+    update_status = text("UPDATE machines SET status = :status WHERE id_machine = :mid")
+    conn.execute(update_status, {"status": new_status, "mid": machine_id})
+    return new_status
 
 # Inicializace databázového jádra (Synchronní SQLAlchemy běžící ve vláknech FastAPI)
 engine = create_engine(DB_URL)
@@ -590,11 +680,18 @@ def create_machine(machine_data: dict, role: str = Depends(get_current_user_role
     description = machine_data.get('description', '')
     m_type = machine_data.get('type', '')
     location = machine_data.get('location', '')
-    status = machine_data.get('status', 'OFFLINE')
+    status = str(machine_data.get('status', 'STOPPED')).upper()
 
-    valid_statuses = ['OK', 'WARNING', 'CRITICAL', 'OFFLINE']
+    # DB enum: machine_status_type = ('OK', 'WARNING', 'FAULT', 'STOPPED')
+    legacy_status_map = {
+        'CRITICAL': 'FAULT',
+        'OFFLINE': 'STOPPED'
+    }
+    status = legacy_status_map.get(status, status)
+
+    valid_statuses = ['OK', 'WARNING', 'FAULT', 'STOPPED']
     if status not in valid_statuses:
-        status = 'OFFLINE'
+        status = 'STOPPED'
 
     with engine.connect() as conn:
         query = text("""
@@ -945,7 +1042,10 @@ def simulate_measurement_endpoint(machine_id: int, token: str = Depends(oauth2_s
 @app.get("/machines/{machine_id}/history")
 def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:
-        # Přidán výběr ID a odstraněno filtrování IS NOT NULL u surových dat
+        # Bereme recent data z obou zdrojů samostatně, aby hustý IIoT stream
+        # nepřehlušil čerstvě stažené raw buffer záznamy.
+        source_limit = max(1, int(limit))
+        combined_limit = source_limit * 2
         query = text("""
             (
                 SELECT 
@@ -960,6 +1060,8 @@ def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(oa
                 FROM feature_data fd
                 JOIN sensors s ON fd.id_sensor = s.id_sensor
                 WHERE s.id_machine = :mid
+                ORDER BY fd.time DESC
+                LIMIT :source_lim
             )
             UNION ALL
             (
@@ -975,12 +1077,18 @@ def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(oa
                 FROM measurements m
                 JOIN sensors s ON m.id_sensor = s.id_sensor
                 WHERE s.id_machine = :mid
+                ORDER BY m.timestamp DESC
+                LIMIT :source_lim
             )
             ORDER BY timestamp DESC
-            LIMIT :lim
+            LIMIT :combined_lim
         """)
         
-        result = conn.execute(query, {"mid": machine_id, "lim": limit}).fetchall()
+        result = conn.execute(query, {
+            "mid": machine_id,
+            "source_lim": source_limit,
+            "combined_lim": combined_limit
+        }).fetchall()
         
         history = []
         for row in result:
@@ -1203,11 +1311,12 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
         """)
         try:
             conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "val": anomaly_score, "label": label, "conf": 1.0})
+            machine_status = recalculate_machine_status(conn, machine_id)
             conn.commit()
-        except Exception:
-            raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek analýzy do databáze.")
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Nepodařilo se uložit výsledek analýzy do databáze: {e}")
             
-        return {"anomaly_score": anomaly_score, "is_anomaly": is_anomaly, "message": "Analýza úspěšně dokončena"}
+        return {"anomaly_score": anomaly_score, "is_anomaly": is_anomaly, "machine_status": machine_status, "message": "Analýza úspěšně dokončena"}
     
 @app.post("/machines/{machine_id}/classify-fault")
 def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme)):
@@ -1250,10 +1359,12 @@ def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme))
         """)
         try:
             conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "label": fault_type, "conf": confidence})
+            machine_status = recalculate_machine_status(conn, machine_id)
             conn.commit()
-        except Exception:
-            raise HTTPException(status_code=500, detail="Nepodařilo se uložit výsledek klasifikace.")
-            
+        except Exception as e:
+            raise HTTPException(status_code=500, detail=f"Nepodařilo se uložit výsledek klasifikace: {e}")
+
+        ml_data["machine_status"] = machine_status
         return ml_data
 
 @app.post("/machines/{machine_id}/predict-rul")
@@ -1347,9 +1458,10 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
             VALUES (:model_id, :meas_id, 'RUL Prediction', :val, :label, NOW())
         """)
         conn.execute(insert_query, {"model_id": model_id, "meas_id": latest_meas_id, "val": rul_days, "label": f"{rul_days} dní"})
+        machine_status = recalculate_machine_status(conn, machine_id)
         conn.commit() 
         
-        return {"rul_value": rul_days, "unit": "dní", "used_model": used_model}
+        return {"rul_value": rul_days, "unit": "dní", "used_model": used_model, "machine_status": machine_status}
     
 @app.get("/training-segments")
 def get_training_segments(
