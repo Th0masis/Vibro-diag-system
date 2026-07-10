@@ -172,12 +172,18 @@ BEGIN
         GROUP BY ts, id_sensor
     )
     
-    INSERT INTO feature_data ("time", id_sensor, id_machine, rms_raw, kurtosis_raw, rms_acl_env, dif_kt_raw, skewness_raw, act_speed)
+    INSERT INTO feature_data ("time", id_sensor, id_machine, rms_raw, peak_raw, kurtosis_raw, rms_acl_env, dif_kt_raw, skewness_raw, act_speed)
     SELECT 
         ts, 
         id_sensor, 
         (SELECT id_machine FROM sensors WHERE id_sensor = pivoted_data.id_sensor LIMIT 1),
-        rms_raw, kurtosis_raw, rms_acl_env, dif_kt_raw, skewness_raw, act_speed
+        rms_raw,
+        rms_raw * 1.414,
+        kurtosis_raw,
+        rms_acl_env,
+        dif_kt_raw,
+        skewness_raw,
+        act_speed
     FROM pivoted_data;
 
     DELETE FROM iiot_buffer WHERE id = NEW.id;
@@ -203,6 +209,24 @@ VALUES (
     '2026-04-23 06:46:51.150605+00'
 );
 
+INSERT INTO machines (id_machine, name, type, location, status, description, is_active_collection)
+VALUES (
+    1,
+    'Ventilator 01',
+    'Ventilator',
+    'Test bench',
+    'OK',
+    'Primary machine for vibro diagnostics',
+    TRUE
+);
+
+INSERT INTO sensors (id_sensor, serial_number, description, status, id_machine, "position", sampling_rate, calibration_date)
+VALUES
+    (1, 'auto-1', 'Channel 1 sensor', 'active', 1, 'Channel 1', 0, CURRENT_DATE),
+    (2, 'auto-2', 'Channel 2 sensor', 'active', 1, 'Channel 2', 0, CURRENT_DATE),
+    (3, 'auto-3', 'Channel 3 sensor', 'active', 1, 'Channel 3', 0, CURRENT_DATE),
+    (4, 'auto-4', 'Channel 4 sensor', 'active', 1, 'Channel 4', 0, CURRENT_DATE);
+
 -- 8. Vlozeni vychoziho katalogu ML modelu
 INSERT INTO ml_models (name, version, type, path_to_model, accuracy, description, is_active, training_status)
 VALUES
@@ -212,3 +236,5 @@ VALUES
 
 -- 9. Synchronizace sekvence
 SELECT setval('users_id_user_seq', (SELECT MAX(id_user) FROM users));
+SELECT setval('machines_id_machine_seq', (SELECT MAX(id_machine) FROM machines));
+SELECT setval('sensors_id_sensor_seq', (SELECT MAX(id_sensor) FROM sensors));

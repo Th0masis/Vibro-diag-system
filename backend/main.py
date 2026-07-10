@@ -33,6 +33,30 @@ BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
 
+# CM4810 defaults (can be overridden by env):
+# TRACE_BUFFER_CHANNEL_MAP="1:66,2:67,3:70,4:71"
+# TRACE_BUFFER_LENGTH="4097"
+TRACE_BUFFER_CHANNEL_MAP = os.getenv("TRACE_BUFFER_CHANNEL_MAP", "1:66,2:67,3:70,4:71")
+TRACE_BUFFER_LENGTH = int(os.getenv("TRACE_BUFFER_LENGTH", "4097"))
+
+
+def translate_path_for_ml(path: str) -> str:
+    """
+    Translate backend-stored CSV paths to ML service container paths.
+    Backend writes to /app/data (host: ./backend/data), ML reads same host mount at /app/backend_data.
+    """
+    if not path:
+        return path
+
+    normalized = str(path).replace('\\', '/')
+
+    if normalized.startswith('./data/'):
+        return f"/app/backend_data/{normalized[len('./data/'):] }"
+    if normalized.startswith('/app/data/'):
+        return f"/app/backend_data/{normalized[len('/app/data/'):] }"
+
+    return path
+
 # Inicializace databázového jádra (Synchronní SQLAlchemy běžící ve vláknech FastAPI)
 engine = create_engine(DB_URL)
 
@@ -211,7 +235,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         )
         
         return {"access_token": access_token, "token_type": "bearer", "role": user_record[3]}
-    
+
+@app.post("/auth/refresh")
+def refresh_token(token: str = Depends(oauth2_scheme)):
+    """
+    Vydá nový JWT token s prodlouženou platností, pokud je stávající token stále platný.
+    Volá se proaktivně z frontendu před vypršením tokenu.
+    """
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        sub: str = payload.get("sub")
+        role: str = payload.get("role")
+        if not sub or not role:
+            raise HTTPException(status_code=401, detail="Neplatný token.")
+    except JWTError:
+        raise HTTPException(status_code=401, detail="Neplatný nebo expirovaný přístupový token.")
+
+    new_token = create_access_token(data={"sub": sub, "role": role})
+    return {"access_token": new_token, "token_type": "bearer"}
+
 @app.get("/users")
 def get_all_users(token: str = Depends(oauth2_scheme)):
     """
@@ -961,7 +1003,7 @@ def get_machine_history(machine_id: int, limit: int = 50, role: str = Depends(oa
         return history
     
 @app.post("/measurements/{id_measurement}/process")
-def process_measurement_data(id_measurement: int, role: str = Depends(oauth2_scheme)):
+def process_measurement_data(id_measurement: int, role: str = Depends(get_current_user_role)):
     if role not in ["admin", "operator"]:
         raise HTTPException(status_code=403, detail="Nedostatečná oprávnění")
 
@@ -978,14 +1020,17 @@ def process_measurement_data(id_measurement: int, role: str = Depends(oauth2_sch
             raise HTTPException(status_code=404, detail="Měření nebo soubor nebyl nalezen")
         
         path = res[0]
+        ml_path = translate_path_for_ml(path)
         
         # 2. Volání ML Service pro vyčištění souboru a výpočet (zůstává strukturálně stejné)
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/process-features", json={"path": path})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/process-features", json={"path": ml_path})
             if ml_res.status_code != 200:
-                raise HTTPException(status_code=500, detail="ML Service selhala při výpočtu")
+                raise HTTPException(status_code=500, detail=f"ML Service selhala při výpočtu: {ml_res.text}")
             
             features = ml_res.json()
+        except HTTPException:
+            raise
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Nepodařilo se spojit s ML Service: {e}")
         
@@ -1029,10 +1074,11 @@ def proxy_raw_data(id_measurement: int):
             raise HTTPException(status_code=404, detail="Cesta nenalezena")
         
         path = res[0]
+        ml_path = translate_path_for_ml(path)
         
         try:
             # Zavoláme ML službu o surová data pro graf
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": path, "step": 16})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": ml_path, "step": 16})
             
             # Kontrola, zda ML služba nevrátila chybu (jinak by spadl .json() parser)
             if ml_res.status_code != 200:
@@ -1065,7 +1111,7 @@ def proxy_fft_data(id_measurement: int):
             raise HTTPException(status_code=404, detail="Cesta nenalezena")
             
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-fft", json={"path": res[0]})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-fft", json={"path": translate_path_for_ml(res[0])})
             if ml_res.status_code != 200:
                 raise HTTPException(status_code=500, detail="Chyba výpočtu FFT v ML službě")
             return ml_res.json()
@@ -1080,7 +1126,7 @@ def proxy_cwt_data(id_measurement: int):
             raise HTTPException(status_code=404, detail="Cesta nenalezena")
             
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-cwt", json={"path": res[0]})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/get-cwt", json={"path": translate_path_for_ml(res[0])})
             if ml_res.status_code != 200:
                 raise HTTPException(status_code=500, detail="Chyba výpočtu CWT v ML službě")
             return ml_res.json()
@@ -1130,6 +1176,7 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
             raise HTTPException(status_code=404, detail="Pro tento stroj nebylo nalezeno žádné lokální měření s raw daty.")
             
         id_measurement, raw_data_path = meas
+        ml_path = translate_path_for_ml(raw_data_path)
         
         # ROBUSTNÍ DOTAZ: Hledáme cokoliv s "GAN" v názvu, co je aktivní (Ignoruje překlepy)
         query_model = text("SELECT id_model FROM ml_models WHERE name LIKE '%GAN%' AND is_active = true LIMIT 1")
@@ -1139,7 +1186,7 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
         id_model = model[0]
         
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/analyze-anomaly", json={"path": raw_data_path})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/analyze-anomaly", json={"path": ml_path})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
         except Exception as e:
@@ -1178,6 +1225,7 @@ def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme))
             raise HTTPException(status_code=404, detail="Žádné měření nenalezeno.")
             
         id_measurement, raw_data_path = meas
+        ml_path = translate_path_for_ml(raw_data_path)
         
         # ROBUSTNÍ DOTAZ: Hledáme cokoliv s "CNN" v názvu
         query_model = text("SELECT id_model FROM ml_models WHERE name LIKE '%CNN%' AND is_active = true LIMIT 1")
@@ -1187,7 +1235,7 @@ def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme))
         id_model = model[0]
         
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/classify-fault", json={"path": raw_data_path})
+            ml_res = requests.post(f"{ML_SERVICE_URL}/classify-fault", json={"path": ml_path})
             ml_res.raise_for_status()
             ml_data = ml_res.json() 
         except Exception as e:
@@ -1217,10 +1265,13 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
     with engine.connect() as conn:
         # Zjištění kategorie poruchy (Zůstává beze změny)
         query_label = text("""
-            SELECT ar.prediction_label FROM analysis_results ar
-            JOIN sensors s ON ar.id_measurement = s.id_sensor -- Upraveno pro obecnost
+            SELECT ar.prediction_label
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
             WHERE s.id_machine = :mid AND ar.prediction_type = 'Fault Classification'
-            ORDER BY ar.timestamp DESC LIMIT 1
+            ORDER BY ar.timestamp DESC
+            LIMIT 1
         """)
         last_label_row = conn.execute(query_label, {"mid": machine_id}).fetchone()
         
@@ -1256,10 +1307,15 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
             
         # Otočíme data z DB do chronologického pořadí pro LSTM (od nejstaršího po nejnovější)
         rows = rows[::-1]
-        
+
+        # Odstraníme nekompletní řádky (None v některé ze 6 charakteristik)
+        valid_rows = [r for r in rows if all(v is not None for v in r[:6])]
+        if len(valid_rows) == 0:
+            raise HTTPException(status_code=400, detail="Nejsou k dispozici kompletní feature vektory pro výpočet RUL.")
+
         # Sestavíme tenzor: Seznam 10 listů, kde každý list má 6 float hodnot
-        sequence = [[float(val) for val in row[:6]] for row in rows]
-        latest_meas_id = rows[-1][6] # Uložíme si ID posledního pro INSERT výsledku
+        sequence = [[float(val) for val in row[:6]] for row in valid_rows]
+        latest_meas_id = valid_rows[-1][6]  # ID posledního validního záznamu pro INSERT výsledku
         
         # PADDING: Pokud máme < 10 měření, naklonujeme nejstarší záznam na začátek
         while len(sequence) < 10:
@@ -1275,6 +1331,8 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
             
         rul_fraction = ml_data.get("rul_fraction")
         used_model = ml_data.get("used_model")
+        if rul_fraction is None:
+            raise HTTPException(status_code=500, detail="ML Service nevrátila hodnotu 'rul_fraction'.")
         rul_days = round(rul_fraction * 30, 1)
         
         model_query = text("SELECT id_model FROM ml_models WHERE (name LIKE '%LSTM%' OR type LIKE '%RUL%') AND is_active = true LIMIT 1")
@@ -1568,6 +1626,351 @@ def activate_model_version(model_id: int, token: str = Depends(oauth2_scheme)):
     return {"status": "success", "message": "Model byl úspěšně nasazen do produkce."}
 
 
+def ftp_fetch_file_with_fallback(host: str, user: str, pwd: str, remote_path: str, local_filepath: str):
+    """
+    Stáhne soubor přes FTP s fallbackem režimů (FTPES + plain FTP).
+    Mazání vzdáleného souboru je best-effort a nesmí shodit import.
+    """
+    safe_user = (user or "").strip() or "anonymous"
+    safe_pwd = pwd or ("anonymous@" if safe_user == "anonymous" else "")
+
+    ctx = ssl.create_default_context()
+    ctx.check_hostname = False
+    ctx.verify_mode = ssl.CERT_NONE
+    ctx.set_ciphers('ALL:@SECLEVEL=0')
+
+    errors = []
+
+    def try_ftpes_with_prot():
+        ftp = FTP_TLS(context=ctx, timeout=30.0)
+        ftp.connect(host, 21, timeout=30.0)
+        ftp.auth()
+        ftp.login(safe_user, safe_pwd)
+        ftp.prot_p()
+        ftp.set_pasv(True)
+        with open(local_filepath, 'wb') as f:
+            ftp.retrbinary(f"RETR {remote_path}", f.write)
+        try:
+            ftp.delete(remote_path)
+        except Exception:
+            pass
+        ftp.quit()
+
+    def try_ftpes_no_prot():
+        ftp = FTP_TLS(context=ctx, timeout=30.0)
+        ftp.connect(host, 21, timeout=30.0)
+        ftp.auth()
+        ftp.login(safe_user, safe_pwd)
+        ftp.set_pasv(True)
+        with open(local_filepath, 'wb') as f:
+            ftp.retrbinary(f"RETR {remote_path}", f.write)
+        try:
+            ftp.delete(remote_path)
+        except Exception:
+            pass
+        ftp.quit()
+
+    def try_plain_ftp():
+        ftp = FTP(timeout=30.0)
+        ftp.connect(host, 21, timeout=30.0)
+        ftp.login(safe_user, safe_pwd)
+        ftp.set_pasv(True)
+        with open(local_filepath, 'wb') as f:
+            ftp.retrbinary(f"RETR {remote_path}", f.write)
+        try:
+            ftp.delete(remote_path)
+        except Exception:
+            pass
+        ftp.quit()
+
+    for mode_name, mode_fn in [
+        ("FTPES(AUTH+PROT)", try_ftpes_with_prot),
+        ("FTPES(AUTH)", try_ftpes_no_prot),
+        ("FTP", try_plain_ftp),
+    ]:
+        try:
+            mode_fn()
+            return {"mode": mode_name}
+        except Exception as e:
+            errors.append(f"{mode_name}: {str(e)}")
+
+    raise Exception(" | ".join(errors))
+
+
+def get_trace_buffer_mapping() -> dict:
+    """
+    Parse TRACE_BUFFER_CHANNEL_MAP from env into {channel: buffer_number}.
+    Fallback: {1:66, 2:67, 3:70, 4:71}
+    """
+    fallback = {1: 66, 2: 67, 3: 70, 4: 71}
+    mapping_raw = (TRACE_BUFFER_CHANNEL_MAP or "").strip()
+    if not mapping_raw:
+        return fallback
+
+    parsed = {}
+    try:
+        for pair in mapping_raw.split(","):
+            item = pair.strip()
+            if not item:
+                continue
+            ch, buf = item.split(":")
+            parsed[int(ch.strip())] = int(buf.strip())
+    except Exception:
+        return fallback
+
+    return parsed or fallback
+
+
+async def resolve_trace_nodes(client: Client):
+    """
+    Najde správný namespace index pro gTrace uzly v OPC UA serveru.
+    Některé PLC projekty nepoužívají ns=6, proto zkoušíme více indexů.
+    """
+    node_path_candidates = {
+        "workid": [
+            "::AsGlobalPV:gTrace.BufferUpload.WorkID",
+            "::AsGlobalPV:gTrace.WorkID",
+        ],
+        "buflen": [
+            "::AsGlobalPV:gTrace.BufferUpload.BufferLength",
+            "::AsGlobalPV:gTrace.BufferLength",
+        ],
+        "bufnum": [
+            "::AsGlobalPV:gTrace.BufferNumber",
+            "::AsGlobalPV:gTrace.BufferUpload.BufferNumber",
+        ],
+        "start": [
+            "::AsGlobalPV:gTrace.BufferUpload.Start",
+            "::AsGlobalPV:gTrace.Start",
+        ],
+        "done": [
+            "::AsGlobalPV:gTrace.BufferStatus.Done",
+            "::AsGlobalPV:gTrace.Done",
+        ],
+        "csv": [
+            "::AsGlobalPV:gTrace.BufferStatus.CSVFileName",
+            "::AsGlobalPV:gTrace.CSVFileName",
+        ],
+        "reset": [
+            "::AsGlobalPV:gTrace.BufferUpload.Reset",
+            "::AsGlobalPV:gTrace.Reset",
+        ],
+    }
+
+    # Priorita namespace: detekce přes NamespaceArray (B&R PV), pak fallback kandidáti.
+    namespace_candidates = []
+    try:
+        ns_array = await client.get_namespace_array()
+        for idx, uri in enumerate(ns_array):
+            u = (uri or "").lower()
+            if "b&r/pv" in u or "b&r\\pv" in u or "b&r" in u and "pv" in u:
+                namespace_candidates.append(idx)
+    except Exception:
+        pass
+
+    for ns in [6, 5, 4, 3, 2, 7, 8, 1]:
+        if ns not in namespace_candidates:
+            namespace_candidates.append(ns)
+
+    last_error = None
+
+    for ns in namespace_candidates:
+        try:
+            resolved = {}
+            for key, path_options in node_path_candidates.items():
+                node_found = None
+                node_error = None
+                for path in path_options:
+                    try:
+                        candidate = client.get_node(f"ns={ns};s={path}")
+                        await candidate.read_node_class()
+                        node_found = candidate
+                        break
+                    except Exception as e:
+                        node_error = e
+
+                if node_found is None:
+                    raise Exception(f"Nenalezen uzel '{key}' v ns={ns}. Poslední chyba: {node_error}")
+
+                resolved[key] = node_found
+
+            return resolved
+        except Exception as e:
+            last_error = e
+
+    raise Exception(
+        f"Nepodařilo se najít gTrace uzly v žádném namespace kandidátu: {namespace_candidates}. "
+        f"Poslední chyba: {last_error}"
+    )
+
+
+async def collect_raw_data_for_machine_once(machine_id: int):
+    """
+    Provede jednorázový ruční sběr z PLC pro zvolený stroj.
+    Vrací přehled vytvořených měření a případných chyb po kanálech.
+    """
+    with engine.connect() as conn:
+        machine = conn.execute(text("""
+            SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir
+            FROM machines
+            WHERE id_machine = :mid
+        """), {"mid": machine_id}).fetchone()
+
+    if not machine:
+        raise HTTPException(status_code=404, detail="Stroj nebyl nalezen.")
+
+    mach_id, plc_opc_url, plc_ftp_host, plc_ftp_user, plc_ftp_pass, plc_remote_dir = machine
+    plc_remote_dir = plc_remote_dir or "C:/BufferData"
+
+    if not plc_opc_url or not plc_ftp_host:
+        raise HTTPException(status_code=400, detail="Stroj nemá nastavené OPC UA/FTP připojení.")
+
+    work_id_prefix = f"manual_mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    buffer_mapping = get_trace_buffer_mapping()
+    created_measurements = []
+    errors = []
+
+    try:
+        async with Client(url=plc_opc_url) as client:
+            trace_nodes = await resolve_trace_nodes(client)
+            node_workid = trace_nodes["workid"]
+            node_buflen = trace_nodes["buflen"]
+            node_bufnum = trace_nodes["bufnum"]
+            node_start = trace_nodes["start"]
+            node_done = trace_nodes["done"]
+            node_csv = trace_nodes["csv"]
+            node_reset = trace_nodes["reset"]
+
+            await node_buflen.write_value(ua.DataValue(ua.Variant(TRACE_BUFFER_LENGTH, ua.VariantType.UInt32)))
+
+            for channel, buffer_number in buffer_mapping.items():
+                current_work_id = f"{work_id_prefix}_CH{channel}"
+                try:
+                    await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
+                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.Byte)))
+                    await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+
+                    timeout = 0
+                    while True:
+                        if await node_done.read_value():
+                            break
+                        await asyncio.sleep(1)
+                        timeout += 1
+                        if timeout > 45:
+                            raise TimeoutError(f"Timeout na PLC u kanálu {channel}")
+
+                    csv_filename = await node_csv.read_value()
+
+                    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+                    await asyncio.sleep(0.5)
+                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+
+                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
+                    os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
+
+                    remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
+                    await asyncio.to_thread(
+                        ftp_fetch_file_with_fallback,
+                        plc_ftp_host,
+                        plc_ftp_user,
+                        plc_ftp_pass,
+                        remote_path,
+                        local_filepath,
+                    )
+
+                    with engine.connect() as conn:
+                        query_sensor = text(f"""
+                            SELECT id_sensor
+                            FROM sensors
+                            WHERE id_machine = {mach_id}
+                            ORDER BY id_sensor ASC
+                            OFFSET {channel - 1}
+                            LIMIT 1
+                        """)
+                        sensor_id = conn.execute(query_sensor).scalar()
+
+                        if sensor_id:
+                            inserted_id = conn.execute(text("""
+                                INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
+                                VALUES (:sid, :ts, :path, :notes)
+                                RETURNING id_measurement
+                            """), {
+                                "sid": sensor_id,
+                                "ts": datetime.now(timezone.utc),
+                                "path": local_filepath,
+                                "notes": f"Manual collect: {work_id_prefix} | Kanál {channel}"
+                            }).scalar()
+                            conn.commit()
+
+                            created_measurements.append({
+                                "channel": channel,
+                                "measurement_id": inserted_id,
+                                "sensor_id": sensor_id,
+                                "file": local_filepath
+                            })
+                        else:
+                            errors.append(f"Kanál {channel}: nenalezen odpovídající senzor")
+
+                except Exception as channel_error:
+                    errors.append(f"Kanál {channel}: {str(channel_error)}")
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Kritická chyba ručního sběru: {str(e)}")
+
+    return {
+        "machine_id": mach_id,
+        "created_count": len(created_measurements),
+        "measurements": created_measurements,
+        "errors": errors
+    }
+
+
+@app.post("/machines/{machine_id}/collect-now")
+async def collect_now(machine_id: int, run_ai: bool = False, role: str = Depends(get_current_user_role)):
+    """
+    Ručně spustí sběr dat z PLC pro jeden stroj.
+    Volitelně po sběru spustí kompletní AI pipeline (anomaly, classification, RUL).
+    """
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nemáte oprávnění spustit ruční sběr dat.")
+
+    collection = await collect_raw_data_for_machine_once(machine_id)
+
+    response = {
+        "status": "success",
+        "collection": collection
+    }
+
+    if run_ai and collection["created_count"] > 0:
+        ai = {}
+
+        try:
+            ai["anomaly"] = analyze_machine_anomaly(machine_id, "manual")
+        except HTTPException as e:
+            ai["anomaly_error"] = e.detail
+        except Exception as e:
+            ai["anomaly_error"] = str(e)
+
+        try:
+            ai["classification"] = classify_machine_fault(machine_id, "manual")
+        except HTTPException as e:
+            ai["classification_error"] = e.detail
+        except Exception as e:
+            ai["classification_error"] = str(e)
+
+        try:
+            ai["rul"] = predict_machine_rul(machine_id, "manual")
+        except HTTPException as e:
+            ai["rul_error"] = e.detail
+        except Exception as e:
+            ai["rul_error"] = str(e)
+
+        response["ai"] = ai
+
+    return response
+
+
 # ==========================================
 # --- SEKCE AUTOMATICKÝ PLÁNOVANÝ SBĚR ----
 # ==========================================
@@ -1606,24 +2009,25 @@ async def download_and_process_raw_data():
             continue
             
         work_id_prefix = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        buffer_mapping = {1: 9, 2: 11, 3: 13, 4: 15}
+        buffer_mapping = get_trace_buffer_mapping()
 
         try:
             async with Client(url=plc_opc_url) as client:
-                node_workid  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.WorkID")
-                node_buflen  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.BufferLength")
-                node_bufnum  = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferNumber") 
-                node_start   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Start")
-                node_done    = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.Done")
-                node_csv     = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferStatus.CSVFileName")
-                node_reset   = client.get_node("ns=6;s=::AsGlobalPV:gTrace.BufferUpload.Reset")
+                trace_nodes = await resolve_trace_nodes(client)
+                node_workid = trace_nodes["workid"]
+                node_buflen = trace_nodes["buflen"]
+                node_bufnum = trace_nodes["bufnum"]
+                node_start = trace_nodes["start"]
+                node_done = trace_nodes["done"]
+                node_csv = trace_nodes["csv"]
+                node_reset = trace_nodes["reset"]
 
-                await node_buflen.write_value(ua.DataValue(ua.Variant(8192, ua.VariantType.UInt32)))
+                await node_buflen.write_value(ua.DataValue(ua.Variant(TRACE_BUFFER_LENGTH, ua.VariantType.UInt32)))
 
                 for channel, buffer_number in buffer_mapping.items():
                     current_work_id = f"{work_id_prefix}_CH{channel}"
                     await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
-                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.UInt16)))
+                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.Byte)))
                     await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
                     
                     timeout = 0
@@ -1645,25 +2049,17 @@ async def download_and_process_raw_data():
                     local_filepath = f"./data/mach{mach_id}/{csv_filename}"
                     os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
                     
-                    def download_and_delete_ftp():
-                        ctx = ssl.create_default_context()
-                        ctx.check_hostname = False
-                        ctx.verify_mode = ssl.CERT_NONE
-                        ctx.set_ciphers('ALL:@SECLEVEL=0')
-                        
-                        ftp = FTP_TLS(context=ctx)
-                        ftp.connect(plc_ftp_host, 21)
-                        ftp.login(plc_ftp_user, plc_ftp_pass)
-                        ftp.prot_p()
-                        ftp.set_pasv(True)
-                        remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
-                        with open(local_filepath, 'wb') as f:
-                            ftp.retrbinary(f"RETR {remote_path}", f.write)
-                        ftp.delete(remote_path)
-                        ftp.quit()
+                    remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
                         
                     try:
-                        await asyncio.to_thread(download_and_delete_ftp)
+                        await asyncio.to_thread(
+                            ftp_fetch_file_with_fallback,
+                            plc_ftp_host,
+                            plc_ftp_user,
+                            plc_ftp_pass,
+                            remote_path,
+                            local_filepath,
+                        )
                         with engine.connect() as conn:
                             query_sensor = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC OFFSET {channel - 1} LIMIT 1")
                             sensor_id = conn.execute(query_sensor).scalar()

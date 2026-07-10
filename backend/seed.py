@@ -64,12 +64,12 @@ def simulate_machine_data(machine_id: int):
             insert_feat = text("""
                 INSERT INTO feature_data (
                     id_measurement, id_machine, time,
-                    rms_raw, peak_raw, crest_factor, iso_10816,
-                    kurtosis_raw, frq_bnd_1, frq_bnd_2
+                    rms_raw, peak_raw, kurtosis_raw, rms_acl_env,
+                    dif_kt_raw, skewness_raw, act_speed
                 ) VALUES (
                     :mid, :mach_id, :ts,
-                    :rms, :peak, :crest, :iso,
-                    :kurt, :fb1, :fb2
+                    :rms, :peak, :kurt, :rms_env,
+                    :dif, :skew, :speed
                 )
             """)
             
@@ -79,11 +79,11 @@ def simulate_machine_data(machine_id: int):
                 "ts": timestamp,
                 "rms": round(base_rms, 3),
                 "peak": round(peak_raw, 3),
-                "crest": round(peak_raw / base_rms, 2),
-                "iso": round(iso_val, 3),
                 "kurt": round(random.uniform(2.5, 5.0) if is_faulty else random.uniform(2.8, 3.2), 2),
-                "fb1": round(base_rms * 0.3, 3),
-                "fb2": round(base_rms * 0.1, 3)
+                "rms_env": round(base_rms * 0.8, 3),
+                "dif": round(base_rms * 0.15, 3),
+                "skew": round(random.uniform(0.1, 0.8), 3),
+                "speed": round(1480 + random.uniform(-20, 20), 2)
             })
             
             created_count += 1
@@ -185,8 +185,11 @@ def seed_history_data(machine_id=1, days=30):
                         kurtosis = random.uniform(2.8, 3.2) # Zdravý kurtosis
 
                     ins_feat = text("""
-                        INSERT INTO feature_data (id_measurement, id_machine, rms_raw, peak_raw, kurtosis_raw, iso_10816)
-                        VALUES (:mid, :mach, :rms, :peak, :kurt, :iso)
+                        INSERT INTO feature_data (
+                            id_measurement, id_machine, rms_raw, peak_raw, kurtosis_raw, rms_acl_env,
+                            dif_kt_raw, skewness_raw, act_speed
+                        )
+                        VALUES (:mid, :mach, :rms, :peak, :kurt, :env, :dif, :skew, :speed)
                     """)
                     
                     conn.execute(ins_feat, {
@@ -195,7 +198,10 @@ def seed_history_data(machine_id=1, days=30):
                         "rms": rms, 
                         "peak": peak, 
                         "kurt": kurtosis, 
-                        "iso": rms * 0.7 # Odhad ISO
+                        "env": rms * 0.7,
+                        "dif": rms * 0.15,
+                        "skew": random.uniform(0.1, 0.8),
+                        "speed": 1480.0
                     })
 
     print("✅ Hotovo. Historie byla úspěšně nahrána.")
