@@ -2470,7 +2470,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .machine-note-title {
-  color: var(--machine-note-accent, #64748b);
+  color: var(--neutral-dark-gray);
 }
 
 .machine-note-content-wrap {
