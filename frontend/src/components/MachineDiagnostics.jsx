@@ -197,7 +197,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
               1D-CNN trained with WGAN identifies the exact bearing fault type from the FFT frequency spectrum.
             </p>
           </div>
-          <span className="role-badge FAULT diag-model-badge">1D_CNN · FFT</span>
+          <span className="role-badge active diag-model-badge">1D_CNN · FFT</span>
         </div>
 
         {classResult ? (

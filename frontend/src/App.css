@@ -531,11 +531,11 @@ button {
 }
 
 .diag-rul-value {
-  font-size: 3rem;
-  font-weight: 800;
-  color: #1D4ED8;
+  font-size: 2.2rem;
+  font-weight: 700;
+  color: #1E40AF;
   line-height: 1;
-  letter-spacing: -0.03em;
+  letter-spacing: -0.02em;
 }
 
 .diag-rul-unit {
@@ -1084,6 +1084,7 @@ tr:hover {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: var(--space-5);
   margin-bottom: var(--space-6);
+  align-items: start;
 }
 
 /* Styly pro malé karty v gridu */
@@ -1123,7 +1124,7 @@ tr:hover {
   color: #6B7280;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.15s ease, color 0.15s ease;
+  transition: background 0.12s ease, color 0.12s ease;
   flex-shrink: 0;
 }
 
@@ -1131,16 +1132,16 @@ tr:hover {
   width: 14px;
   height: 14px;
   flex-shrink: 0;
-  opacity: 0.65;
-  transition: opacity 0.15s;
+  opacity: 0.55;
+  transition: opacity 0.12s;
 }
 
 .tab-btn:hover {
-  background: rgba(255,255,255,0.75);
-  color: #374151;
+  background: #ffffff;
+  color: #111827;
 }
 
-.tab-btn:hover .tab-icon { opacity: 0.85; }
+.tab-btn:hover .tab-icon { opacity: 1; }
 
 .tab-btn.active {
   background: #ffffff;
@@ -1282,45 +1283,47 @@ tr:hover {
 /* Sensor list compact icon buttons */
 .sensor-btn {
   background: none;
-  border: 1px solid #e2e8f0;
-  color: #475569;
-  width: 44px;
-  height: 44px;
-  border-radius: 8px;
+  border: none;
+  color: #94A3B8;
+  width: 30px;
+  height: 30px;
+  min-height: 30px;
+  min-width: 30px;
+  border-radius: 6px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.12s ease, color 0.12s ease;
   flex-shrink: 0;
   padding: 0;
 }
 
 .sensor-btn:hover {
-  background: #f1f5f9;
-  border-color: #cdd6df;
+  background: #F1F5F9;
+  color: #374151;
 }
 
 .sensor-btn-detail {
   background: transparent;
   border: none;
-  color: var(--primary);
+  color: #94A3B8;
 }
 
 .sensor-btn-detail:hover {
-  background: #ffedd5;
-  color: #b45309;
+  background: #FFF7ED;
+  color: var(--primary);
 }
 
 .sensor-btn-delete {
   background: transparent;
   border: none;
-  color: var(--status-fault);
+  color: #94A3B8;
 }
 
 .sensor-btn-delete:hover {
-  background: #fee2e2;
-  color: #dc2626;
+  background: #FEF2F2;
+  color: var(--status-fault);
 }
 
 /* tab-btn.active is defined in tabs-header section above */
@@ -1893,7 +1896,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   color: #6B7280;
   font-size: 0.875rem;
   line-height: 1.5;
-  max-width: 60ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .dashboard-pro-summary {
@@ -1934,7 +1939,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .status-stat-count {
   font-size: 1rem;
-  font-weight: 700;
+  font-weight: 500;
   color: #0F172A;
   line-height: 1;
 }
@@ -1981,13 +1986,11 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .machine-card-pro--warning {
-  background: #FFFBEB;
-  border-color: #FDE68A;
+  border-color: #FCD34D;
 }
 
 .machine-card-pro--fault {
-  background: #FEF2F2;
-  border-color: #FECACA;
+  border-color: #FCA5A5;
 }
 
 .machine-card-pro-header {
@@ -2169,8 +2172,8 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 .compact-btn-pro svg,
 .sensor-btn svg,
 .btn-diagnose--compact svg {
-  width: 16px;
-  height: 16px;
+  width: 14px;
+  height: 14px;
   stroke-width: 2;
   flex-shrink: 0;
 }
@@ -2414,16 +2417,21 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   margin: 0;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 2px;
 }
 
 .machine-sensor-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 8px;
-  padding: 4px 0;
-  border-bottom: none;
+  gap: 6px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  transition: background 0.12s ease;
+}
+
+.machine-sensor-item:hover {
+  background: #F8FAFC;
 }
 
 .machine-sensor-item:last-child {

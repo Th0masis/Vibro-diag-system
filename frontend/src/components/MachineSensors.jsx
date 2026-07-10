@@ -108,9 +108,9 @@ function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, on
         isOpen={!!sensorToDetach}
         onClose={() => setSensorToDetach(null)}
         onConfirm={handleDetach}
-        title="Odpojit senzor"
-        message={`Opravdu chcete odpojit senzor ${sensorToDetach?.serial_number} od tohoto stroje? Senzor bude přesunut do stavu "K dispozici" (Sklad).`}
-        confirmText="Odpojit"
+        title="Detach sensor"
+        message={`Detach sensor ${sensorToDetach?.serial_number} from this machine? It will become available in inventory.`}
+        confirmText="Detach"
       />
     </div>
   );
