@@ -2405,6 +2405,31 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   flex: 1;
 }
 
+.machine-sensor-summary-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 8px 0;
+  border-bottom: 1px solid #EEF2F7;
+}
+
+.machine-sensor-summary-row:last-child {
+  border-bottom: none;
+}
+
+.machine-sensor-summary-label {
+  color: #6B7280;
+  font-size: 0.84rem;
+  font-weight: 500;
+}
+
+.machine-sensor-summary-value {
+  color: #111827;
+  font-size: 0.92rem;
+  font-weight: 700;
+  font-family: 'DM Mono', 'Courier New', monospace;
+}
+
 .machine-sensor-empty {
   color: var(--text-muted);
   font-style: italic;

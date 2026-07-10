@@ -29,11 +29,6 @@ function MachineDetail() {
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
   const [preselectedSensorId, setPreselectedSensorId] = useState(null);
 
-  // Stavy pro přiřazování senzoru
-  const [isAssignPanelOpen, setIsAssignPanelOpen] = useState(false);
-  const [availableSensors, setAvailableSensors] = useState([]);
-  const [assignForm, setAssignForm] = useState({ sensor_id: '', position: '' });
-
   const fetchDetail = async () => {
     try {
       const response = await axios.get(`/machines/${id}`);
@@ -54,41 +49,6 @@ function MachineDetail() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
-
-  // Funkce pro rychlé odpojení senzoru
-  const handleDetachSensor = async (sensorId) => {
-    if(!window.confirm("Opravdu odebrat tento senzor ze stroje?")) return;
-    try {
-      // Zde také využíváme výhody globálního nastavení axios (smazáno http://127.0.0.1:8000)
-      await axios.post(`/machines/${id}/sensors/${sensorId}/detach`);
-      fetchDetail();
-    } catch (error) {
-      alert('Failed to detach sensor.');
-    }
-  };
-
-  const openAssignPanel = async () => {
-    try {
-      const res = await axios.get('/sensors/available');
-      setAvailableSensors(res.data);
-      setAssignForm({ sensor_id: '', position: '' });
-      setIsAssignPanelOpen(true);
-    } catch (error) { alert('Could not load available sensors.'); }
-  };
-
-  const handleAttachSensor = async (e) => {
-    e.preventDefault();
-    try {
-      await axios.post(`/machines/${id}/sensors`, assignForm);
-      setIsAssignPanelOpen(false);
-      fetchDetail();
-    } catch (error) { alert('Failed to assign sensor.'); }
-  };
-
-  const openSensorDetail = (sensorId) => {
-    setPreselectedSensorId(sensorId);
-    setActiveTab('sensors');
-  };
 
   if (loading || !data) return <div className="page-container"><div className="loading-message"><span className="loading-spinner" aria-hidden="true"></span><span>Loading machine…</span></div></div>;
 
@@ -129,7 +89,7 @@ return (
         </div>
       </div>
 
-      {/* 2. HORNÍ GRID (3 BOXY) */}
+      {/* 2. HORNÍ GRID */}
       <div className="dashboard-grid-3">
         
         {/* BOX 1: Technické údaje */}
@@ -138,6 +98,10 @@ return (
           <div className="detail-grid detail-grid--compact">
             <div className="detail-item"><label>Machine ID</label><p className="detail-value-strong">#{info.id_machine}</p></div>
             <div className="detail-item"><label>Installed</label><p>{info.installation_date}</p></div>
+            <div className="detail-item"><label>Sensors (active)</label><p className="detail-value-strong">{sensors.filter((s) => s.status === 'active').length}</p></div>
+            <div className="detail-item"><label>Sensors (available)</label><p>{sensors.filter((s) => s.status === 'available').length}</p></div>
+            <div className="detail-item"><label>Sensors (maintenance)</label><p>{sensors.filter((s) => s.status === 'maintenance').length}</p></div>
+            <div className="detail-item"><label>Total sensors</label><p>{sensors.length}</p></div>
             <div className="detail-item detail-item--full">
                 <label>Popis zařízení</label>
                 <p className="detail-description-text">{info.description}</p>
@@ -145,73 +109,7 @@ return (
           </div>
         </div>
 
-        {/* BOX 2: Senzory */}
-        <div className="detail-card card-sensors">
-          <div className="card-title">
-             <span>Sensors ({sensors.length})</span>
-             <button className="btn-diagnose btn-diagnose--compact" onClick={openAssignPanel}>
-               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-               Add
-             </button>
-          </div>
-          <div className="machine-sensor-list-wrap">
-            {sensors.length === 0 ? <p className="machine-sensor-empty">No sensors attached</p> : (
-              <ul className="machine-sensor-list">
-                {sensors.map(s => (
-                  <li key={s.id_sensor} className="machine-sensor-item">
-                    <div className="machine-sensor-item-main">
-                      <span className="machine-sensor-item-name">{s.description}</span>
-                      <span className="machine-sensor-item-serial">({s.serial_number})</span>
-                    </div>
-                    <button
-                      className="sensor-btn sensor-btn-detail"
-                      onClick={() => openSensorDetail(s.id_sensor)}
-                      title="View sensor details"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                      </svg>
-                    </button>
-                    <button 
-                      className="sensor-btn sensor-btn-delete"
-                      onClick={() => handleDetachSensor(s.id_sensor)}
-                      title="Detach sensor"
-                    >
-                      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                        <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                      </svg>
-                    </button>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-
-          {isAssignPanelOpen && (
-            <div className="machine-assign-panel">
-              <h3 className="machine-assign-panel-title">Attach sensor</h3>
-              <form onSubmit={handleAttachSensor}>
-                <div className="form-group">
-                  <label>Select sensor</label>
-                  <select value={assignForm.sensor_id} onChange={(e) => setAssignForm({...assignForm, sensor_id: e.target.value})} required>
-                    <option value="">-- Select --</option>
-                    {availableSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.serial_number} - {s.description}</option>)}
-                  </select>
-                </div>
-                <div className="form-group">
-                  <label>Position</label>
-                  <input type="text" value={assignForm.position} onChange={(e) => setAssignForm({...assignForm, position: e.target.value})} required />
-                </div>
-                <div className="modal-actions">
-                  <button type="button" className="btn-cancel" onClick={() => setIsAssignPanelOpen(false)}>Cancel</button>
-                  <button type="submit" className="btn-add-confirm">Attach</button>
-                </div>
-              </form>
-            </div>
-          )}
-        </div>
-
-        {/* BOX 3: Nejnovější poznámka */}
+        {/* BOX 2: Nejnovější poznámka */}
         <div className={`detail-card card-note ${noteSeverityClass}`}>
           <div className="card-title machine-note-title">
             Latest note
