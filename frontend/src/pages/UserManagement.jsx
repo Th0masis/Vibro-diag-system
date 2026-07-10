@@ -4,6 +4,14 @@ import { jwtDecode } from 'jwt-decode';
 
 import ConfirmModal from '../components/ConfirmModal';
 
+function normalizeListPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.users)) return payload.users;
+  return [];
+}
+
 function UserManagement() {
   const [users, setUsers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
@@ -22,9 +30,10 @@ function UserManagement() {
     try {
       setLoading(true);
       const response = await axios.get('/users');
-      setUsers(response.data);
+      setUsers(normalizeListPayload(response.data));
     } catch (error) {
       console.error('Failed to load users:', error);
+      setUsers([]);
     } finally {
       setLoading(false);
     }

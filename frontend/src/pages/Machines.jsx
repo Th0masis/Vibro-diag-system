@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 
+function normalizeListPayload(payload) {
+    if (Array.isArray(payload)) return payload;
+    if (Array.isArray(payload?.data)) return payload.data;
+    if (Array.isArray(payload?.items)) return payload.items;
+    if (Array.isArray(payload?.machines)) return payload.machines;
+    return [];
+}
+
 function Machines() {
     // Variables
     const [machines, setMachines] = useState([]);
@@ -24,9 +32,10 @@ function Machines() {
         try {
             setLoading(true);
             const response = await axios.get('/machines');
-            setMachines(response.data);
+            setMachines(normalizeListPayload(response.data));
         } catch (error) {
             console.error("Couldn't load machines:", error);
+            setMachines([]);
         } finally {
             setLoading(false);
         }

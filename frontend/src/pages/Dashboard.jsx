@@ -2,10 +2,18 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import MachineCard from '../components/MachineCard';
 
+function normalizeMachinesPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.machines)) return payload.machines;
+  if (Array.isArray(payload?.data)) return payload.data;
+  return [];
+}
+
 function Dashboard({ token }) {
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     const fetchMachines = async () => {
@@ -15,21 +23,23 @@ function Dashboard({ token }) {
         const res = await axios.get('/machines', {
           headers: { Authorization: `Bearer ${token}` }
         });
-        setMachines(res.data);
+        setMachines(normalizeMachinesPayload(res.data));
       } catch (err) {
         console.error("Chyba při načítání dashboardu", err);
         setError(err.response?.data?.message || "Failed to load machines. Please try again.");
+        setMachines([]);
       } finally {
         setLoading(false);
       }
     };
 
     if (token) fetchMachines();
-  }, [token]);
+  }, [token, refreshKey]);
 
   const handleRetry = () => {
     setError(null);
     setLoading(true);
+    setRefreshKey(prev => prev + 1);
   };
 
   if (loading) {

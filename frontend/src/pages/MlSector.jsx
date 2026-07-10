@@ -2,6 +2,14 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import ModelTrainingModal from '../components/ModelTrainingModal';
 
+function normalizeListPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.models)) return payload.models;
+  return [];
+}
+
 function MlSector() {
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -21,24 +29,27 @@ function MlSector() {
     try {
       const config = getAuthHeader();
       const res = await axios.get('/ml-models', config);
+      const nextModels = normalizeListPayload(res.data);
       
-      setModels(res.data);
+      setModels(nextModels);
       
       // Pokud už máme nějaký model vybraný, aktualizujeme jeho data (aby se přepsal is_active apod.)
       if (selectedModel) {
-        const updatedSelected = res.data.find(m => m.id_model === selectedModel.id_model);
+        const updatedSelected = nextModels.find(m => m.id_model === selectedModel.id_model);
         if (updatedSelected) {
           setSelectedModel(updatedSelected);
         } else {
           // Pokud model z nějakého důvodu zmizel, vybereme první
-          setSelectedModel(res.data.length > 0 ? res.data[0] : null);
+          setSelectedModel(nextModels.length > 0 ? nextModels[0] : null);
         }
-      } else if (res.data.length > 0) {
-        setSelectedModel(res.data[0]);
+      } else if (nextModels.length > 0) {
+        setSelectedModel(nextModels[0]);
       }
     } catch (err) {
       console.error('Failed to load ML models', err);
       setError("Failed to load models from server. Check your login.");
+      setModels([]);
+      setSelectedModel(null);
     } finally {
       setLoading(false);
     }

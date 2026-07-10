@@ -3,6 +3,15 @@ import axios from 'axios';
 
 import ConfirmModal from '../components/ConfirmModal';
 
+function normalizeListPayload(payload) {
+  if (Array.isArray(payload)) return payload;
+  if (Array.isArray(payload?.data)) return payload.data;
+  if (Array.isArray(payload?.items)) return payload.items;
+  if (Array.isArray(payload?.machines)) return payload.machines;
+  if (Array.isArray(payload?.sensors)) return payload.sensors;
+  return [];
+}
+
 function Sensors() {
   const [sensors, setSensors] = useState([]);
   const [machines, setMachines] = useState([]); // NOVÉ: Seznam strojů pro dropdown
@@ -37,10 +46,12 @@ function Sensors() {
         axios.get('/sensors'),
         axios.get('/machines')
       ]);
-      setSensors(sensorsRes.data);
-      setMachines(machinesRes.data);
+      setSensors(normalizeListPayload(sensorsRes.data));
+      setMachines(normalizeListPayload(machinesRes.data));
     } catch (error) {
       console.error("Chyba při načítání dat:", error);
+      setSensors([]);
+      setMachines([]);
     } finally {
       setLoading(false);
     }
