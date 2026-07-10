@@ -24,14 +24,14 @@ function UserManagement() {
       const response = await axios.get('/users');
       setUsers(response.data);
     } catch (error) {
-      console.error("Nelze načíst uživatele:", error);
+      console.error('Failed to load users:', error);
     } finally {
       setLoading(false);
     }
   };
   const formatDate = (dateString) => {
     if (!dateString) return "Never";
-    return new Date(dateString).toLocaleString('cs-CZ', {
+    return new Date(dateString).toLocaleString('en-GB', {
         dateStyle: 'short',
         timeStyle: 'short'
     });
@@ -58,7 +58,7 @@ function UserManagement() {
       setNewUser({ username: '', password: '', email: '', role: 'user' }); // Reset
       fetchUsers(); // Znovu načíst tabulku
     } catch (error) {
-      alert("Chyba: " + error.response?.data?.detail);
+      alert('Error: ' + error.response?.data?.detail);
     }
   };
 
@@ -94,7 +94,7 @@ function UserManagement() {
         const decoded = jwtDecode(token);
         setIsAdmin(decoded.role === 'admin');
       } catch (error) {
-        console.error("Chyba při dekódování tokenu:", error);
+        console.error('Token decode failed:', error);
       }
     }
     fetchUsers();
@@ -104,8 +104,8 @@ function UserManagement() {
 
   return (
     <div className="page-container">
-      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ color: 'var(--br-orange-dark)', margin: 0 }}>Team</h2>
+      <div className="section-header section-header-row">
+        <h2 className="section-header-title section-header-title-primary">Team</h2>
         {isAdmin &&(
           <button 
             className="btn-diagnose" 
@@ -150,9 +150,29 @@ function UserManagement() {
                     {formatDate(user.last_login)}
                     </td>
                     {isAdmin && (
-                      <td style={{ textAlign: 'center' }}>
-                        <button className="btn-small-edit" onClick={() => startEdit(user)}>Edit</button>
-                        <button className="btn-small-delete" onClick={() => setUserToDelete(user.id_user)}>Delete</button>
+                      <td className="table-actions-center">
+                        <div className="machine-sensors-actions-wrap">
+                          <button
+                            className="sensor-btn sensor-btn-detail"
+                            onClick={() => startEdit(user)}
+                            title="Edit user"
+                            aria-label="Edit user"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+                            </svg>
+                          </button>
+                          <button
+                            className="sensor-btn sensor-btn-delete"
+                            onClick={() => setUserToDelete(user.id_user)}
+                            title="Delete user"
+                            aria-label="Delete user"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                              <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                            </svg>
+                          </button>
+                        </div>
                       </td>
                     )}
                 </tr>
@@ -221,22 +241,22 @@ function UserManagement() {
       )}
       {editingUser && (
         <div className="modal-overlay">
-          <div className="modal-content add-user-modal" style={{ borderTop: '6px solid var(--primary)' }}>
-            <h2 style={{ marginBottom: '20px', color: 'var(--primary)' }}>Edit user</h2>
+          <div className="modal-content add-user-modal modal-content-primary-border">
+            <h2 className="modal-title-primary modal-title-spaced">Edit user</h2>
             <form onSubmit={handleUpdateUser}>
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
+                <label className="form-field-label">
                   Username (fixed - can't be changed)
                 </label>
                 <input 
                   type="text" 
                   value={editingUser.username} 
                   disabled 
-                  style={{ background: '#f1f5f9', cursor: 'not-allowed' }}
+                  className="form-input-disabled"
                 />
               </div>
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
+                <label className="form-field-label">
                   E-mail
                 </label>
                 <input 
@@ -246,8 +266,8 @@ function UserManagement() {
                   required 
                 />
               </div>
-              <div className="form-group" style={{ marginTop: '20px', padding: '15px', background: '#fef2f2', borderRadius: '8px' }}>
-                <label style={{ fontSize: '0.8rem', color: 'var(--status-fault)', fontWeight: 'bold', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
+              <div className="form-group form-group-warning">
+                <label className="form-field-label form-field-label-warning">
                   Password change (optional)
                 </label>
                 <input 
@@ -255,14 +275,14 @@ function UserManagement() {
                   placeholder="Leave empty to keep old password"
                   value={editingUser.password || ''}
                   onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                  style={{ borderColor: 'var(--status-fault)' }}
+                  className="form-input-warning"
                 />
-                <small style={{ display: 'block', textAlign: 'left', color: '#64748b', marginTop: '5px' }}>
+                <small className="form-help-text">
                   If you fill this, the password will be changed
                 </small>
               </div>
               <div className="form-group">
-                <label style={{ fontSize: '0.8rem', color: '#64748b', display: 'block', textAlign: 'left', marginBottom: '5px' }}>
+                <label className="form-field-label">
                   System role
                 </label>
                 <select 

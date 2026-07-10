@@ -59,8 +59,8 @@ function Machines() {
 
     return (
         <div className="page-container">
-            <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-                <h2 style={{ color: 'var(--text)', margin: 0 }}>Machines</h2>
+            <div className="section-header section-header-row">
+                <h2 className="section-header-title">Machines</h2>
                 <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>
                     + Add machine
                 </button>
@@ -84,9 +84,9 @@ function Machines() {
                             {machines.map((machine) => (
                                 <tr key={machine.id_machine}>
                                     <td>
-                                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start' }}>
-                                            <span style={{ fontWeight: 'bold', color: 'var(--text)' }}>{machine.name}</span>
-                                            <span style={{ fontSize: '0.8rem', color: '#64748b' }}>ID: {machine.id_machine}</span>
+                                        <div className="machine-id-stack">
+                                            <span className="machine-id-name">{machine.name}</span>
+                                            <span className="machine-id-meta">ID: {machine.id_machine}</span>
                                         </div>
                                     </td>
                                     <td>{machine.type}</td>
@@ -96,13 +96,19 @@ function Machines() {
                                             {machine.status}
                                         </span>
                                     </td>
-                                    <td style={{ textAlign: 'center' }}>
-                                        <button 
-                                            className="btn-small-edit" 
-                                            onClick={() => handleOpenDetail(machine.id_machine)}
-                                        >
-                                            Open detail
-                                        </button>
+                                    <td className="table-actions-center">
+                                        <div className="machine-sensors-actions-wrap">
+                                            <button
+                                                className="sensor-btn sensor-btn-detail"
+                                                onClick={() => handleOpenDetail(machine.id_machine)}
+                                                title="Open machine detail"
+                                                aria-label="Open machine detail"
+                                            >
+                                                <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                                                    <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                                                </svg>
+                                            </button>
+                                        </div>
                                     </td>
                                 </tr>
                             ))}

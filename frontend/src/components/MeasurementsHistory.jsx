@@ -39,7 +39,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       // Po načtení nových dat vyčistíme výběr
       setSelectedIds([]); 
     } catch (error) {
-      console.error("Chyba při načítání historie:", error);
+      console.error('Failed to load history:', error);
     } finally {
       setLoading(false);
     }
@@ -67,7 +67,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       if (filterSource !== 'all' && item.source !== filterSource) return false;
       if (filterDate && !item.timestamp.startsWith(filterDate)) return false;
       if (filterTime) {
-        const itemTime = new Date(item.timestamp).toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+        const itemTime = new Date(item.timestamp).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
         if (itemTime !== filterTime) return false;
       }
       return true;
@@ -130,7 +130,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
         await axios.post(`/measurements/${id}/process`, {}, getAuthHeader());
         setProcessedCount(prev => prev + 1);
       } catch (e) {
-        console.error(`Chyba u ID ${id}:`, e);
+        console.error(`Failed to process ID ${id}:`, e);
       }
     }
 
@@ -243,7 +243,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                     )}
                   </td>
                   <td className="history-time-cell">
-                    {new Date(row.timestamp).toLocaleString('cs-CZ', { 
+                    {new Date(row.timestamp).toLocaleString('en-GB', { 
                       day: '2-digit', month: '2-digit', year: 'numeric', 
                       hour: '2-digit', minute: '2-digit' 
                     })}
@@ -302,7 +302,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
 
         {filteredData.length === 0 && !loading && (
           <div className="history-empty-state">
-            Žádné záznamy neodpovídají filtrům.
+            No records match the current filters.
           </div>
         )}
 

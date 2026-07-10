@@ -177,7 +177,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
 
       {/* --- OBSAH --- */}
       <div style={{ padding: '25px', background: '#f8fafc', minHeight: '500px' }}>
-        {loading ? <p>Načítám data...</p> : (
+        {loading ? <p>Loading data...</p> : (
           <div style={{ display: 'grid', gridTemplateColumns: '3fr 1fr', gap: '25px' }}>
 
             {/* LEVÝ SLOUPEC: GRAFY A ZÁLOŽKY */}

@@ -875,6 +875,123 @@ tr:hover {
 .role-badge.user { background: #e0f2fe; color: #2563eb;}
 .role-badge.operator { background: #fee2e2; color: var(--br-yellow);}
 
+/* Shared section header row used across list pages */
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.section-header-title {
+  color: var(--text);
+  margin: 0;
+}
+
+.section-header-title-primary {
+  color: var(--br-orange-dark);
+}
+
+.table-cell-muted {
+  color: #94a3b8;
+}
+
+.table-actions-center {
+  text-align: center;
+}
+
+.machine-id-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.machine-id-name {
+  font-weight: 700;
+  color: var(--text);
+}
+
+.machine-id-meta {
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.modal-header-row {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 20px;
+}
+
+.modal-title-primary {
+  margin: 0;
+  color: var(--primary);
+}
+
+.modal-title-spaced {
+  margin-bottom: 20px;
+}
+
+.modal-content-primary-border {
+  border-top: 6px solid var(--primary);
+}
+
+.detail-item-highlight {
+  grid-column: span 2;
+  background: #f8fafc;
+  padding: 10px;
+  border-radius: 6px;
+}
+
+.machine-position-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.machine-position-name {
+  font-weight: 700;
+}
+
+.machine-position-muted {
+  color: #64748b;
+}
+
+.form-input-disabled {
+  background: #f1f5f9;
+  cursor: not-allowed;
+}
+
+.form-field-label {
+  font-size: 0.8rem;
+  color: #64748b;
+  display: block;
+  text-align: left;
+  margin-bottom: 5px;
+}
+
+.form-field-label-warning {
+  color: var(--status-fault);
+  font-weight: 700;
+}
+
+.form-group-warning {
+  margin-top: 20px;
+  padding: 15px;
+  background: #fef2f2;
+  border-radius: 8px;
+}
+
+.form-input-warning {
+  border-color: var(--status-fault);
+}
+
+.form-help-text {
+  display: block;
+  text-align: left;
+  color: #64748b;
+  margin-top: 5px;
+}
+
 /* Malá tlačítka v tabulce */
 .btn-small-edit, .btn-small-delete {
   padding: 6px 10px;

@@ -37,7 +37,7 @@ function MlSector() {
         setSelectedModel(res.data[0]);
       }
     } catch (err) {
-      console.error("Chyba při načítání ML modelů", err);
+      console.error('Failed to load ML models', err);
       setError("Failed to load models from server. Check your login.");
     } finally {
       setLoading(false);
@@ -62,7 +62,7 @@ function MlSector() {
       alert("Model activated successfully and is now in production.");
       await fetchModels(); // Ihned po aktivaci stáhneme čerstvá data
     } catch (err) {
-      console.error("Chyba při aktivaci modelu:", err);
+      console.error('Failed to activate model:', err);
       alert("Failed to activate model. Check backend connection.");
     }
   };
@@ -100,7 +100,7 @@ function MlSector() {
               // Rozhodnutí, jaký štítek ukážeme vlevo
               let statusBadge;
               if (model.training_status === 'training') {
-                statusBadge = <span className="role-badge ml-model-status-badge ml-model-status-badge--training">TRAINING ⏳</span>;
+                statusBadge = <span className="role-badge ml-model-status-badge ml-model-status-badge--training">TRAINING</span>;
               } else if (model.is_active) {
                 statusBadge = <span className="role-badge available ml-model-status-badge">ACTIVE</span>;
               } else {
@@ -147,18 +147,18 @@ function MlSector() {
               <div className="ml-sector-detail-cta-wrap">
                 {selectedModel.training_status === 'training' ? (
                   <span className="role-badge ml-sector-training-badge">
-                    ⏳ TRAINING (waiting to complete)
+                    TRAINING (waiting to complete)
                   </span>
                 ) : selectedModel.is_active ? (
                   <span className="role-badge OK ml-sector-production-badge">
-                    PRODUCTION ✓
+                    PRODUCTION
                   </span>
                 ) : (
                   <button
                     className="btn-update ml-sector-activate-btn"
                     onClick={() => handleActivateModel(selectedModel.id_model)}
                   >
-                    🚀 Deploy to production
+                    Deploy to production
                   </button>
                 )}
               </div>
@@ -192,7 +192,7 @@ function MlSector() {
               {/* SEKCE: TRÉNINK A FINE-TUNING */}
               <div className="ml-sector-training-box">
                 <h4 className="card-title ml-sector-training-title">
-                  🧠 Fine-Tune & Update Model
+                  Fine-Tune & Update Model
                 </h4>
                 <p className="ml-sector-training-description">
                   The baseline model can be fine-tuned on real production data (Transfer Learning). This adapts the model to your specific equipment noise and bearing characteristics, significantly improving prediction reliability in production.
@@ -203,7 +203,7 @@ function MlSector() {
                   onClick={() => setIsTrainingModalOpen(true)}
                   disabled={selectedModel.training_status === 'training'}
                 >
-                  {selectedModel.training_status === 'training' ? 'Training in progress...' : '⚙️ Start fine-tuning'}
+                  {selectedModel.training_status === 'training' ? 'Training in progress...' : 'Start fine-tuning'}
                 </button>
               </div>
 

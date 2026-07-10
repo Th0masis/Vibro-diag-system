@@ -26,10 +26,10 @@ function ModelTrainingModal({ model, onClose }) {
   const isGAN = model.name.includes('GAN') || model.type === 'AE_ANOWGAN';
 
   const FAULT_OPTIONS = [
-    { value: '0', label: 'Zdravé ložisko (Normal)' },
-    { value: '1', label: 'Porucha vnitřního kroužku (IR)' },
-    { value: '2', label: 'Porucha vnějšího kroužku (OR)' },
-    { value: '3', label: 'Porucha valivého elementu / klece - other (O)' }
+    { value: '0', label: 'Healthy bearing (Normal)' },
+    { value: '1', label: 'Inner race fault (IR)' },
+    { value: '2', label: 'Outer race fault (OR)' },
+    { value: '3', label: 'Rolling element / cage fault (Other)' }
   ];
 
   const getAuthHeader = () => {
@@ -71,8 +71,8 @@ function ModelTrainingModal({ model, onClose }) {
       const response = await axios.get(`/training-segments?${params.toString()}`, { headers });
       setSearchResults(response.data);
     } catch (error) {
-      console.error("Chyba při vyhledávání dat:", error);
-      alert("Nepodařilo se vyhledat datové úseky.");
+      console.error('Segment search failed:', error);
+      alert('Failed to find data segments.');
     } finally {
       setIsSearching(false);
     }
@@ -86,17 +86,17 @@ function ModelTrainingModal({ model, onClose }) {
 
   const startTraining = async () => {
     if (selectedSegments.length === 0) {
-      alert("Pro trénink musíte vybrat alespoň jeden datový úsek!");
+      alert('Select at least one data segment before training.');
       return;
     }
 
     if (isRUL && (!rulDates.installation || !rulDates.replacement)) {
-      alert("Pro trénink RUL modelu musíte zadat datum instalace a datum výměny (selhání) ložiska!");
+      alert('RUL training requires both installation and replacement dates.');
       return;
     }
 
     setStep(2);
-    setTrainingPhase('Odesílám data na server a spouštím MLOps pipeline...');
+    setTrainingPhase('Sending data to the server and starting the MLOps pipeline...');
 
     try {
       const headers = getAuthHeader();
@@ -121,7 +121,7 @@ function ModelTrainingModal({ model, onClose }) {
       await axios.post(`/models/${model.id_model}/fine-tune`, payload, { headers });
       setStep(3);
     } catch (error) {
-      console.error("Chyba při spouštění tréninku:", error);
+      console.error('Training start failed:', error);
       alert("Error: " + (error.response?.data?.detail || error.message));
       setStep(1);
     }
@@ -130,31 +130,31 @@ function ModelTrainingModal({ model, onClose }) {
   const renderSegmentSearch = () => (
     <div className="training-search-root">
       <div className="training-search-header">
-        <h4 className="training-search-title">Vyhledat data v databázi</h4>
+        <h4 className="training-search-title">Search data in database</h4>
         <button className="btn-cancel" onClick={() => setIsAddingSegment(false)}>← Back</button>
       </div>
 
       <div className="training-search-filters">
         <div>
-          <label className="training-field-label">Stroj</label>
+          <label className="training-field-label">Machine</label>
           <select className="custom-select" value={filters.machine} onChange={e => setFilters({...filters, machine: e.target.value, sensor: ''})}>
-            <option value="">Všechny stroje</option>
+            <option value="">All machines</option>
             {availableMachines.map(m => <option key={m.id_machine} value={m.id_machine}>{m.name}</option>)}
           </select>
         </div>
         <div>
-          <label className="training-field-label">Senzor</label>
+          <label className="training-field-label">Sensor</label>
           <select className="custom-select" value={filters.sensor} onChange={e => setFilters({...filters, sensor: e.target.value})}>
             <option value="">All sensors</option>
-            {filteredSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.position || `Senzor #${s.id_sensor}`}</option>)}
+            {filteredSensors.map(s => <option key={s.id_sensor} value={s.id_sensor}>{s.position || `Sensor #${s.id_sensor}`}</option>)}
           </select>
         </div>
         <div>
-          <label className="training-field-label">Od</label>
+          <label className="training-field-label">From</label>
           <input type="datetime-local" className="custom-select" value={filters.dateFrom} onChange={e => setFilters({...filters, dateFrom: e.target.value})} />
         </div>
         <div>
-          <label className="training-field-label">Do</label>
+          <label className="training-field-label">To</label>
           <input type="datetime-local" className="custom-select" value={filters.dateTo} onChange={e => setFilters({...filters, dateTo: e.target.value})} />
         </div>
         <button className="btn-diagnose" onClick={handleSearchSegments} disabled={isSearching}>{isSearching ? '...' : 'Search'}</button>
@@ -164,10 +164,10 @@ function ModelTrainingModal({ model, onClose }) {
         <table>
           <thead>
             <tr>
-              <th>Stroj / Senzor</th>
-              <th>Časový úsek</th>
-              <th className="training-center">Vzorků</th>
-              <th className="training-center">Akce</th>
+              <th>Machine / Sensor</th>
+              <th>Time range</th>
+              <th className="training-center">Samples</th>
+              <th className="training-center">Action</th>
             </tr>
           </thead>
           <tbody>
@@ -184,7 +184,7 @@ function ModelTrainingModal({ model, onClose }) {
                         onClick={() => handleAddSegment(res)}
                         disabled={isAdded}
                     >
-                      {isAdded ? 'Přidáno ✓' : '+ Přidat'}
+                      {isAdded ? 'Added' : '+ Add'}
                     </button>
                   </td>
                 </tr>
@@ -204,68 +204,68 @@ function ModelTrainingModal({ model, onClose }) {
         {isRUL && (
           <div className="training-rul-box">
             <h4 className="training-rul-title">
-              🕒 Parametry životního cyklu ložiska
+              Bearing lifecycle parameters
             </h4>
             <div className="training-rul-grid">
               <div>
-                <label className="training-rul-label">Datum instalace (Start RUL = 1.0)</label>
+                <label className="training-rul-label">Installation date (RUL start = 1.0)</label>
                 <input 
                   type="date" 
                   className="custom-select training-rul-input"
                   value={rulDates.installation}
                   onChange={e => setRulDates({...rulDates, installation: e.target.value})}
                 />
-                <small className="training-help">Kdy bylo nové ložisko nasazeno do provozu.</small>
+                <small className="training-help">Date when the new bearing entered operation.</small>
               </div>
               <div>
-                <label className="training-rul-label">Datum výměny/selhání (Konec RUL = 0.0)</label>
+                <label className="training-rul-label">Replacement/failure date (RUL end = 0.0)</label>
                 <input 
                   type="date" 
                   className="custom-select training-rul-input"
                   value={rulDates.replacement}
                   onChange={e => setRulDates({...rulDates, replacement: e.target.value})}
                 />
-                <small className="training-help">Okamžik, kdy ložisko dosáhlo konce životnosti.</small>
+                <small className="training-help">Time when the bearing reached end of life.</small>
               </div>
             </div>
             <div className="training-rul-note">
-              <strong>Poznámka:</strong> Datum pořízení datového záznamu bude automaticky spárováno s tímto intervalem pro výpočet zbývající životnosti.
+              <strong>Note:</strong> Each data timestamp is mapped to this interval to compute remaining useful life.
             </div>
           </div>
         )}
 
         {isCNN && (
           <div className="training-mode-box training-mode-box--cnn">
-            <strong>Režim Supervised (Labelování)</strong><br/>
-            <span className="training-mode-text">Přiřaďte úsekům typy poruch pro učení klasifikátoru.</span>
+            <strong>Supervised mode (labeling)</strong><br/>
+            <span className="training-mode-text">Assign fault classes to segments for supervised classifier training.</span>
           </div>
         )}
 
         {isGAN && (
           <div className="training-mode-box training-mode-box--gan">
-            <strong>Režim Unsupervised (Baseline)</strong><br/>
-            <span className="training-mode-text">Vybírejte pouze úseky bezporuchového stavu stroje.</span>
+            <strong>Unsupervised mode (baseline)</strong><br/>
+            <span className="training-mode-text">Select only healthy baseline segments for unsupervised training.</span>
           </div>
         )}
 
         {isAddingSegment ? renderSegmentSearch() : (
           <div className="training-selected-root">
             <div className="training-selected-header">
-              <h4 className="training-selected-title">Vybrané datové úseky</h4>
-              <button className="btn-diagnose training-add-data-btn" onClick={() => setIsAddingSegment(true)}>+ Přidat data</button>
+              <h4 className="training-selected-title">Selected data segments</h4>
+              <button className="btn-diagnose training-add-data-btn" onClick={() => setIsAddingSegment(true)}>+ Add data</button>
             </div>
             <div className="table-wrapper">
               {selectedSegments.length === 0 ? (
-                <div className="training-empty">Žádná data. Vyhledejte úseky v databázi.</div>
+                <div className="training-empty">No data selected. Search and add segments from the database.</div>
               ) : (
                 <table>
                   <thead>
                     <tr>
-                      <th>Stroj / Senzor</th>
-                      <th>Období měření</th>
-                      <th className="training-center">Vzorků</th>
-                      {isCNN && <th>Štítek (Label)</th>}
-                      <th className="training-center">Odstranit</th>
+                      <th>Machine / Sensor</th>
+                      <th>Measurement period</th>
+                      <th className="training-center">Samples</th>
+                      {isCNN && <th>Label</th>}
+                      <th className="training-center">Remove</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -282,7 +282,7 @@ function ModelTrainingModal({ model, onClose }) {
                           </td>
                         )}
                         <td className="training-center">
-                          <button className="btn-small-delete" onClick={() => setSelectedSegments(selectedSegments.filter(s => s.id !== seg.id))}>✕</button>
+                          <button className="btn-small-delete" onClick={() => setSelectedSegments(selectedSegments.filter(s => s.id !== seg.id))}>Remove</button>
                         </td>
                       </tr>
                     ))}
@@ -300,7 +300,7 @@ function ModelTrainingModal({ model, onClose }) {
     <div className="modal-overlay">
       <div className="modal-content training-modal-content">
         <div className="training-modal-header">
-          <h2 className="training-modal-title">{step === 3 ? '🚀 Fine-Tuning' : '⚙️ Konfigurace tréninku'}</h2>
+          <h2 className="training-modal-title">{step === 3 ? 'Fine-Tuning' : 'Training configuration'}</h2>
           <button onClick={onClose} className="modal-close-btn modal-close-btn--dark" title="Close">
             <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
@@ -316,8 +316,8 @@ function ModelTrainingModal({ model, onClose }) {
             </div>
             {renderDataSelectionForm()}
             <div className="training-modal-actions">
-              <button className="btn-cancel" onClick={onClose}>Zrušit</button>
-              <button className="btn-diagnose training-start-btn" onClick={startTraining} disabled={selectedSegments.length === 0}>Spustit Fine-Tuning</button>
+              <button className="btn-cancel" onClick={onClose}>Cancel</button>
+              <button className="btn-diagnose training-start-btn" onClick={startTraining} disabled={selectedSegments.length === 0}>Start fine-tuning</button>
             </div>
           </div>
         )}
@@ -331,10 +331,10 @@ function ModelTrainingModal({ model, onClose }) {
 
         {step === 3 && (
           <div className="training-step-center training-step-center--done">
-            <div className="training-success-icon">🚀</div>
-            <h3>Pipeline úspěšně inicializována</h3>
-            <p>Trénink probíhá asynchronně. Status modelu v DB: <strong>TRAINING</strong>.</p>
-            <button className="btn-diagnose" onClick={onClose}>Zavřít</button>
+            <div className="training-success-icon">Done</div>
+            <h3>Pipeline initialized successfully</h3>
+            <p>Training is running asynchronously. Model DB status: <strong>TRAINING</strong>.</p>
+            <button className="btn-diagnose" onClick={onClose}>Close</button>
           </div>
         )}
       </div>

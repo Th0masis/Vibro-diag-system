@@ -47,7 +47,7 @@ function MachineGraphs({ machineId }) {
       const res = await axios.get(`/machines/${machineId}/history`);
       setData(res.data);
     } catch (error) {
-      console.error("Chyba při načítání dat pro grafy:", error);
+      console.error('Failed to load chart data:', error);
     } finally {
       setLoading(false);
     }
@@ -82,7 +82,7 @@ function MachineGraphs({ machineId }) {
       if (!grouped[timeKey]) {
         grouped[timeKey] = { 
           timestamp: time, 
-          timeLabel: time.toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
+          timeLabel: time.toLocaleString('en-GB', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) 
         };
       }
 
@@ -167,7 +167,7 @@ function MachineGraphs({ machineId }) {
                     key={sensorName}
                     type="monotone" 
                     dataKey={sensorName} 
-                    name={`Senzor ${sensorName}`}
+                    name={`Sensor ${sensorName}`}
                     stroke={sensorColor} 
                     strokeWidth={2.5}
                     dot={renderSensorDot(sensorName, sensorColor)}

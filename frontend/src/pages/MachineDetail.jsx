@@ -103,7 +103,7 @@ return (
             <div className="detail-item"><label>Sensors (maintenance)</label><p>{sensors.filter((s) => s.status === 'maintenance').length}</p></div>
             <div className="detail-item"><label>Total sensors</label><p>{sensors.length}</p></div>
             <div className="detail-item detail-item--full">
-                <label>Popis zařízení</label>
+              <label>Device description</label>
                 <p className="detail-description-text">{info.description}</p>
             </div>
           </div>
@@ -129,7 +129,7 @@ return (
                 </span>
                 <span>
                   <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'inline',verticalAlign:'middle',marginRight:'3px'}}><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                  {new Date(last_note.timestamp).toLocaleString('cs-CZ', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                  {new Date(last_note.timestamp).toLocaleString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             </div>

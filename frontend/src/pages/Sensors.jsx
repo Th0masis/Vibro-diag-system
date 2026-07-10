@@ -23,6 +23,12 @@ function Sensors() {
     id_machine: ''
   });
 
+  const formatStatusLabel = (status) => {
+    if (status === 'active') return 'Active';
+    if (status === 'maintenance') return 'Maintenance';
+    return 'Available';
+  };
+
   // Načtení senzorů I strojů
   const fetchData = async () => {
     try {
@@ -50,7 +56,7 @@ function Sensors() {
     if (payload.id_machine === '') payload.id_machine = null;
 
     try {
-      await axios.post('http://127.0.0.1:8000/sensors', payload);
+      await axios.post('/sensors', payload);
       setIsAddModalOpen(false);
       setNewSensor({ 
         serial_number: '', description: '', sampling_rate: '', 
@@ -69,7 +75,7 @@ function Sensors() {
     if (payload.id_machine === '' || payload.id_machine === 'null') payload.id_machine = null;
 
     try {
-      await axios.put(`http://127.0.0.1:8000/sensors/${editingSensor.id_sensor}`, payload);
+      await axios.put(`/sensors/${editingSensor.id_sensor}`, payload);
       setEditingSensor(null);
       setSelectedSensor(null);
       fetchData();
@@ -80,7 +86,7 @@ function Sensors() {
 
   const confirmDelete = async () => {
     try {
-      await axios.delete(`http://127.0.0.1:8000/sensors/${sensorToDelete}`);
+      await axios.delete(`/sensors/${sensorToDelete}`);
       setSensorToDelete(null);
       fetchData();
     } catch (error) {
@@ -110,8 +116,8 @@ function Sensors() {
 
   return (
     <div className="page-container">
-      <div className="section-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '20px' }}>
-        <h2 style={{ color: 'var(--text)', margin: 0 }}>Sensor Management</h2>
+      <div className="section-header section-header-row">
+        <h2 className="section-header-title">Sensor Management</h2>
         <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>+ Register sensor</button>
       </div>
 
@@ -132,18 +138,36 @@ function Sensors() {
                 <tr key={s.id_sensor}>
                   <td><strong>{s.serial_number}</strong></td>
                   <td>{s.description}</td>
-                  <td style={{ color: s.id_machine ? 'var(--text)' : '#94a3b8' }}>
+                  <td className={s.id_machine ? '' : 'table-cell-muted'}>
                     {s.id_machine ? getMachineName(s.id_machine) : '— Warehouse —'}
                   </td>
                   <td>
                     <span className={`role-badge ${s.status}`}>
-                      {s.status === 'available' ? 'Available' : s.status === 'active' ? 'Active' : 'Maintenance'}
+                      {formatStatusLabel(s.status)}
                     </span>
                   </td>
-                  <td style={{ textAlign: 'center' }}>
-                    <div style={{ display: 'flex', justifyContent: 'center', gap: '8px' }}>
-                      <button className="btn-small-edit" onClick={() => setSelectedSensor(s)}>Detail</button>
-                      <button className="btn-small-delete" onClick={() => setSensorToDelete(s.id_sensor)}>Delete</button>
+                  <td className="table-actions-center">
+                    <div className="machine-sensors-actions-wrap">
+                      <button
+                        className="sensor-btn sensor-btn-detail"
+                        onClick={() => setSelectedSensor(s)}
+                        title="View sensor details"
+                        aria-label="View sensor details"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+                        </svg>
+                      </button>
+                      <button
+                        className="sensor-btn sensor-btn-delete"
+                        onClick={() => setSensorToDelete(s.id_sensor)}
+                        title="Delete sensor"
+                        aria-label="Delete sensor"
+                      >
+                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
+                        </svg>
+                      </button>
                     </div>
                   </td>
                 </tr>
@@ -157,9 +181,9 @@ function Sensors() {
       {selectedSensor && !editingSensor && (
         <div className="modal-overlay">
           <div className="modal-content sensor-detail-card">
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '20px' }}>
-              <h2 style={{ margin: 0, color: 'var(--primary)' }}>Sensor detail</h2>
-              <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
+            <div className="modal-header-row">
+              <h2 className="modal-title-primary">Sensor detail</h2>
+              <span className={`role-badge ${selectedSensor.status}`}>{formatStatusLabel(selectedSensor.status)}</span>
             </div>
             <div className="detail-grid">
               <div className="detail-item"><label>S/N</label><p>{selectedSensor.serial_number}</p></div>
@@ -168,13 +192,13 @@ function Sensors() {
               <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
               
               {/* Show assigned machine in detail */}
-              <div className="detail-item" style={{ gridColumn: 'span 2', background: '#f8fafc', padding: '10px', borderRadius: '6px' }}>
+              <div className="detail-item detail-item-highlight">
                   <label>Placement</label>
-                  <p style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                  <p className="machine-position-meta">
                     {selectedSensor.id_machine ? (
                         <>
-                          <span style={{ fontWeight: 'bold' }}>{getMachineName(selectedSensor.id_machine)}</span>
-                          <span style={{ color: '#64748b' }}>📍 {selectedSensor.position}</span>
+                          <span className="machine-position-name">{getMachineName(selectedSensor.id_machine)}</span>
+                          <span className="machine-position-muted">Position: {selectedSensor.position}</span>
                         </>
                     ) : 'Warehouse (Unassigned)'}
                   </p>
@@ -192,11 +216,11 @@ function Sensors() {
       {editingSensor && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--primary)' }}>Edit sensor</h2>
+            <h2 className="modal-title-primary">Edit sensor</h2>
             <form onSubmit={handleUpdateSensor}>
               <div className="form-group">
                 <label>Serial number (S/N)</label>
-                <input type="text" value={editingSensor.serial_number} disabled style={{ background: '#f1f5f9' }} />
+                <input type="text" value={editingSensor.serial_number} disabled className="form-input-disabled" />
               </div>
 
               <div className="form-group">
@@ -266,7 +290,7 @@ function Sensors() {
       {isAddModalOpen && (
         <div className="modal-overlay">
           <div className="modal-content add-user-modal">
-            <h2 style={{ color: 'var(--primary)' }}>New sensor</h2>
+            <h2 className="modal-title-primary">New sensor</h2>
             <form onSubmit={handleAddSensor}>
               <div className="form-group">
                 <label>Serial number *</label>
