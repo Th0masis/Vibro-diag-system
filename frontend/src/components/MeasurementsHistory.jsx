@@ -141,14 +141,11 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   return (
     <div className="history-container">
       {selectedMeasurementId && (
-        <div className="history-inline-detail">
-          <MeasurementDetailModal
-            measurementId={selectedMeasurementId}
-            onClose={() => setSelectedMeasurementId(null)}
-            onProcessed={fetchData}
-            inline
-          />
-        </div>
+        <MeasurementDetailModal
+          measurementId={selectedMeasurementId}
+          onClose={() => setSelectedMeasurementId(null)}
+          onProcessed={fetchData}
+        />
       )}
 
       {/* TOOLBAR S FILTRY - S flex layoutem */}

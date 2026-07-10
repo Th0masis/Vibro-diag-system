@@ -31,31 +31,6 @@ function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, on
 
   return (
     <div>
-      {selectedSensor && (
-        <div className="machine-sensors-detail-card">
-          <div className="machine-sensors-detail-header">
-            <h2 className="machine-sensors-detail-title">Sensor detail</h2>
-            <div className="machine-sensors-detail-actions">
-              <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
-              <button className="modal-close-btn" onClick={() => setSelectedSensor(null)} title="Close">
-                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-                </svg>
-              </button>
-            </div>
-          </div>
-
-          <div className="detail-grid">
-            <div className="detail-item"><label>Serial number</label><p>{selectedSensor.serial_number}</p></div>
-            <div className="detail-item"><label>Model</label><p>{selectedSensor.description}</p></div>
-            <div className="detail-item"><label>Sampling rate</label><p>{selectedSensor.sampling_rate ? `${selectedSensor.sampling_rate} Hz` : '-'}</p></div>
-            <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
-            <div className="detail-item"><label>Position</label><p>{selectedSensor.position || '-'}</p></div>
-            <div className="detail-item"><label>Sensor ID</label><p>#{selectedSensor.id_sensor}</p></div>
-          </div>
-        </div>
-      )}
-
       <div className="table-wrapper">
         {sensors.length === 0 ? (
           <div className="machine-sensors-empty-state">
@@ -112,6 +87,33 @@ function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, on
         message={`Detach sensor ${sensorToDetach?.serial_number} from this machine? It will become available in inventory.`}
         confirmText="Detach"
       />
+
+      {selectedSensor && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '760px', width: '92%', textAlign: 'left' }}>
+            <div className="machine-sensors-detail-header">
+              <h2 className="machine-sensors-detail-title">Sensor detail</h2>
+              <div className="machine-sensors-detail-actions">
+                <span className={`role-badge ${selectedSensor.status}`}>{selectedSensor.status}</span>
+                <button className="modal-close-btn" onClick={() => setSelectedSensor(null)} title="Close">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <div className="detail-grid">
+              <div className="detail-item"><label>Serial number</label><p>{selectedSensor.serial_number}</p></div>
+              <div className="detail-item"><label>Model</label><p>{selectedSensor.description}</p></div>
+              <div className="detail-item"><label>Sampling rate</label><p>{selectedSensor.sampling_rate ? `${selectedSensor.sampling_rate} Hz` : '-'}</p></div>
+              <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
+              <div className="detail-item"><label>Position</label><p>{selectedSensor.position || '-'}</p></div>
+              <div className="detail-item"><label>Sensor ID</label><p>#{selectedSensor.id_sensor}</p></div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
