@@ -10,6 +10,18 @@ PROGRAM _INIT
 	(* Module path pointer - points directly to OPC UA BufferUpload structure *)
 	fubCM4810.paramMain.pModulePath := ADR(gTrace.BufferUpload.ModulePath);
 
+	(* Initialize SensorData - clear all channels [1..4] *)
+	FOR i := 1 TO 4 DO
+		SensorData[i].RmsAccRaw := 0.0;
+		SensorData[i].RmsAccEnvelope := 0.0;
+		SensorData[i].RmsVelRaw := 0.0;
+		SensorData[i].RmsVelEnvelope := 0.0;
+		SensorData[i].KurtosisRaw := 0.0;
+		SensorData[i].SkewnessRaw := 0.0;
+		SensorData[i].Vdi3832KtRaw := 0.0;
+		SensorData[i].ActSpeed := 0.0;
+	END_FOR;
+
 	(* NOTE: BufferNumber, BufferLength configured dynamically in _CYCLIC from BufferUpload command *)
 
 END_PROGRAM

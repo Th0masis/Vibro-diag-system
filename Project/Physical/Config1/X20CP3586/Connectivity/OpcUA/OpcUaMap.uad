@@ -14,6 +14,7 @@
           <Variable Name="BufferUpload" RecursiveEnable="2" />
           <Variable Name="BufferStatus" RecursiveEnable="2" />
         </Variable>
+        <Variable Name="SensorData" RecursiveEnable="2" />
       </GlobalVariables>
     </Module>
   </DefaultView>

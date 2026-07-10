@@ -1,7 +1,4 @@
 VAR_CONFIG
-	::ISO10816 AT %ID."X20CM4810".Iso10816_01;
-	::RMSAclEnv AT %ID."X20CM4810".RmsAccEnvelope01;
-	::RMSVelEnv AT %ID."X20CM4810".RmsVelEnvelope01;
 	::GetBuffer:fubCM4810.ioMapping.BufferInputSequence01 AT %IB."X20CM4810".BufferInputSequence01;
 	::GetBuffer:fubCM4810.ioMapping.BufferRxByte01 AT %IB."X20CM4810".BufferRxByte01;
 	::GetBuffer:fubCM4810.ioMapping.BufferRxByte02 AT %IB."X20CM4810".BufferRxByte02;
@@ -14,5 +11,39 @@ VAR_CONFIG
 	::GetBuffer:fubCM4810.ioMapping.BufferTxByte03 AT %QB."X20CM4810".BufferTxByte03;
 	::GetBuffer:fubCM4810.ioMapping.BufferTxByte04 AT %QB."X20CM4810".BufferTxByte04;
 	::GetBuffer:fubCM4810.ioMapping.BufferLockValid01 AT %IX."X20CM4810".BufferLockValid01;
-	::GetBuffer:fubCM4810.ioMapping.RequestBufferLock01 AT %QX."X20CM4810".RequestBufferLock01;
+	::GetBuffer:fubCM4810.ioMapping.RequestBufferLock01 AT %QX."X20CM4810".RequestBufferLock01; (* SensorData[1] - CM4810 Channel 1 *)
+	::SensorData[1].RmsAccRaw AT %ID."X20CM4810".RmsAccRaw01;
+	::SensorData[1].RmsAccEnvelope AT %ID."X20CM4810".RmsAccEnvelope01;
+	::SensorData[1].RmsVelRaw AT %ID."X20CM4810".RmsVelRaw01;
+	::SensorData[1].RmsVelEnvelope AT %ID."X20CM4810".RmsVelEnvelope01;
+	::SensorData[1].KurtosisRaw AT %ID."X20CM4810".KurtosisRaw01;
+	::SensorData[1].SkewnessRaw AT %ID."X20CM4810".SkewnessRaw01;
+	::SensorData[1].Vdi3832KtRaw AT %ID."X20CM4810".Vdi3832KtRaw01;
+	::SensorData[1].ActSpeed AT %ID."X20CM4810".ActSpeed01;
+	::SensorData[2].RmsAccRaw AT %ID."X20CM4810".RmsAccRaw02;
+	::SensorData[2].RmsAccEnvelope AT %ID."X20CM4810".RmsAccEnvelope02;
+	::SensorData[2].RmsVelRaw AT %ID."X20CM4810".RmsVelRaw02;
+	::SensorData[2].RmsVelEnvelope AT %ID."X20CM4810".RmsVelEnvelope02;
+	::SensorData[2].KurtosisRaw AT %ID."X20CM4810".KurtosisRaw02;
+	::SensorData[2].SkewnessRaw AT %ID."X20CM4810".SkewnessRaw02;
+	::SensorData[2].Vdi3832KtRaw AT %ID."X20CM4810".Vdi3832KtRaw02;
+	::SensorData[2].ActSpeed AT %ID."X20CM4810".ActSpeed02;
+	::SensorData[3].RmsAccRaw AT %ID."X20CM4810".RmsAccRaw03; (*RMS Value of the acceleration raw signal from MinFrequencyRaw to MaxFrequencyRaw [mg], channel 2*)
+	::SensorData[3].RmsVelEnvelope AT %ID."X20CM4810".RmsVelEnvelope03; (*RMS Value of the velocity envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mm/s], channel 3 (0 = calculation of velocity signal is disabled)*)
+	::SensorData[3].KurtosisRaw AT %ID."X20CM4810".KurtosisRaw03; (*Kurtosis (4th statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 3*)
+	::SensorData[3].Vdi3832KtRaw AT %ID."X20CM4810".Vdi3832KtRaw03; (*Ratio of the refernce values to the actual measured values of the raw signal as defined in VDI 3832 [1], channel 3*)
+	::SensorData[3].SkewnessRaw AT %ID."X20CM4810".SkewnessRaw03; (*Skewnes (3rd statistical moment) of the raw signal from 0 Hz to MaxFrequencyRaw [1], channel 3*)
+	::SensorData[3].RmsAccEnvelope AT %ID."X20CM4810".RmsAccEnvelope03; (*RMS Value of the acceleration envelope signal from MinFrequencyEnvelope to MaxFrequencyEnvelope [mg], channel 2*)
+	::SensorData[3].RmsVelRaw AT %ID."X20CM4810".RmsVelRaw03; (*RMS Value of the velocity raw signal from MinFrequencyRaw to MaxFrequencyRaw [mm/s], channel 2 (0 = calculation of velocity signal is disabled)*)
+	::SensorData[4].RmsAccRaw AT %ID."X20CM4810".RmsAccRaw04;
+	::SensorData[4].RmsAccEnvelope AT %ID."X20CM4810".RmsAccEnvelope04;
+	::SensorData[4].RmsVelRaw AT %ID."X20CM4810".RmsVelRaw04;
+	::SensorData[4].RmsVelEnvelope AT %ID."X20CM4810".RmsVelEnvelope04;
+	::SensorData[4].KurtosisRaw AT %ID."X20CM4810".KurtosisRaw04;
+	::SensorData[4].SkewnessRaw AT %ID."X20CM4810".SkewnessRaw04;
+	::SensorData[4].Vdi3832KtRaw AT %ID."X20CM4810".Vdi3832KtRaw04;
+	::SensorData[1].ActSpeed AT %QD."X20CM4810".ActSpeed01;
+	::SensorData[2].ActSpeed AT %QD."X20CM4810".ActSpeed02;
+	::SensorData[3].ActSpeed AT %QD."X20CM4810".ActSpeed03;
+	::SensorData[4].ActSpeed AT %QD."X20CM4810".ActSpeed04;
 END_VAR

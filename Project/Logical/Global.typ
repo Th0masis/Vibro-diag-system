@@ -1,4 +1,20 @@
 (* ============================================================ *)
+(* CM4810 SENSOR CHANNEL DATA - Mapped from X20CM4810 process data via IoMap *)
+
+TYPE
+	SensorChannelData : 	STRUCT
+		RmsAccRaw : REAL;			(* RMS acceleration raw [g] *)
+		RmsAccEnvelope : REAL;		(* RMS acceleration envelope [g] *)
+		RmsVelRaw : REAL;			(* RMS velocity raw [mm/s] *)
+		RmsVelEnvelope : REAL;		(* RMS velocity envelope [mm/s] *)
+		KurtosisRaw : REAL;			(* Kurtosis raw [-] *)
+		SkewnessRaw : REAL;			(* Skewness raw [-] *)
+		Vdi3832KtRaw : REAL;		(* VDI3832 Kt raw [-] *)
+		ActSpeed : REAL;			(* Actual speed [rpm] *)
+	END_STRUCT;
+END_TYPE
+
+(* ============================================================ *)
 (* CSV EXPORT STATE MACHINE - Single state variable for GetBuffer <-> SaveData communication*)
 
 TYPE

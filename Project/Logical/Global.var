@@ -1,6 +1,4 @@
 VAR
 	gTrace : TraceVibro;
-	ISO10816 : REAL;
-	RMSAclEnv : REAL;
-	RMSVelEnv : REAL;
+	SensorData : ARRAY[1..4] OF SensorChannelData;
 END_VAR

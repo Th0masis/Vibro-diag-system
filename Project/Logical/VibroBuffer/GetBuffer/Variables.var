@@ -2,4 +2,5 @@ VAR
 	fubCM4810 : vbioCM4810; (* Function block for accessing the buffers of a CM4810 module *)
 	bInitialized : BOOL := FALSE;
 	stMachine : UINT := 0; (* Status of the main state machine *)
+	i : INT;
 END_VAR
