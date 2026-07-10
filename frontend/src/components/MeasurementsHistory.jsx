@@ -25,10 +25,15 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   // Modal
   const [selectedMeasurementId, setSelectedMeasurementId] = useState(initialSelectedMeasurementId);
 
+  const getAuthHeader = () => {
+    const token = sessionStorage.getItem('token') || localStorage.getItem('token');
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
+  };
+
   const fetchData = async () => {
     try {
       setLoading(true);
-      const res = await axios.get(`/machines/${machineId}/history`);
+      const res = await axios.get(`/machines/${machineId}/history`, getAuthHeader());
       setData(res.data);
       // Po načtení nových dat vyčistíme výběr
       setSelectedIds([]); 
@@ -92,7 +97,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
   const handleSingleProcess = async (id) => {
     setProcessingId(id);
     try {
-      await axios.post(`/measurements/${id}/process`);
+      await axios.post(`/measurements/${id}/process`, {}, getAuthHeader());
       await fetchData(); 
     } catch (error) {
       alert('Processing failed: ' + error.message);
@@ -111,7 +116,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
     // Zpracujeme pouze ta ID, která uživatel zaklikl
     for (const id of selectedIds) {
       try {
-        await axios.post(`/measurements/${id}/process`);
+        await axios.post(`/measurements/${id}/process`, {}, getAuthHeader());
         setProcessedCount(prev => prev + 1);
       } catch (e) {
         console.error(`Chyba u ID ${id}:`, e);
@@ -150,8 +155,8 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
           <label className="history-filter-label">Status:</label>
           <select className="history-filter-control" value={filterStatus} onChange={(e) => setFilterStatus(e.target.value)}>
             <option value="all">All</option>
-            <option value="processed">✅ Processed</option>
-            <option value="waiting">⏳ Awaiting analysis</option>
+            <option value="processed">Processed</option>
+            <option value="waiting">Awaiting analysis</option>
           </select>
         </div>
 
@@ -177,7 +182,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       {/* TABULKA HISTORIE */}
       <div className="card-shadow history-table-card">
         {loading ? (
-          <div className="history-loading-state">Načítám historii...</div>
+          <div className="history-loading-state">Loading history…</div>
         ) : (
           <table className="machine-table">
             <thead>
@@ -241,9 +246,9 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                   <td>{row.kurtosis ? row.kurtosis.toFixed(2) : '-'}</td>
                   <td>
                     {row.rms ? (
-                      <span className="history-status history-status--processed">✅ Analyzováno</span>
+                      <span className="history-status history-status--processed">Analyzed</span>
                     ) : (
-                      <span className="history-status history-status--waiting">⏳ Čeká na zpracování</span>
+                      <span className="history-status history-status--waiting">Awaiting analysis</span>
                     )}
                   </td>
                     <td className="text-right">
@@ -252,22 +257,21 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
                         {row.source === 'raw_analysis' && !row.rms && (
                           <button 
                             className="btn-action-small"
-                            title="Spustit analýzu signálu"
+                            title="Run signal analysis"
                             onClick={() => handleSingleProcess(row.id_measurement)}
                             disabled={processingId === row.id_measurement || isBatchProcessing}
                           >
-                            {processingId === row.id_measurement ? '...' : '⚙️'}
+                            {processingId === row.id_measurement ? '…' : 'Analyze'}
                           </button>
                         )}
                         
-                        {/* Tlačítko pro detail (lupa) - ZOBRAZIT POUZE PRO raw_analysis */}
                         {row.source === 'raw_analysis' && (
                           <button 
-                            className="btn-action-small history-detail-button"
-                            title="Zobrazit detail a grafy"
+                            className="btn-action-small btn-action-primary"
+                            title="View detail and graphs"
                             onClick={() => setSelectedMeasurementId(row.id_measurement)}
                           >
-                            🔍
+                            Detail
                           </button>
                         )}
                       </div>
@@ -286,7 +290,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
 
         {filteredData.length > limit && (
           <div className="history-load-more-wrap">
-            <button className="btn-cancel" onClick={() => setLimit(limit + 20)}>Načíst další...</button>
+            <button className="btn-load-more" onClick={() => setLimit(limit + 20)}>Load more</button>
           </div>
         )}
       </div>

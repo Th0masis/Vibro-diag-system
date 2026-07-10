@@ -19,25 +19,49 @@ function formatDate(ts) {
 function AiStatusBanner({ machineId }) {
   const [aiData, setAiData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [fetchError, setFetchError] = useState(false);
 
   useEffect(() => {
     const fetchAiData = async () => {
       try {
         const token = sessionStorage.getItem('token') || localStorage.getItem('token');
         const headers = token ? { Authorization: `Bearer ${token}` } : {};
-        const res = await axios.get(`/machines/${machineId}/latest-ai`, { headers });
+        const res = await axios.get(`/machines/${machineId}/latest-ai`, {
+          headers,
+          params: { _ts: Date.now() }
+        });
         setAiData(res.data);
+        setFetchError(false);
       } catch (err) {
-        console.error('AI data fetch error for machine', machineId);
+        setFetchError(true);
+        console.error('AI data fetch error for machine', machineId, err);
       } finally {
         setLoading(false);
       }
     };
+
     fetchAiData();
+
+    const intervalId = setInterval(fetchAiData, 15000);
+    const onFocus = () => fetchAiData();
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+    };
   }, [machineId]);
 
   if (loading) {
     return <div className="ai-banner ai-banner--loading">Loading AI diagnostics…</div>;
+  }
+
+  if (fetchError) {
+    return (
+      <div className="ai-banner ai-banner--empty">
+        AI status temporarily unavailable
+      </div>
+    );
   }
 
   const hasData = aiData && (aiData.anomaly?.timestamp || aiData.fault?.timestamp || aiData.rul?.timestamp);

@@ -2,6 +2,10 @@ import { useState } from 'react';
 import axios from 'axios';
 
 function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
+  // --- 0. STAV: RUČNÍ SBĚR + AUTO AI ---
+  const [collectLoading, setCollectLoading] = useState(false);
+  const [collectResult, setCollectResult] = useState(null);
+
   // --- 1. STAV: DETEKCE ANOMÁLIÍ (AE_ANOWGAN) ---
   const [anomalyLoading, setAnomalyLoading] = useState(false);
   const [anomalyResult, setAnomalyResult] = useState(null);
@@ -21,6 +25,24 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
   };
 
   // --- FUNKCE PRO SPUŠTĚNÍ JEDNOTLIVÝCH MODELŮ ---
+
+  const runManualCollectAndAi = async () => {
+    setCollectLoading(true);
+    setCollectResult(null);
+    try {
+      const res = await axios.post(
+        `/machines/${machineId}/collect-now?run_ai=true`,
+        {},
+        { headers: getAuthHeader() }
+      );
+      setCollectResult(res.data);
+      if (onDiagnosisComplete) onDiagnosisComplete();
+    } catch (error) {
+      alert('Manual collection failed: ' + (error.response?.data?.detail || error.message));
+    } finally {
+      setCollectLoading(false);
+    }
+  };
 
   const runAnomalyDetection = async () => {
     setAnomalyLoading(true);
@@ -78,6 +100,52 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
 
   return (
     <div className="diag-grid">
+
+      {/* =====================================================================
+         0. MANUAL COLLECTION + AUTOMATIC AI CHAIN
+         ===================================================================== */}
+      <div className="detail-card diag-card">
+        <div className="diag-card-header">
+          <div>
+            <h2 className="diag-card-title">Manual Collection + AI</h2>
+            <p className="diag-card-desc">
+              Downloads fresh raw files from PLC via FTP and starts anomaly, fault classification and RUL analysis.
+            </p>
+          </div>
+          <span className="role-badge user diag-model-badge">PLC FTP + AI Chain</span>
+        </div>
+
+        {collectResult ? (
+          <div className="diag-result diag-result--info">
+            <div className="diag-result-row">
+              <span className="diag-result-label">New measurements</span>
+              <span className="diag-result-value">{collectResult.collection?.created_count ?? 0}</span>
+            </div>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Collection errors</span>
+              <span className="diag-result-value">{collectResult.collection?.errors?.length ?? 0}</span>
+            </div>
+            {!!collectResult.collection?.errors?.length && (
+              <div style={{ marginTop: '0.6rem', textAlign: 'left' }}>
+                {collectResult.collection.errors.map((err, idx) => (
+                  <div key={`${idx}-${err}`} style={{ fontSize: '0.82rem', opacity: 0.9, marginBottom: '0.24rem' }}>
+                    • {err}
+                  </div>
+                ))}
+              </div>
+            )}
+            <button onClick={() => setCollectResult(null)} className="btn-cancel diag-reset-btn">
+              Clear result
+            </button>
+          </div>
+        ) : (
+          <button className="btn-diagnose diag-run-btn diag-run-btn--info" onClick={runManualCollectAndAi} disabled={collectLoading}>
+            {collectLoading
+              ? <><span className="loading-spinner" aria-hidden="true"></span>Collecting + analysing…</>
+              : 'Collect from PLC and run AI'}
+          </button>
+        )}
+      </div>
       
       {/* =====================================================================
          1. ANOMALY DETECTION (AE_ANOWGAN)

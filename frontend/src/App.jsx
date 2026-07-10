@@ -58,6 +58,40 @@ function App() {
     delete axios.defaults.headers.common['Authorization'];
   }, []);
 
+  // Proactively refresh the token 5 minutes before it expires so the user
+  // is never logged out mid-session.
+  useEffect(() => {
+    if (!token) return;
+
+    const decoded = decodeValidToken(token);
+    if (!decoded) return;
+
+    const msUntilExpiry = decoded.exp * 1000 - Date.now();
+    const msUntilRefresh = msUntilExpiry - 5 * 60 * 1000; // 5 min before expiry
+
+    if (msUntilRefresh <= 0) {
+      // Already within the danger window – refresh immediately
+      axios.post('/auth/refresh').then(res => {
+        const newToken = res.data.access_token;
+        sessionStorage.setItem('token', newToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        setToken(newToken);
+      }).catch(() => handleLogout());
+      return;
+    }
+
+    const timerId = setTimeout(() => {
+      axios.post('/auth/refresh').then(res => {
+        const newToken = res.data.access_token;
+        sessionStorage.setItem('token', newToken);
+        axios.defaults.headers.common['Authorization'] = `Bearer ${newToken}`;
+        setToken(newToken);
+      }).catch(() => handleLogout());
+    }, msUntilRefresh);
+
+    return () => clearTimeout(timerId);
+  }, [token, handleLogout]);
+
   useEffect(() => {
     if (token) {
       const decoded = decodeValidToken(token);

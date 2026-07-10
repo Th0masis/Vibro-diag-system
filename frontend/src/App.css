@@ -795,7 +795,7 @@ tr:hover {
     display: flex;
     align-items: center;
     justify-content: center;
-    padding: 8px;
+    padding: 4px;
     z-index: 10;
     min-width: 44px;
     min-height: 44px;
@@ -868,13 +868,14 @@ tr:hover {
 
 /* Malá tlačítka v tabulce */
 .btn-small-edit, .btn-small-delete {
-  padding: 6px 12px;
+  padding: 4px 8px;
   border-radius: 4px;
-  font-weight: 600;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all 0.15s ease;
   background: white;
-  font-size: 0.8rem;
+  font-size: 0.75rem;
+  border: 1px solid var(--neutral-border-dark);
 }
 .btn-small-edit {
   border: 1px solid var(--primary);
@@ -895,6 +896,39 @@ tr:hover {
   color: white;
   box-shadow: 0 2px 8px rgba(184, 48, 48, 0.3);
 }
+/* --- Modal close button (unified across all modals) --- */
+.modal-close-btn {
+  background: transparent;
+  border: none;
+  color: #475569;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.modal-close-btn:hover {
+  background: #f1f5f9;
+}
+
+/* Dark variant for dark modal headers */
+.modal-close-btn--dark {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.modal-close-btn--dark:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: white;
+}
+
 /* Overlay - ztmaví pozadí */
 .modal-overlay {
   position: fixed;
@@ -1001,8 +1035,8 @@ tr:hover {
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 20px;
-  margin-top: 10px;
+  gap: var(--space-5);
+  margin-top: var(--space-3);
 }
 
 .detail-item label {
@@ -1183,6 +1217,19 @@ tr:hover {
   background: #FFFDF9;
 }
 
+/* Compact sensor card variant — reduce visual weight */
+.card-sensors {
+  padding: 16px;
+  box-shadow: none;
+  border: 1px solid var(--neutral-border);
+}
+
+.card-sensors:hover {
+  transform: none;
+  box-shadow: none;
+  background: #fff;
+}
+
 /* Card accent variants — subtle left indicators */
 .card-tech { border-left: 3px solid #E2E8F0; }
 .card-sensors { border-left: 3px solid #E2E8F0; }
@@ -1199,25 +1246,55 @@ tr:hover {
   align-items: center;
 }
 
-/* --- Button to detach sensor (semantic red for destructive action) --- */
-.btn-detach {
-  background: #fee2e2;
-  color: var(--status-fault);
-  border: 1px solid #fecaca;
+.card-sensors .card-title {
+  font-size: 0.95rem;
+  margin-bottom: 12px;
+  color: var(--neutral-dark-gray);
+  font-weight: 600;
+}
+
+/* Sensor list compact icon buttons */
+.sensor-btn {
+  background: none;
+  border: 1px solid #e2e8f0;
+  color: #475569;
+  width: 32px;
+  height: 32px;
   border-radius: 6px;
-  width: 28px;
-  height: 28px;
   display: flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.2s;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+  padding: 0;
 }
 
-.btn-detach:hover {
-  background: var(--status-fault);
-  color: white;
-  border-color: var(--status-fault);
+.sensor-btn:hover {
+  background: #f1f5f9;
+  border-color: #cdd6df;
+}
+
+.sensor-btn-detail {
+  background: transparent;
+  border: none;
+  color: var(--primary);
+}
+
+.sensor-btn-detail:hover {
+  background: #ffedd5;
+  color: #b45309;
+}
+
+.sensor-btn-delete {
+  background: transparent;
+  border: none;
+  color: var(--status-fault);
+}
+
+.sensor-btn-delete:hover {
+  background: #fee2e2;
+  color: #dc2626;
 }
 
 /* tab-btn.active is defined in tabs-header section above */
@@ -2036,14 +2113,14 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   background: #ffffff;
   color: #475569;
   border-radius: 10px;
-  padding: 7px 6px;
+  padding: 5px 4px;
   font-size: 0.75rem;
   font-weight: 700;
   cursor: pointer;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 6px;
+  gap: 5px;
   transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
 }
 
@@ -2132,51 +2209,67 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .btn-diagnose--compact {
-  font-size: 0.75rem;
-  padding: 5px 10px;
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  height: auto;
+  min-height: auto;
 }
 
 .machine-sensor-list-wrap {
   flex: 1;
-  overflow-y: auto;
-  max-height: 150px;
-  padding-right: 5px;
 }
 
 .machine-sensor-empty {
-  color: #cbd5e1;
+  color: var(--text-muted);
   font-style: italic;
-  font-size: 0.9rem;
+  font-size: 0.85rem;
 }
 
 .machine-sensor-list {
   list-style: none;
   padding: 0;
   margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .machine-sensor-item {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 0;
-  border-bottom: 1px solid #f1f5f9;
+  gap: 8px;
+  padding: 4px 0;
+  border-bottom: none;
+}
+
+.machine-sensor-item:last-child {
+  border-bottom: none;
 }
 
 .machine-sensor-item-main {
-  line-height: 1.2;
+  line-height: 1.25;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 4px;
+  align-items: center;
 }
 
 .machine-sensor-item-name {
-  font-weight: 600;
-  font-size: 0.9rem;
-  color: #334155;
+  font-weight: 500;
+  font-size: 0.85rem;
+  color: var(--neutral-dark-gray);
+  white-space: nowrap;
 }
 
 .machine-sensor-item-serial {
-  font-size: 0.75rem;
-  color: #94a3b8;
+  font-size: 0.7rem;
+  color: var(--text-muted);
   font-family: Consolas, 'Courier New', monospace;
+  letter-spacing: 0.3px;
+  flex-shrink: 0;
 }
 
 .machine-assign-panel {
@@ -2808,9 +2901,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
    ========================================================================== */
 .machine-sensors-detail-card {
   background: #ffffff;
-  border-radius: 8px;
-  padding: 16px;
-  margin-bottom: 16px;
+  border-radius: 12px;
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
   border: 1px solid var(--neutral-border);
 }
 
@@ -2823,8 +2916,9 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 
 .machine-sensors-detail-title {
   margin: 0;
-  color: var(--primary);
+  color: var(--neutral-black);
   font-size: 1.1rem;
+  font-weight: 600;
 }
 
 .machine-sensors-detail-actions {
@@ -2853,42 +2947,114 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 /* ==========================================================================
    20. MEASUREMENTS HISTORY DISTILL + POLISH
    ========================================================================== */
+
+/* Utility: shadow applied to table card and modal sections */
+.card-shadow {
+  box-shadow: var(--shadow);
+}
+
+/* Source badge color variants — used in history and elsewhere */
+.badge-blue {
+  background: #e0f2fe;
+  color: #0369a1;
+}
+.badge-orange {
+  background: #fff3e0;
+  color: var(--primary-hover);
+}
+
+/* Compact action buttons inside table rows */
+.btn-action-small {
+  padding: var(--space-1) var(--space-3);
+  border-radius: 4px;
+  border: 1px solid var(--neutral-border-dark);
+  background: var(--neutral-bg-white);
+  color: var(--neutral-dark-gray);
+  font-size: 0.78rem;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-action-small:hover:not(:disabled) {
+  background: var(--neutral-bg-light);
+  border-color: var(--neutral-gray);
+}
+.btn-action-small:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.btn-action-small.btn-action-primary {
+  border-color: var(--primary);
+  color: var(--primary);
+}
+.btn-action-small.btn-action-primary:hover:not(:disabled) {
+  background: var(--primary);
+  color: #fff;
+  border-color: var(--primary);
+}
+
+/* Load more — neutral secondary, not cancel style */
+.btn-load-more {
+  padding: var(--space-2) var(--space-5);
+  border-radius: 6px;
+  border: 1px solid var(--neutral-border-dark);
+  background: var(--neutral-bg-white);
+  color: var(--neutral-dark-gray);
+  font-weight: 600;
+  font-size: 0.85rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.btn-load-more:hover {
+  background: var(--neutral-bg-light);
+  border-color: var(--neutral-gray);
+}
+
 .history-inline-detail {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .history-toolbar {
   display: flex;
-  gap: 20px;
+  gap: var(--space-5);
   align-items: flex-end;
-  margin-bottom: 20px;
+  margin-bottom: var(--space-5);
   flex-wrap: wrap;
   background: #ffffff;
-  padding: 15px 20px;
+  padding: var(--space-4) var(--space-5);
   border-radius: 10px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-  border: 1px solid #eef2f6;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.08);
+  border: 1px solid var(--neutral-border);
 }
 
 .history-filter-group {
   display: flex;
   flex-direction: column;
-  gap: 5px;
+  gap: var(--space-1);
 }
 
 .history-filter-label {
-  font-size: 0.8rem;
-  color: #64748b;
+  font-size: 0.75rem;
+  color: var(--neutral-gray);
   font-weight: 700;
+  letter-spacing: 0.03em;
 }
 
 .history-filter-control {
-  padding: 8px;
+  padding: var(--space-2) var(--space-3);
   border-radius: 6px;
-  border: 1px solid #cbd5e1;
+  border: 1px solid var(--neutral-border-dark);
   outline: none;
-  color: #1e293b;
+  color: var(--neutral-black);
   background: #ffffff;
+  font-size: 0.875rem;
+  font-family: inherit;
+}
+.history-filter-control:focus {
+  border-color: var(--primary);
+  box-shadow: 0 0 0 2px rgba(240, 120, 0, 0.12);
 }
 
 .history-toolbar-spacer {
@@ -2896,8 +3062,8 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .history-batch-button {
-  padding: 10px 15px;
-  height: fit-content;
+  padding: var(--space-2) var(--space-4);
+  align-self: flex-end;
 }
 
 .history-batch-button--disabled {
@@ -2909,21 +3075,21 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   background: #ffffff;
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid #eef2f6;
+  border: 1px solid var(--neutral-border);
 }
 
 .history-loading-state,
 .history-empty-state {
-  padding: 40px;
+  padding: var(--space-10);
   text-align: center;
 }
 
 .history-loading-state {
-  color: #64748b;
+  color: var(--neutral-gray);
 }
 
 .history-empty-state {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .history-select-head {
@@ -2944,28 +3110,31 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .history-unavailable-marker {
-  color: #cbd5e1;
+  color: var(--neutral-border-dark);
 }
 
 .history-time-cell {
   font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .history-sensor-position {
-  color: #94a3b8;
+  color: var(--text-muted);
 }
 
 .history-source-badge {
-  font-size: 0.65rem;
+  font-size: 0.75rem;
 }
 
 .history-rms-cell {
   font-weight: 700;
-  color: #1e293b;
+  font-variant-numeric: tabular-nums;
+  color: var(--neutral-black);
 }
 
 .history-status {
-  font-size: 0.85rem;
+  font-size: 0.82rem;
+  font-weight: 600;
 }
 
 .history-status--processed {
@@ -2973,24 +3142,19 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
 }
 
 .history-status--waiting {
-  color: #94a3b8;
+  color: var(--neutral-gray);
 }
 
 .history-actions-wrap {
   display: flex;
-  gap: 5px;
+  gap: var(--space-2);
   justify-content: flex-end;
-}
-
-.history-detail-button {
-  background: #3b82f6;
-  color: #ffffff;
 }
 
 .history-load-more-wrap {
   text-align: center;
-  padding: 20px;
-  border-top: 1px solid #f1f5f9;
+  padding: var(--space-5);
+  border-top: 1px solid var(--neutral-border);
 }
 
 /* ==========================================================================
