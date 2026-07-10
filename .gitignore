@@ -3,6 +3,8 @@ __pycache__/
 backend/venv/
 .env
 create_user.py
+**/data/**/*.csv
+**/data/*.csv
 
 
 # Python (ml_service)
