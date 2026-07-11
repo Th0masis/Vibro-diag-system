@@ -1,249 +1,109 @@
-# Vibro-diag System | Predictive Maintenance Platform
+<!-- markdownlint-disable MD012 -->
 
-[![Docker Compose](https://img.shields.io/badge/Docker%20Compose-Ready-blue.svg)](https://docs.docker.com/compose/)
-[![React 18](https://img.shields.io/badge/Frontend-React%2018-61DAFB.svg)](https://react.dev)
-[![FastAPI](https://img.shields.io/badge/Backend-FastAPI-009688.svg)](https://fastapi.tiangolo.com)
-[![PyTorch](https://img.shields.io/badge/ML-PyTorch-EE4C2C.svg)](https://pytorch.org)
-[![PostgreSQL](https://img.shields.io/badge/Database-TimescaleDB-336791.svg)](https://www.timescale.com)
+# Vibro-diag System
 
-A comprehensive **industrial predictive maintenance platform** for real-time vibration monitoring, fault detection, and remaining useful life (RUL) prediction on rotating machinery. Built with modern ML (PyTorch), containerized microservices (Docker Compose), and a professional React dashboard.
+Vibro-diag System is a containerized predictive maintenance platform for rotating machinery. It collects vibration data, applies machine-learning diagnostics, and presents maintenance insights in a web dashboard.
 
----
+## What This Project Does
 
-## 🎯 Project Goals
+- Collects vibration data from industrial systems (including PLC-driven workflows)
+- Stores measurements and analytics in TimescaleDB
+- Runs anomaly detection, fault classification, and RUL estimation
+- Provides a browser-based operations dashboard for diagnostics and maintenance notes
 
-- **Early fault detection** on bearings, pumps, and rotating machinery
-- **Automated fault classification** using deep learning (bearing defects, misalignment, imbalance)
-- **RUL prediction** to schedule maintenance before failure
-- **Condition-based maintenance** over fixed-interval schedules (cost & uptime savings)
+## Core Features
 
----
+- Multi-service Docker deployment (frontend, backend, ML service, TimescaleDB)
+- JWT-based authentication
+- Machine/sensor management and service notes
+- Automated and manual collection workflows
+- Model catalog, fine-tuning triggers, and model activation flow
 
-## 📦 System Architecture
+## System Components
 
-Microservices-based, fully containerized with Docker Compose:
+| Service | Stack | Purpose | Default Port |
+| --- | --- | --- | --- |
+| Frontend | React + Vite + Nginx | Dashboard UI and API proxy | 80 |
+| Backend | FastAPI + SQLAlchemy | Main API, auth, orchestration, PLC integration | 8000 |
+| ML Service | FastAPI + PyTorch | Inference and asynchronous training tasks | 8001 |
+| Database | PostgreSQL 15 + TimescaleDB | Relational and time-series storage | 5432 |
 
-### Services
+## Screenshots
 
-| Service | Tech Stack | Purpose | Port |
-|---------|-----------|---------|------|
-| **Frontend** | React 18 + Vite + Nginx | Dashboard, machine monitoring, diagnostics | 80 |
-| **Backend** | FastAPI + SQLAlchemy | REST API, auth, DB orchestration | 8000 |
-| **ML Service** | FastAPI + PyTorch | Model inference, anomaly detection, RUL prediction | 8001 |
-| **Database** | PostgreSQL 15 + TimescaleDB | Time-series & relational data storage | 5432 |
+![Login](docs/images/quickstart-01-login.png)
+![Dashboard](docs/images/quickstart-02-dashboard.png)
+![Machines](docs/images/quickstart-03-machines.png)
+![Sensors](docs/images/quickstart-04-sensors.png)
+![AI Models](docs/images/quickstart-05-ai-models.png)
+![Team](docs/images/quickstart-06-team.png)
 
----
+## Architecture
 
-## 🧠 Machine Learning Models
+High-level architecture and flows are documented in:
 
-The diagnostic pipeline uses three specialized neural networks:
+- [Architecture Overview](docs/architecture/overview.md)
 
-1. **AE-AnoWGAN** — Autoencoder + GAN for anomaly detection from raw vibration signals
-2. **1D-CNN** — Fault classifier (inner race, outer race, rolling element, healthy)
-3. **Bi-LSTM** — Remaining useful life (RUL) predictor (days to failure)
-
----
-
-## 🚀 Quick Start
-
-### Prerequisites
-- **Docker Desktop** (or Docker + Docker Compose)
-- **Git**
-
-### Deploy with Docker Compose
+## Quick Start (Docker)
 
 ```bash
-# Clone repository
-git clone <repo-url>
+git clone <repository-url>
 cd Vibro-diag-system
-
-# Start all services
-docker-compose up
-
-# Wait for database initialization (~15 seconds)
-# Look for: "database system is ready to accept connections"
+docker compose up --build
 ```
 
-### Access the System
+Access:
 
-| Service | URL |
-|---------|-----|
-| Frontend Dashboard | http://localhost |
-| Backend Swagger API | http://localhost:8000/docs |
-| ML Service API | http://localhost:8001/docs |
+- Frontend: <http://localhost>
+- Backend API docs: <http://localhost:8000/docs>
+- ML Service API docs: <http://localhost:8001/docs>
 
-### Stop Services
+Stop:
 
 ```bash
-docker-compose down          # Stop containers
-docker-compose down -v       # Also remove database volume
+docker compose down
 ```
 
----
-
-## 🔧 Configuration
-
-Environment variables are pre-configured in `docker-compose.yml`:
-
-```yaml
-backend:
-  environment:
-    SECRET_KEY: "your-secret-key"
-    ALGORITHM: "HS256"
-    ACCESS_TOKEN_EXPIRE_MINUTES: 30
-    DATABASE_URL: "postgresql://vibro_user:vibro_password@db:5432/vibro_diag"
-```
-
-### Database Credentials
-- **User**: `vibro_user`
-- **Password**: `vibro_password`
-- **Database**: `vibro_diag`
-
----
-
-## 📁 Project Structure
-
-```
-├── backend/                 # FastAPI REST API
-│   ├── main.py             # Route handlers, endpoints
-│   ├── auth.py             # JWT authentication
-│   ├── models.py           # SQLAlchemy ORM models
-│   └── requirements.txt
-│
-├── frontend/               # React + Vite + Nginx
-│   ├── src/
-│   │   ├── App.jsx        # Root component
-│   │   ├── pages/         # Page components
-│   │   ├── components/    # Reusable UI components
-│   ├── vite.config.js
-│   ├── Dockerfile         # Multi-stage build
-│   └── nginx.conf         # SPA routing config
-│
-├── ml_service/             # PyTorch ML models
-│   ├── main.py            # Model service endpoints
-│   ├── models.py          # Model definitions
-│   ├── train_*.py         # Training scripts
-│   └── models/            # Model checkpoints
-│
-├── docker-compose.yml      # Service orchestration
-├── init.sql                # Database schema
-└── docs/                   # Documentation
-    ├── DEPLOYMENT.md
-    ├── MODEL_TRAINING.md
-    └── DESIGN.md
-```
-
----
-
-## 📊 API Endpoints
-
-### Authentication
-- `POST /auth/login` — User login
-- `POST /auth/logout` — Logout
-
-### Machines
-- `GET /machines` — List machines
-- `GET /machines/{id}` — Get machine details
-- `POST /machines/{id}/notes` — Add service notes
-
-### Diagnostics
-- `POST /machines/{id}/analyze-anomaly` — Anomaly detection
-- `POST /machines/{id}/classify-fault` — Fault classification
-- `POST /machines/{id}/predict-rul` — RUL prediction
-
-Full API docs: `http://localhost:8000/docs` (Swagger UI)
-
----
-
-## 🛠️ Development
-
-### Run Backend Locally
+Reset local data:
 
 ```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # Windows: venv\Scripts\activate
-pip install -r requirements.txt
-
-export SECRET_KEY="dev-key"
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+docker compose down -v
 ```
 
-### Run Frontend Locally
+## Deployment and Operations
 
-```bash
-cd frontend
-npm install
-npm run dev
+- [Installation Guide](docs/deployment/installation.md)
+- [Customer Quick Start](docs/deployment/customer-quick-start.md)
+- [Deployment Guide](docs/deployment/deployment-guide.md)
+- [Configuration Reference](docs/deployment/configuration-reference.md)
+- [Operations Guide](docs/operations/operations-guide.md)
+- [Operator Runbook](docs/operations/operator-runbook.md)
+- [Troubleshooting](docs/troubleshooting/troubleshooting.md)
 
-# Runs on http://localhost:5173
-```
+## API and Data Documentation
 
-### Build Frontend for Production
+- [Backend API](docs/api/backend-api.md)
+- [ML Service API](docs/api/ml-service-api.md)
+- [Database Schema](docs/database/schema.md)
+- [ML Service Guide](docs/ml-service/overview.md)
 
-```bash
-cd frontend
-npm run build
-# Output: dist/ folder
-```
+## Development
 
----
+- [Developer Guide](docs/development/developer-guide.md)
+- Frontend design notes: [DESIGN.md](DESIGN.md)
 
-## 📚 Documentation
+## Security Notes
 
-- **[DEPLOYMENT.md](docs/DEPLOYMENT.md)** — Production deployment, SSL setup
-- **[MODEL_TRAINING.md](docs/MODEL_TRAINING.md)** — Training & fine-tuning models
-- **[DESIGN.md](DESIGN.md)** — UI design system, tokens, typography
+Review security findings before production deployment:
 
----
+- [Security Audit Report](docs/operations/SECURITY_AUDIT_REPORT_2026-07-11.md)
 
-## 🧪 Testing
+## Documentation Audit
 
-### Verify Services
+The full documentation audit and decisions are tracked in:
 
-```bash
-# Frontend
-curl http://localhost
+- [Documentation Audit Report](docs/DOCUMENTATION_AUDIT_REPORT.md)
 
-# Backend
-curl http://localhost:8000/docs
+## License
 
-# Database
-docker-compose exec db psql -U vibro_user -d vibro_diag -c "SELECT 1;"
-```
-
-### View Logs
-
-```bash
-docker-compose logs -f              # All services
-docker-compose logs -f backend      # Backend only
-docker-compose logs backend --tail 100
-```
-
----
-
-## 🆘 Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Database fails to start | Ensure Docker Compose v2.0+. Check `docker-compose.yml` version. |
-| Backend can't connect to DB | Verify services are on same network: `docker network ls` |
-| Frontend 404 on refresh | Nginx SPA routing should be enabled. Check `nginx.conf` is copied. |
-| ML Service not responding | Check logs: `docker-compose logs ml_service` |
-| Clear all and restart | `docker-compose down -v && docker-compose up` |
-
----
-
-## 📝 License
-
-[Add your license here]
-
-## 👥 Team
-
-Developed at **VUT BRNO** (Vysoké učení technické v Brně) in collaboration with **B&R Automation**.
-
----
-
-**Last Updated**: 2026-07-05  
-**Status**: ✅ Production-ready with Docker Compose
+No explicit license file is present in the repository at the time of this documentation update.
 

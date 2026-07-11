@@ -214,3 +214,36 @@ Actions:
 - Better interpretability and user trust through validated workflows.
 - Faster and safer maintenance decisions from better RUL confidence.
 - Stronger data quality for future model improvement.
+
+## 6) Addendum (2026-07-10): AS card acquisition readiness for multi-machine setups
+
+### What is already prepared in the Automation Studio project
+- PLC side exposes a dynamic OPC command interface for buffer jobs:
+  - WorkID
+  - ModulePath
+  - BufferNumber
+  - BufferLength
+  - Start and Reset triggers
+- GetBuffer logic reads these command values at runtime and executes download plus CSV export pipeline.
+- SaveData logic writes CSV with dynamic file name derived from WorkID and reports completion via BufferStatus.
+
+### Current functional limits on PLC side
+- Processing is sequential (single active job at a time) because one global gTrace structure and one CM4810 function block instance are used.
+- Global SensorData is fixed to four channels (ARRAY[1..4]); this is suitable for one 4-channel logical set but not enough for explicit multi-card identity by itself.
+
+### Backend integration gap (critical for multi-machine and shared-card scenarios)
+- Backend currently does not write ModulePath to PLC before each job.
+- Backend currently pairs channel to sensor by sensor order (OFFSET based mapping) and global TRACE_BUFFER_CHANNEL_MAP, not by explicit persisted module/card/channel binding.
+- Because of this, AS is ready for dynamic routing, but end-to-end routing is still only partially implemented.
+
+### Implication for requested deployment scenarios
+- Two machines with two sensors each: possible but not robustly explicit without structured channel binding.
+- One machine with grouped front and back sensors: possible today using sensor position labels, but grouping is text-based (not a first-class data model).
+- Two machines sharing one CM4810/card pool: feasible only after explicit binding and ModulePath write is implemented in backend.
+
+### Recommended next implementation steps
+1. Add explicit sensor hardware binding model in DB (machine_id, sensor_id, module_path, card_id, channel_no, mount_group, mount_point).
+2. Update collection pipeline to resolve sensor by explicit binding instead of OFFSET ordering.
+3. Write ModulePath per collection job via OPC UA before Start trigger.
+4. Extend UI forms to maintain module/card/channel and mount_group fields.
+5. Keep existing position field as free text, but use mount_group enum for analytics-ready grouping.
