@@ -94,9 +94,16 @@ function MachineCard({ machine }) {
   };
 
   const machineCardStatusClass = `machine-card-pro--${statusClass}`;
+  const hasGraphData = graphData.length > 0;
+  const hasServiceNote = Boolean(machine.last_note);
+  const isSparseCard = !hasGraphData && !hasServiceNote;
+  const noteSeverity = (machine.last_note_severity || 'INFO').toUpperCase();
+  const noteTitle = hasServiceNote
+    ? machine.last_note.replace(/\r\n/g, '\n').trim().split('\n\n')[0].split('\n')[0].trim()
+    : '';
 
   return (
-    <div className={`detail-card machine-card-pro ${machineCardStatusClass}`}>
+    <div className={`detail-card machine-card-pro ${machineCardStatusClass} ${isSparseCard ? 'machine-card-pro--sparse' : ''}`}>
       
       {/* 1. HLAVIČKA */}
       <div className="machine-card-pro-header">
@@ -136,9 +143,9 @@ function MachineCard({ machine }) {
         <div className="machine-card-pro-main">
           
           {/* Mini Graf */}
-           <div className="machine-card-pro-graph" ref={graphHostRef}>
+           <div className={`machine-card-pro-graph ${hasGraphData ? '' : 'machine-card-pro-graph--empty'}`} ref={graphHostRef}>
              <span className="machine-card-pro-graph-label">RMS Trend</span>
-             {graphData.length > 0 && graphReady ? (
+             {hasGraphData && graphReady ? (
                <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={72}>
                  <LineChart data={graphData}>
                    <YAxis domain={['auto', 'auto']} hide />
@@ -172,16 +179,29 @@ function MachineCard({ machine }) {
                  </LineChart>
                </ResponsiveContainer>
              ) : (
-               <div className="machine-card-pro-empty">No data</div>
+               <div className="machine-card-pro-empty" role="status" aria-label="No vibration data available yet">
+                 <svg className="machine-card-pro-empty-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                   <path d="M3 12h3l2-4 3 8 3-6 2 3h5" />
+                 </svg>
+                 <div className="machine-card-pro-empty-title">Awaiting first measurement</div>
+                 <div className="machine-card-pro-empty-hint">Trend chart appears after first sensor upload.</div>
+               </div>
              )}
           </div>
 
-          <div className={`machine-card-pro-note ${machine.last_note ? 'machine-card-pro-note--filled' : ''}`}>
+          <div className={`machine-card-pro-note ${hasServiceNote ? 'machine-card-pro-note--filled' : ''}`}>
             <div className="machine-card-pro-note-meta">
-              Service note{machine.last_note_time ? ` · ${new Date(machine.last_note_time).toLocaleDateString()}` : ''}
+              <span>
+                Service note{machine.last_note_time ? ` · ${new Date(machine.last_note_time).toLocaleDateString()}` : ''}
+              </span>
+              {hasServiceNote && (
+                <span className={`machine-card-note-type machine-card-note-type--${noteSeverity.toLowerCase()}`}>
+                  {noteSeverity}
+                </span>
+              )}
             </div>
-            <div className={`truncate-multiline-3 ${machine.last_note ? '' : 'machine-card-pro-note-empty'}`}>
-              {machine.last_note || "No entries yet."}
+            <div className={`truncate-multiline-3 ${hasServiceNote ? '' : 'machine-card-pro-note-empty'}`}>
+              {hasServiceNote ? noteTitle : 'No service notes yet.'}
             </div>
           </div>
         </div>

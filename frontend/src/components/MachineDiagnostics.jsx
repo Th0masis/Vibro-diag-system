@@ -104,7 +104,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       {/* =====================================================================
          0. MANUAL COLLECTION + AUTOMATIC AI CHAIN
          ===================================================================== */}
-      <div className="detail-card diag-card">
+      <div className="detail-card diag-card diag-card--pipeline">
         <div className="diag-card-header">
           <div>
             <h2 className="diag-card-title">Manual Collection + AI</h2>
@@ -139,7 +139,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             </button>
           </div>
         ) : (
-          <button className="btn-diagnose diag-run-btn diag-run-btn--primary" onClick={runManualCollectAndAi} disabled={collectLoading}>
+          <button className="btn-diagnose diag-run-btn diag-run-btn--pipeline" onClick={runManualCollectAndAi} disabled={collectLoading}>
             {collectLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Collecting + analysing…</>
               : 'Run AI pipeline'}
@@ -178,7 +178,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             </button>
           </div>
         ) : (
-          <button className="btn-diagnose diag-run-btn" onClick={runAnomalyDetection} disabled={anomalyLoading}>
+          <button className="btn-diagnose diag-run-btn diag-run-btn--anomaly" onClick={runAnomalyDetection} disabled={anomalyLoading}>
             {anomalyLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Computing…</>
               : 'Run anomaly analysis'}
@@ -249,7 +249,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
             </button>
           </div>
         ) : (
-          <button className="btn-diagnose diag-run-btn diag-run-btn--info" onClick={runRULAnalysis} disabled={rulLoading}>
+          <button className="btn-diagnose diag-run-btn diag-run-btn--rul" onClick={runRULAnalysis} disabled={rulLoading}>
             {rulLoading
               ? <><span className="loading-spinner" aria-hidden="true"></span>Analysing…</>
               : 'Run RUL estimation'}

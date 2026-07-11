@@ -52,35 +52,21 @@ function AiStatusBanner({ machineId }) {
     };
   }, [machineId]);
 
-  if (loading) {
-    return <div className="ai-banner ai-banner--loading">Loading AI diagnostics…</div>;
-  }
-
-  if (fetchError) {
-    return (
-      <div className="ai-banner ai-banner--empty">
-        AI status temporarily unavailable
-      </div>
-    );
-  }
-
   const hasData = aiData && (aiData.anomaly?.timestamp || aiData.fault?.timestamp || aiData.rul?.timestamp);
+  const mode = loading ? 'loading' : fetchError ? 'error' : hasData ? 'live' : 'idle';
 
-  if (!hasData) {
-    return (
-      <div className="ai-banner ai-banner--empty">
-        No AI analysis run yet
-      </div>
-    );
-  }
+  const safeAiData = aiData || {};
+  const anomalyData = safeAiData.anomaly;
+  const faultData = safeAiData.fault;
+  const rulData = safeAiData.rul;
 
-  const timestamps = [aiData.anomaly?.timestamp, aiData.fault?.timestamp, aiData.rul?.timestamp].filter(Boolean);
-  const latestDate = [...timestamps].sort().reverse()[0];
+  const timestamps = [anomalyData?.timestamp, faultData?.timestamp, rulData?.timestamp].filter(Boolean);
+  const latestDate = timestamps.length > 0 ? [...timestamps].sort().reverse()[0] : null;
 
   const ANOMALY_THRESHOLD = 0.75;
-  const anomalyScore = Number(aiData.anomaly?.value);
+  const anomalyScore = Number(anomalyData?.value);
   const hasAnomalyScore = Number.isFinite(anomalyScore);
-  const anomalyLabel = (aiData.anomaly?.label || '').toLowerCase();
+  const anomalyLabel = (anomalyData?.label || '').toLowerCase();
   const labelSignalsAnomaly =
     anomalyLabel.includes('anomaly') ||
     anomalyLabel.includes('anom') ||
@@ -95,46 +81,86 @@ function AiStatusBanner({ machineId }) {
   const isAnomalyDetected = hasAnomalyScore
     ? anomalyScore > ANOMALY_THRESHOLD
     : (labelSignalsAnomaly && !labelSignalsHealthy);
-  const isFaultClassified = aiData.fault?.label && !aiData.fault.label.toLowerCase().includes('zdrav');
-  const isError = isAnomalyDetected || isFaultClassified;
+  const isFaultClassified = faultData?.label && !faultData.label.toLowerCase().includes('zdrav');
+  const isError = mode === 'live' && (isAnomalyDetected || isFaultClassified);
+
+  let bannerClass = 'ai-banner';
+  if (mode === 'live') {
+    bannerClass += isError ? ' ai-banner--error' : ' ai-banner--ok';
+  } else if (mode === 'loading') {
+    bannerClass += ' ai-banner--loading';
+  } else {
+    bannerClass += ' ai-banner--empty';
+    if (mode === 'idle') bannerClass += ' ai-banner--idle';
+    if (mode === 'error') bannerClass += ' ai-banner--error-soft';
+  }
+
+  const statusText = mode === 'live' && latestDate ? formatDate(latestDate) : '';
+
+  const fallbackMetricLabel =
+    mode === 'loading'
+      ? 'Pending'
+      : mode === 'error'
+      ? 'Unavailable'
+      : mode === 'idle'
+      ? 'Waiting data'
+      : 'Not run';
+
+  const anomalyText =
+    mode === 'live' && anomalyData?.timestamp
+      ? (isAnomalyDetected ? 'Detected' : 'None')
+      : fallbackMetricLabel;
+
+  const anomalyConfidence =
+    mode === 'live' && anomalyData?.timestamp
+      ? `(${anomalyData.value?.toFixed(2)})`
+      : null;
+
+  const faultText =
+    mode === 'live' && faultData?.timestamp
+      ? faultData.label
+      : fallbackMetricLabel;
+
+  const faultConfidence =
+    mode === 'live' && faultData?.timestamp
+      ? `(${(faultData.confidence * 100).toFixed(0)}%)`
+      : null;
+
+  const rulText =
+    mode === 'live' && rulData?.timestamp
+      ? `${rulData.value} days`
+      : fallbackMetricLabel;
 
   return (
-    <div className={`ai-banner ${isError ? 'ai-banner--error' : 'ai-banner--ok'}`}>
+    <div className={bannerClass} role="status" aria-live="polite">
       <div className="ai-banner-header">
         <div className="ai-banner-header-left">
           <AiIcon />
           <span className="ai-banner-title">AI Diagnostics</span>
         </div>
-        <span className="ai-banner-timestamp">{formatDate(latestDate)}</span>
+        <span className="ai-banner-timestamp">{statusText}</span>
       </div>
 
       <div className="ai-banner-metrics">
-        {aiData.anomaly?.timestamp && (
-          <div className="ai-metric">
-            <span className="ai-metric-label">Anomaly</span>
-            <span className={`ai-metric-value ${isAnomalyDetected ? 'ai-metric-value--bad' : 'ai-metric-value--good'}`}>
-              {isAnomalyDetected ? 'Detected' : 'None'}
-              <span className="ai-metric-confidence">({aiData.anomaly.value?.toFixed(2)})</span>
-            </span>
-          </div>
-        )}
+        <div className="ai-metric">
+          <span className="ai-metric-label">Anomaly</span>
+          <span className={`ai-metric-value ${mode === 'live' && anomalyData?.timestamp ? (isAnomalyDetected ? 'ai-metric-value--bad' : 'ai-metric-value--good') : 'ai-metric-value--pending'}`}>
+            {anomalyText}
+            {anomalyConfidence && <span className="ai-metric-confidence">{anomalyConfidence}</span>}
+          </span>
+        </div>
 
-        {aiData.fault?.timestamp && (
-          <div className="ai-metric">
-            <span className="ai-metric-label">Fault class</span>
-            <span className={`ai-metric-value ${isFaultClassified ? 'ai-metric-value--bad' : 'ai-metric-value--good'}`}>
-              {aiData.fault.label}
-              <span className="ai-metric-confidence">({(aiData.fault.confidence * 100).toFixed(0)}%)</span>
-            </span>
-          </div>
-        )}
+        <div className="ai-metric">
+          <span className="ai-metric-label">Fault class</span>
+          <span className={`ai-metric-value ${mode === 'live' && faultData?.timestamp ? (isFaultClassified ? 'ai-metric-value--bad' : 'ai-metric-value--good') : 'ai-metric-value--pending'}`}>
+            {faultText}
+            {faultConfidence && <span className="ai-metric-confidence">{faultConfidence}</span>}
+          </span>
+        </div>
 
         <div className="ai-metric">
           <span className="ai-metric-label">RUL estimate</span>
-          {aiData.rul?.timestamp
-            ? <span className="ai-metric-value ai-metric-value--rul">{aiData.rul.value} days</span>
-            : <span className="ai-metric-value ai-metric-value--muted">Not run</span>
-          }
+          <span className={`ai-metric-value ${mode === 'live' && rulData?.timestamp ? 'ai-metric-value--rul' : 'ai-metric-value--pending'}`}>{rulText}</span>
         </div>
       </div>
     </div>
