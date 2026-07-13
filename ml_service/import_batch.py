@@ -20,7 +20,7 @@ ID_SENSOR_V = 7
 
 def login():
     """Získá přístupový token pro admina."""
-    print(f"🔑 Přihlašuji se jako '{USERNAME}'...")
+    print(f"Přihlašuji se jako '{USERNAME}'...")
     try:
         # FastAPI očekává form-data, ne JSON pro login!
         payload = {"username": USERNAME, "password": PASSWORD}
@@ -28,13 +28,13 @@ def login():
         
         if response.status_code == 200:
             token = response.json().get("access_token")
-            print("✅ Přihlášení úspěšné.")
+            print("Přihlášení úspěšné.")
             return token
         else:
-            print(f"❌ Chyba přihlášení: {response.status_code} - {response.text}")
+            print(f"Chyba přihlášení: {response.status_code} - {response.text}")
             exit(1)
     except Exception as e:
-        print(f"❌ Chyba připojení k backendu: {e}")
+        print(f"Chyba připojení k backendu: {e}")
         exit(1)
 
 def process_batch():
@@ -50,7 +50,7 @@ def process_batch():
     files = [f for f in os.listdir(DATASET_PATH) if f.endswith('.csv') and '_' not in f]
     files.sort(key=lambda x: int(os.path.splitext(x)[0]))
 
-    print(f"📦 Nalezeno {len(files)} souborů k importu.")
+    print(f"Nalezeno {len(files)} souborů k importu.")
     
     start_time = datetime.now() - timedelta(minutes=len(files))
 
@@ -69,7 +69,7 @@ def process_batch():
                 df.iloc[:, 0].to_csv(path_h, index=False)
                 df.iloc[:, 1].to_csv(path_v, index=False)
             except Exception as e:
-                print(f"❌ Chyba při dělení {filename}: {e}")
+                print(f"Chyba při dělení {filename}: {e}")
                 continue
         
         # B) Odeslání do API
@@ -97,17 +97,17 @@ def process_batch():
             res_v = requests.post(API_URL, json=payload_v, headers=headers)
 
             if res_h.status_code == 200 and res_v.status_code == 200:
-                print(f"✅ [{i+1}/{len(files)}] Importováno: {filename}")
+                print(f"[{i+1}/{len(files)}] Importováno: {filename}")
             else:
                 # Výpis chyby, pokud nastane (např. 422 Unprocessable Entity)
-                print(f"⚠️ Chyba API u {filename}:")
+                print(f"Chyba API u {filename}:")
                 if res_h.status_code != 200: print(f"   H: {res_h.status_code} {res_h.text}")
                 if res_v.status_code != 200: print(f"   V: {res_v.status_code} {res_v.text}")
 
         except Exception as e:
-            print(f"❌ Chyba komunikace: {e}")
+            print(f"Chyba komunikace: {e}")
 
-    print("🎉 Hotovo! Všechna měření jsou v databázi.")
+    print("Hotovo! Všechna měření jsou v databázi.")
 
 if __name__ == "__main__":
     process_batch()

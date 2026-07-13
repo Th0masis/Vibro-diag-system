@@ -1547,7 +1547,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
     Iniciuje proces asynchronního doučení (Fine-Tuning) vybrané architektury modelu
     na označených datech z operátorského rozhraní Reactu.
     """
-    print(f"\n🚀 START FINE-TUNING Z BASE MODELU ID {model_id}")
+    print(f"\nSTART FINE-TUNING Z BASE MODELU ID {model_id}")
     with engine.connect() as conn:
         query_model = text("SELECT name, version, type, description FROM ml_models WHERE id_model = :mid")
         model_row = conn.execute(query_model, {"mid": model_id}).fetchone()
@@ -1596,7 +1596,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
                 sql_d_to = seg.dateTo
             # -------------------------------------------------------
 
-            print(f"\n[DEBUG] 🔎 Hledám data pro senzor ID {seg.id_sensor} v rozšířeném okně od '{sql_d_from}' do '{sql_d_to}'")
+            print(f"\n[DEBUG] Hledám data pro senzor ID {seg.id_sensor} v rozšířeném okně od '{sql_d_from}' do '{sql_d_to}'")
             
             data_query = text("""
                 SELECT raw_data_path, timestamp FROM measurements 
@@ -1613,7 +1613,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
                 "d_to": sql_d_to
             }).fetchall()
             
-            print(f"[DEBUG] 📊 Nalezeno řádků v tabulce measurements: {len(rows)}")
+            print(f"[DEBUG] Nalezeno řádků v tabulce measurements: {len(rows)}")
             
             valid_paths = 0
             for row in rows:
@@ -1630,7 +1630,7 @@ def start_model_finetuning(model_id: int, payload: FineTuneStartRequest, token: 
                     if "LSTM" in model_name:
                         measurements_data_rul.append({"path": raw_path, "date": str(timestamp_val)})
             
-            print(f"[DEBUG] 📁 Z toho má fyzickou cestu k CSV (raw_data_path): {valid_paths}")
+            print(f"[DEBUG] Z toho má fyzickou cestu k CSV (raw_data_path): {valid_paths}")
         
         conn.commit()
 

@@ -130,7 +130,7 @@ def seed_history_data(machine_id=1, days=30):
             sensors = conn.execute(sensors_query, {"mid": machine_id}).fetchall()
             
             if not sensors:
-                print("❌ Chyba: Stroj nemá žádné senzory. Spusť nejprve základní seed pro vytvoření struktury.")
+                print("Chyba: Stroj nemá žádné senzory. Spusť nejprve základní seed pro vytvoření struktury.")
                 return
 
             print(f"Nalezeno {len(sensors)} senzorů.")
@@ -204,11 +204,11 @@ def seed_history_data(machine_id=1, days=30):
                         "speed": 1480.0
                     })
 
-    print("✅ Hotovo. Historie byla úspěšně nahrána.")
+    print("Hotovo. Historie byla úspěšně nahrána.")
 
 if __name__ == "__main__":
     # Spustíme seed pro Stroj 1
     try:
         seed_history_data(machine_id=1)
     except Exception as e:
-        print(f"❌ Nastala chyba: {e}")
+        print(f"Nastala chyba: {e}")
