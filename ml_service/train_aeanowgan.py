@@ -125,6 +125,8 @@ def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16, sav
 
         # 4. TRÉNOVACÍ SMYČKA
         print("[BACKGROUND TASK] Začínám iterace...")
+        final_l_r = None
+        final_l_tot = None
         for epoch in range(epochs):
             for batch_idx, real_imgs in enumerate(dataloader):
                 real_imgs = real_imgs.to(DEVICE)
@@ -169,6 +171,8 @@ def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16, sav
                 opt_E.step()
                 opt_Dec.step()
                 
+            final_l_r = l_r.item()
+            final_l_tot = total_loss.item()
             print(f"[BACKGROUND TASK] Epoch [{epoch+1}/{epochs}] dokončena. | L_r: {l_r.item():.4f} | L_tot: {total_loss.item():.4f}")
 
         # 5. ULOŽENÍ VAH (Změněno na dynamickou cestu)
@@ -186,6 +190,13 @@ def run_training_pipeline(file_paths, webhook_url, epochs=10, batch_size=16, sav
                 requests.post(webhook_url, json={
                     "status": "success",
                     "message": f"Fine-tuning dokončen na {len(file_paths)} souborech. Modely v2 uloženy.",
+                    "evaluation_score": float(max(0.0, min(1.0, 1.0 - float(final_l_tot or 1.0)))),
+                    "evaluation": {
+                        "metric": "train_total_loss",
+                        "value": float(final_l_tot or 1.0),
+                        "reconstruction_loss": float(final_l_r or 1.0),
+                        "samples": int(len(dataset)),
+                    },
                 }, timeout=10)
         except Exception as we:
             print(f"[BACKGROUND TASK] Webhook nelze odeslat: {we}")

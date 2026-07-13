@@ -1,4 +1,5 @@
 import os
+import math
 import requests
 import traceback
 import numpy as np
@@ -15,6 +16,43 @@ from utils import extract_14_features
 DEVICE = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 RUL_MODEL_DIR = "./models/Bi-LSTM"
 WINDOW_SIZE = 10
+
+
+def _safe_num(value, default=0.0):
+    try:
+        num = float(value)
+        if math.isnan(num) or math.isinf(num):
+            return float(default)
+        return num
+    except Exception:
+        return float(default)
+
+
+def _to_rul_feature_vector(raw_feats):
+    """
+    Normalizuje výstup extrakce na 6-D vektor pro Bi-LSTM.
+    Podporuje současně dict i list/tuple (kvůli staršímu extract_14_features).
+    """
+    if isinstance(raw_feats, dict):
+        rms = _safe_num(raw_feats.get('rms_raw', 0.0))
+        kurt = _safe_num(raw_feats.get('kurtosis_raw', 0.0))
+        skew = _safe_num(raw_feats.get('skewness_raw', 0.0))
+        rms_env = _safe_num(raw_feats.get('rms_acl_env', 0.0))
+        dif = _safe_num(raw_feats.get('dif_kt_raw', kurt))
+        speed = _safe_num(raw_feats.get('act_speed', 1500.0), 1500.0)
+        return [rms, kurt, skew, rms_env, dif, speed]
+
+    if isinstance(raw_feats, (list, tuple, np.ndarray)):
+        vals = [_safe_num(v) for v in list(raw_feats)]
+        rms = vals[0] if len(vals) > 0 else 0.0
+        skew = vals[2] if len(vals) > 2 else 0.0
+        kurt = vals[3] if len(vals) > 3 else 0.0
+        rms_env = vals[7] if len(vals) > 7 else 0.0
+        dif = kurt
+        speed = 1500.0
+        return [rms, kurt, skew, rms_env, dif, speed]
+
+    raise TypeError(f"Nepodporovaný typ feature dat: {type(raw_feats)}")
 
 def create_sequences(data, labels, window_size):
     X, y = [], []
@@ -55,17 +93,9 @@ def run_rul_training_pipeline(category, measurements, lifecycle_info, webhook_ur
             current_rul = (end_date - meas_date) / total_lifespan
             current_rul = max(0.0, min(1.0, current_rul)) # Oříznutí pro jistotu
             
-            # Extrakce funkcí (Získáme slovník od utils, vytáhneme našich 6 parametrů)
+            # Extrakce funkcí (podpora dict i list výstupu)
             raw_feats = extract_14_features(path)
-            
-            vec = [
-                raw_feats.get('rms_raw', 0.0),
-                raw_feats.get('kurtosis_raw', 0.0),
-                raw_feats.get('skewness_raw', 0.0),
-                raw_feats.get('rms_acl_env', 0.0),
-                raw_feats.get('dif_kt_raw', raw_feats.get('kurtosis_raw', 0.0)), # VDI fallback
-                raw_feats.get('act_speed', 1500.0)
-            ]
+            vec = _to_rul_feature_vector(raw_feats)
             features.append(vec)
             rul_labels.append(current_rul)
 
@@ -108,6 +138,7 @@ def run_rul_training_pipeline(category, measurements, lifecycle_info, webhook_ur
         optimizer = optim.Adam(model.parameters(), lr=0.001)
 
         # 7. Trénink
+        final_train_loss = None
         for epoch in range(epochs):
             train_loss = 0.0
             for batch_X, batch_y in dataloader:
@@ -119,6 +150,7 @@ def run_rul_training_pipeline(category, measurements, lifecycle_info, webhook_ur
                 train_loss += loss.item() * batch_X.size(0)
             
             train_loss /= len(dataloader.dataset)
+            final_train_loss = train_loss
             if (epoch + 1) % 10 == 0 or epoch == 0:
                 print(f"[BACKGROUND TASK] Bi-LSTM Epoch [{epoch+1}/{epochs}] | MSE Loss: {train_loss:.4f}")
 
@@ -133,7 +165,22 @@ def run_rul_training_pipeline(category, measurements, lifecycle_info, webhook_ur
         
         # 9. Webhook
         if webhook_url.startswith("http"):
-            requests.post(webhook_url, json={"status": "success", "message": f"Bi-LSTM ({category}) připraven."}, timeout=10)
+            score = max(0.0, min(1.0, 1.0 - _safe_num(final_train_loss, 1.0)))
+            requests.post(
+                webhook_url,
+                json={
+                    "status": "success",
+                    "message": f"Bi-LSTM ({category}) připraven.",
+                    "evaluation_score": score,
+                    "evaluation": {
+                        "metric": "train_mse",
+                        "value": _safe_num(final_train_loss, 1.0),
+                        "window_size": WINDOW_SIZE,
+                        "samples": int(len(features)),
+                    },
+                },
+                timeout=10,
+            )
 
     except Exception as e:
         print(f"[BACKGROUND TASK] KRITICKÁ CHYBA:\n{traceback.format_exc()}")

@@ -84,6 +84,8 @@ def run_1dcnn_training_pipeline(measurements, webhook_url, epochs=10, batch_size
         criterion = nn.CrossEntropyLoss()
         optimizer = optim.SGD(model.parameters(), lr=0.001, momentum=0.9)
 
+        final_acc = 0.0
+        final_loss = 0.0
         for epoch in range(epochs):
             running_loss, correct, total = 0.0, 0, 0
             for inputs, labels in dataloader:
@@ -100,7 +102,9 @@ def run_1dcnn_training_pipeline(measurements, webhook_url, epochs=10, batch_size
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
 
-            print(f"[BACKGROUND TASK] 1DCNN Epoch [{epoch+1}/{epochs}] | Loss: {running_loss/len(dataloader):.4f} | Acc: {100*correct/total:.2f}%")
+            final_loss = running_loss / len(dataloader)
+            final_acc = (correct / total) if total > 0 else 0.0
+            print(f"[BACKGROUND TASK] 1DCNN Epoch [{epoch+1}/{epochs}] | Loss: {final_loss:.4f} | Acc: {100*final_acc:.2f}%")
 
         # Dynamické uložení pod novou verzí
         target_dir = os.path.dirname(save_path) if save_path else CLASSIFY_MODEL_DIR
@@ -111,7 +115,21 @@ def run_1dcnn_training_pipeline(measurements, webhook_url, epochs=10, batch_size
         print(f"[BACKGROUND TASK] Hotovo. Model uložen do {final_save_path}.")
 
         if webhook_url.startswith("http"):
-            requests.post(webhook_url, json={"status": "success", "message": "1DCNN nová verze připravena."}, timeout=10)
+            requests.post(
+                webhook_url,
+                json={
+                    "status": "success",
+                    "message": "1DCNN nová verze připravena.",
+                    "evaluation_score": float(final_acc),
+                    "evaluation": {
+                        "metric": "train_accuracy",
+                        "value": float(final_acc),
+                        "train_loss": float(final_loss),
+                        "samples": int(len(dataset)),
+                    },
+                },
+                timeout=10,
+            )
 
     except Exception as e:
         print(f"[BACKGROUND TASK] KRITICKÁ CHYBA:\n{traceback.format_exc()}")

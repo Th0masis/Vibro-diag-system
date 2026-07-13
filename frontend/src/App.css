@@ -2211,6 +2211,79 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   padding: 4px 8px;
 }
 
+.dashboard-pro-right {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.collection-health-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  min-height: 34px;
+  padding: 0.45rem 0.7rem;
+  border-radius: 8px;
+  border: 1px solid #CBD5E1;
+  background: #F8FAFC;
+  color: #334155;
+  white-space: nowrap;
+}
+
+.collection-health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #94A3B8;
+  flex-shrink: 0;
+}
+
+.collection-health-text {
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+.collection-health-chip--ok {
+  border-color: #A7F3D0;
+  background: #ECFDF5;
+  color: #065F46;
+}
+
+.collection-health-chip--ok .collection-health-dot {
+  background: #10B981;
+}
+
+.collection-health-chip--warn {
+  border-color: #FDE68A;
+  background: #FFFBEB;
+  color: #92400E;
+}
+
+.collection-health-chip--warn .collection-health-dot {
+  background: #F59E0B;
+}
+
+.collection-health-chip--error {
+  border-color: #FECACA;
+  background: #FEF2F2;
+  color: #991B1B;
+}
+
+.collection-health-chip--error .collection-health-dot {
+  background: #EF4444;
+}
+
+.collection-health-chip--muted {
+  border-color: #CBD5E1;
+  background: #F8FAFC;
+  color: #475569;
+}
+
+.collection-health-chip--muted .collection-health-dot {
+  background: #94A3B8;
+}
+
 .status-stat {
   display: flex;
   align-items: center;
@@ -2560,6 +2633,12 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
     flex-direction: column;
     align-items: flex-start;
     padding: 0.9rem;
+  }
+
+  .dashboard-pro-right {
+    width: 100%;
+    justify-content: space-between;
+    flex-wrap: wrap;
   }
 
   .machine-card-pro-main {

@@ -8,7 +8,7 @@ import uvicorn
 import aioftp
 import pandas as pd
 from datetime import datetime, timezone, timedelta
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
 from dotenv import load_dotenv
 
@@ -43,6 +43,8 @@ ANOMALY_THRESHOLD = 0.75
 FAULT_RUL_DAYS = 7.0
 FAULT_CONFIDENCE = 0.90
 
+MIN_MODEL_EVAL_SCORE = float(os.getenv("MIN_MODEL_EVAL_SCORE", "0.55"))
+
 
 def translate_path_for_ml(path: str) -> str:
     """
@@ -60,6 +62,38 @@ def translate_path_for_ml(path: str) -> str:
         return f"/app/backend_data/{normalized[len('/app/data/'):] }"
 
     return path
+
+
+logger = logging.getLogger("vibrodiag.backend")
+if not logger.handlers:
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
+
+
+COLLECTION_OBS: Dict[str, Any] = {
+    "scheduler_running": False,
+    "total_runs": 0,
+    "successful_runs": 0,
+    "last_run_started_at": None,
+    "last_run_finished_at": None,
+    "last_successful_collection_at": None,
+    "last_error": None,
+    "last_summary": {},
+}
+
+
+def _utc_now_iso() -> str:
+    return datetime.now(timezone.utc).isoformat()
+
+
+def _min_eval_threshold(model_name: str, model_type: str) -> float:
+    txt = f"{model_name or ''} {model_type or ''}".upper()
+    if "CNN" in txt:
+        return max(MIN_MODEL_EVAL_SCORE, 0.60)
+    if "LSTM" in txt or "RUL" in txt:
+        return max(MIN_MODEL_EVAL_SCORE, 0.40)
+    if "GAN" in txt or "ANOM" in txt:
+        return max(MIN_MODEL_EVAL_SCORE, 0.30)
+    return MIN_MODEL_EVAL_SCORE
 
 
 def _to_float(value):
@@ -168,6 +202,9 @@ class FineTuneStartRequest(BaseModel):
 class WebhookPayload(BaseModel):
     status: str             # "success" / "failed"
     message: Optional[str] = None
+    error_detail: Optional[str] = None
+    evaluation_score: Optional[float] = None
+    evaluation: Optional[dict] = None
 
 class OPCSettings(BaseModel):
     url: Optional[str] = ""
@@ -213,12 +250,14 @@ async def lifespan(app: FastAPI):
     # Produkční plán: Sběr dat každé 4 hodiny
     scheduler.add_job(download_and_process_raw_data, 'cron', hour='2,6,10,14,18,22', minute=0)
     scheduler.start()
+    COLLECTION_OBS["scheduler_running"] = True
     print("Asynchronní scheduler úloh spuštěn v produkčním režimu.")
     
     yield  # Zde aplikace běží a obsluhuje požadavky
     
     # Logika při ukončení aplikace
     scheduler.shutdown()
+    COLLECTION_OBS["scheduler_running"] = False
     print("Asynchronní scheduler úloh byl bezpečně ukončen.")
 
 # Inicializace FastAPI aplikace s definovaným lifespan kontextem
@@ -260,6 +299,12 @@ def get_current_user_role(token: str = Depends(oauth2_scheme)):
 def home():
     """Veřejný testovací endpoint pro ověření stavu běžícího backendu."""
     return {"message": "Vibrodiagnosticky system bezi!"}
+
+
+@app.get("/collection/health")
+def get_collection_health(role: str = Depends(get_current_user_role)):
+    """Lehký observability endpoint pro periodický sběr dat."""
+    return COLLECTION_OBS
 
 
 # ==========================================
@@ -1683,10 +1728,30 @@ def training_webhook(model_id: int, payload: WebhookPayload):
     """
     with engine.connect() as conn:
         status_str = 'ready' if payload.status == "success" else 'failed'
-        update_query = text("UPDATE ml_models SET training_status = :status WHERE id_model = :mid")
-        conn.execute(update_query, {"status": status_str, "mid": model_id})
+        eval_text = None
+        if payload.evaluation:
+            eval_json = json.dumps(payload.evaluation, ensure_ascii=True, separators=(",", ":"))
+            eval_text = f"eval:{eval_json}"[:1000]
+
+        update_query = text("""
+            UPDATE ml_models
+            SET training_status = :status,
+                accuracy = COALESCE(:score, accuracy),
+                description = CASE
+                    WHEN :eval_text IS NULL THEN description
+                    WHEN description IS NULL OR description = '' THEN :eval_text
+                    ELSE description || ' | ' || :eval_text
+                END
+            WHERE id_model = :mid
+        """)
+        conn.execute(update_query, {
+            "status": status_str,
+            "score": payload.evaluation_score,
+            "eval_text": eval_text,
+            "mid": model_id,
+        })
         conn.commit()
-    return {"status": "acknowledged"}
+    return {"status": "acknowledged", "model_id": model_id, "training_status": status_str}
 
 @app.post("/models/sync-active")
 def sync_active_models():
@@ -1719,9 +1784,19 @@ def activate_model_version(model_id: int, token: str = Depends(oauth2_scheme)):
     se stejným logickým názvem a nařídí běžící ML mikroslužbě okamžitý reload vah do RAM.
     """
     with engine.connect() as conn:
-        res = conn.execute(text("SELECT name FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
+        res = conn.execute(text("SELECT name, type, training_status, accuracy FROM ml_models WHERE id_model = :mid"), {"mid": model_id}).fetchone()
         if not res: raise HTTPException(status_code=404, detail="Model nenalezen.")
-        model_name = res[0]
+        model_name, model_type, training_status, eval_score = res
+
+        if training_status != "ready":
+            raise HTTPException(status_code=409, detail=f"Model nelze aktivovat: training_status='{training_status}'.")
+
+        threshold = _min_eval_threshold(model_name, model_type)
+        if eval_score is None:
+            raise HTTPException(status_code=409, detail=f"Model nelze aktivovat bez evaluation_score. Požadované minimum je {threshold:.2f}.")
+
+        if float(eval_score) < threshold:
+            raise HTTPException(status_code=409, detail=f"Model nesplňuje quality gate: score={float(eval_score):.3f}, minimum={threshold:.2f}.")
 
         conn.execute(text("UPDATE ml_models SET is_active = False WHERE name = :name"), {"name": model_name})
         conn.execute(text("UPDATE ml_models SET is_active = True WHERE id_model = :mid"), {"mid": model_id})
@@ -2093,15 +2168,37 @@ async def download_and_process_raw_data():
     pomocí OPC UA, čeká na dokončení generování CSV vyrovnávací paměti a následně 
     přes šifrované FTP (FTP Pull) stahuje signálová data do lokálního úložiště.
     """
+    started_at = _utc_now_iso()
+    COLLECTION_OBS["total_runs"] += 1
+    COLLECTION_OBS["last_run_started_at"] = started_at
+    COLLECTION_OBS["last_error"] = None
+    run_summary = {
+        "machines_total": 0,
+        "machines_processed": 0,
+        "records_created": 0,
+        "errors": 0,
+    }
+    logger.info(json.dumps({"event": "collection_run_started", "started_at": started_at}, ensure_ascii=True))
     print(f"[{datetime.now()}] Spouštím asynchronní rutinu pro sběr dat z PLC...")
     try:
         with engine.connect() as conn:
             query = text("SELECT id_machine, opc_ua_url, ftp_host, ftp_user, ftp_password, ftp_dir FROM machines WHERE is_active_collection = TRUE")
             active_machines = conn.execute(query).fetchall()
+            run_summary["machines_total"] = len(active_machines)
             if not active_machines:
                 print("Žádný stroj nemá povolený automatický sběr dat.")
+                finished_at = _utc_now_iso()
+                COLLECTION_OBS["last_run_finished_at"] = finished_at
+                COLLECTION_OBS["last_summary"] = run_summary
+                logger.info(json.dumps({"event": "collection_run_finished", "finished_at": finished_at, **run_summary}, ensure_ascii=True))
                 return
     except Exception as e:
+        COLLECTION_OBS["last_error"] = str(e)
+        run_summary["errors"] += 1
+        finished_at = _utc_now_iso()
+        COLLECTION_OBS["last_run_finished_at"] = finished_at
+        COLLECTION_OBS["last_summary"] = run_summary
+        logger.error(json.dumps({"event": "collection_run_failed", "error": str(e)}, ensure_ascii=True))
         print(f"Chyba databáze při načítání strojů: {e}")
         return
 
@@ -2117,6 +2214,8 @@ async def download_and_process_raw_data():
                     print(f"Stroj {mach_id} pravděpodobně stojí (RMS < 0.1). Přeskakuji sběr.")
                     continue
         except Exception as e:
+            COLLECTION_OBS["last_error"] = str(e)
+            run_summary["errors"] += 1
             print(f"Chyba při ověřování běhu stroje: {e}")
             continue
             
@@ -2125,6 +2224,7 @@ async def download_and_process_raw_data():
 
         try:
             async with Client(url=plc_opc_url) as client:
+                run_summary["machines_processed"] += 1
                 trace_nodes = await resolve_trace_nodes(client)
                 node_workid = trace_nodes["workid"]
                 node_buflen = trace_nodes["buflen"]
@@ -2185,10 +2285,24 @@ async def download_and_process_raw_data():
                                     "path": local_filepath, "notes": f"Batch: {work_id_prefix} | Kanál {channel}"
                                 })
                                 conn.commit()
+                                run_summary["records_created"] += 1
                     except Exception as e:
+                        COLLECTION_OBS["last_error"] = str(e)
+                        run_summary["errors"] += 1
                         print(f"[{mach_id}] Chyba FTP přenosu nebo DB u kanálu {channel}: {e}")
         except Exception as e:
+            COLLECTION_OBS["last_error"] = str(e)
+            run_summary["errors"] += 1
             print(f"[{mach_id}] Kritická chyba OPC UA: {e}")
+
+    finished_at = _utc_now_iso()
+    COLLECTION_OBS["last_run_finished_at"] = finished_at
+    COLLECTION_OBS["last_summary"] = run_summary
+    if run_summary["records_created"] > 0:
+        COLLECTION_OBS["successful_runs"] += 1
+        COLLECTION_OBS["last_successful_collection_at"] = finished_at
+
+    logger.info(json.dumps({"event": "collection_run_finished", "finished_at": finished_at, **run_summary}, ensure_ascii=True))
     print(f"[{datetime.now()}] Asynchronní sběr dat dokončen.")
 
 if __name__ == "__main__":

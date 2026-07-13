@@ -14,6 +14,7 @@ function Dashboard({ token }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [collectionHealth, setCollectionHealth] = useState(null);
 
   useEffect(() => {
     const fetchMachines = async () => {
@@ -35,6 +36,41 @@ function Dashboard({ token }) {
 
     if (token) fetchMachines();
   }, [token, refreshKey]);
+
+  useEffect(() => {
+    if (!token) {
+      setCollectionHealth(null);
+      return;
+    }
+
+    let mounted = true;
+
+    const fetchCollectionHealth = async () => {
+      try {
+        const res = await axios.get('/collection/health', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        if (mounted) {
+          setCollectionHealth(res.data || null);
+        }
+      } catch (err) {
+        if (mounted) {
+          setCollectionHealth({
+            scheduler_running: false,
+            last_error: err.response?.data?.detail || err.message || 'Collection health unavailable'
+          });
+        }
+      }
+    };
+
+    fetchCollectionHealth();
+    const intervalId = setInterval(fetchCollectionHealth, 45000);
+
+    return () => {
+      mounted = false;
+      clearInterval(intervalId);
+    };
+  }, [token]);
 
   const handleRetry = () => {
     setError(null);
@@ -96,6 +132,33 @@ function Dashboard({ token }) {
     { ok: 0, warning: 0, fault: 0 }
   );
 
+  const nowTs = Date.now();
+  const lastSuccessTs = collectionHealth?.last_successful_collection_at
+    ? new Date(collectionHealth.last_successful_collection_at).getTime()
+    : null;
+  const isRecentSuccess = Boolean(lastSuccessTs) && (nowTs - lastSuccessTs <= 6 * 60 * 60 * 1000);
+
+  let healthTone = 'muted';
+  let healthLabel = 'Collection: Waiting';
+
+  if (collectionHealth?.last_error) {
+    healthTone = 'error';
+    healthLabel = 'Collection: Error';
+  } else if (collectionHealth?.scheduler_running === false) {
+    healthTone = 'error';
+    healthLabel = 'Collection: Stopped';
+  } else if (collectionHealth?.scheduler_running && isRecentSuccess) {
+    healthTone = 'ok';
+    healthLabel = 'Collection: Healthy';
+  } else if (collectionHealth?.scheduler_running) {
+    healthTone = 'warn';
+    healthLabel = 'Collection: Delayed';
+  }
+
+  const healthHint = collectionHealth?.last_successful_collection_at
+    ? `Last success ${new Date(collectionHealth.last_successful_collection_at).toLocaleString('en-GB')}`
+    : 'No successful collection recorded yet';
+
   return (
     <div className="page-container">
       <div className="dashboard-pro-header">
@@ -103,28 +166,35 @@ function Dashboard({ token }) {
           <h1 className="dashboard-pro-title">Fleet Overview</h1>
           <p className="dashboard-pro-subtitle">Live machinery status, vibration trends and AI diagnostic signals across the plant.</p>
         </div>
-        <div className="dashboard-pro-summary" aria-live="polite" role="status" aria-label="Machine fleet status">
-          <div className="status-stat">
-            <span className="status-stat-dot status-stat-dot--ok" aria-hidden="true"></span>
-            <strong className="status-stat-count" style={summary.ok > 0 ? {color:'#059669'} : undefined}>{summary.ok}</strong>
-            <span className="status-stat-label">OK</span>
+        <div className="dashboard-pro-right">
+          <div className="dashboard-pro-summary" aria-live="polite" role="status" aria-label="Machine fleet status">
+            <div className="status-stat">
+              <span className="status-stat-dot status-stat-dot--ok" aria-hidden="true"></span>
+              <strong className="status-stat-count" style={summary.ok > 0 ? {color:'#059669'} : undefined}>{summary.ok}</strong>
+              <span className="status-stat-label">OK</span>
+            </div>
+            <span className="status-stat-divider" aria-hidden="true"></span>
+            <div className="status-stat">
+              <span className="status-stat-dot status-stat-dot--warning" aria-hidden="true"></span>
+              <strong className="status-stat-count" style={summary.warning > 0 ? {color:'#B45309'} : undefined}>{summary.warning}</strong>
+              <span className="status-stat-label">Warning</span>
+            </div>
+            <span className="status-stat-divider" aria-hidden="true"></span>
+            <div className="status-stat">
+              <span className="status-stat-dot status-stat-dot--fault" aria-hidden="true"></span>
+              <strong className="status-stat-count" style={summary.fault > 0 ? {color:'#DC2626'} : undefined}>{summary.fault}</strong>
+              <span className="status-stat-label">Fault</span>
+            </div>
+            <span className="status-stat-divider" aria-hidden="true"></span>
+            <div className="status-stat">
+              <strong className="status-stat-count">{machines.length}</strong>
+              <span className="status-stat-label">Total</span>
+            </div>
           </div>
-          <span className="status-stat-divider" aria-hidden="true"></span>
-          <div className="status-stat">
-            <span className="status-stat-dot status-stat-dot--warning" aria-hidden="true"></span>
-            <strong className="status-stat-count" style={summary.warning > 0 ? {color:'#B45309'} : undefined}>{summary.warning}</strong>
-            <span className="status-stat-label">Warning</span>
-          </div>
-          <span className="status-stat-divider" aria-hidden="true"></span>
-          <div className="status-stat">
-            <span className="status-stat-dot status-stat-dot--fault" aria-hidden="true"></span>
-            <strong className="status-stat-count" style={summary.fault > 0 ? {color:'#DC2626'} : undefined}>{summary.fault}</strong>
-            <span className="status-stat-label">Fault</span>
-          </div>
-          <span className="status-stat-divider" aria-hidden="true"></span>
-          <div className="status-stat">
-            <strong className="status-stat-count">{machines.length}</strong>
-            <span className="status-stat-label">Total</span>
+
+          <div className={`collection-health-chip collection-health-chip--${healthTone}`} role="status" aria-live="polite" title={collectionHealth?.last_error ? `${healthHint}. Error: ${collectionHealth.last_error}` : healthHint}>
+            <span className="collection-health-dot" aria-hidden="true"></span>
+            <span className="collection-health-text">{healthLabel}</span>
           </div>
         </div>
       </div>
