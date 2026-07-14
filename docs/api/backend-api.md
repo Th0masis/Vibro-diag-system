@@ -75,6 +75,9 @@ Auth:
 ### POST /sensors
 - Description: Register sensor.
 - Auth required: Yes (`admin` expected)
+- Request JSON fields now include:
+  - `module_path` for CM4810 module routing
+  - `channel_no` for strict channel binding on the machine
 
 ### PUT /sensors/{sensor_id}
 - Description: Update sensor configuration and assignment.
@@ -122,6 +125,14 @@ Auth:
 
 ### PUT /machines/{machine_id}/settings
 - Description: Update OPC UA + FTP machine settings and collection toggle.
+- Auth required: Yes (`admin` or `operator` expected)
+
+### GET /machines/{machine_id}/alert-policy
+- Description: Get machine operating mode + anomaly threshold policy.
+- Auth required: Yes
+
+### PUT /machines/{machine_id}/alert-policy
+- Description: Update operating mode thresholds, consecutive anomaly limit, and cooldown.
 - Auth required: Yes (`admin` or `operator` expected)
 
 ### POST /machines/{machine_id}/test-connection?type=opc|ftp
@@ -244,6 +255,15 @@ FTP:
 ### POST /machines/{machine_id}/collect-now?run_ai=true|false
 - Description: Trigger immediate PLC collection for machine; optionally run AI chain.
 - Auth required: Yes (`admin` or `operator` expected)
+- Notes:
+  - Manual collection now supports configurable multi-buffer plan through `TRACE_BUFFER_PLAN_JSON`.
+  - Duplicate raw payload across channels triggers guard (`duplicate_channel_groups`) and blocks optional AI chain.
+
+### GET /machines/{machine_id}/buffer-jobs/recent?limit=30
+- Description: Read recent buffer download jobs for queue/state visualization.
+- Auth required: Yes
+- Query params:
+  - `limit` (optional, default 30, max 200)
 
 ## Generic and Legacy
 

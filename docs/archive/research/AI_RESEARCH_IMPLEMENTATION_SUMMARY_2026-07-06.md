@@ -92,6 +92,11 @@ This report separates:
 - RUL prediction exists, but update policy is manual/on-demand.
 - No adaptive scheduler or event-driven update orchestration from research.
 
+9. Duplicate-channel artifact guardrail is missing.
+- Backend currently does not verify that CH1-CH4 files in one collection batch are truly different payloads.
+- If PLC/export routing fails, identical channel files can silently pass into diagnostics and RUL pipeline.
+- No hash-based warning/block policy is implemented yet.
+
 ### Important technical risk
 9. RUL fine-tuning script has a data structure mismatch risk.
 - train_rul expects dict-like features (.get), while extract_14_features currently returns a list.
@@ -133,6 +138,8 @@ Actions:
 - Extend PLC/API flow to download raw + envelope + FFT raw + FFT envelope per sensor.
 - Store metadata and paths for each buffer artifact.
 - Update processing pipeline to use richer features.
+- Replace placeholder feature values in RUL preprocessing (compute real envelope-based feature(s) and dif_kt_raw instead of fixed zeros).
+- Add acceptance checks so RUL vectors contain non-placeholder values where source data is available.
 
 ### P1.2 Introduce robust buffer job tracking
 Benefit: High
@@ -141,6 +148,8 @@ Actions:
 - Create buffer_download_jobs and related audit tables.
 - Add retry, timeout, and status transitions.
 - Surface queue/job state in UI.
+- Add per-batch file hash audit (CH1-CH4) to detect duplicate-channel artifacts.
+- Add policy to flag warning and skip AI/RUL chain for suspicious duplicate-channel batches.
 
 ### P1.3 Add threshold policy and operating modes
 Benefit: High (fewer false alarms, better trust)
@@ -247,3 +256,5 @@ Actions:
 3. Write ModulePath per collection job via OPC UA before Start trigger.
 4. Extend UI forms to maintain module/card/channel and mount_group fields.
 5. Keep existing position field as free text, but use mount_group enum for analytics-ready grouping.
+6. Add per-batch channel hash verification (CH1-CH4) to detect duplicate payloads before AI processing.
+7. If duplicate-channel artifact is detected, persist warning and skip automatic AI/RUL chain for that batch.

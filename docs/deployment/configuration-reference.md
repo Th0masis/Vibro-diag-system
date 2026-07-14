@@ -14,7 +14,7 @@ This reference is derived from `docker-compose.yml`, `backend/main.py`, `backend
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Yes | none | JWT expiration in minutes. | Shorter values reduce token theft impact. |
 | `ML_SERVICE_URL` | No | `http://localhost:8001` | URL used by backend to call ML endpoints. | Restrict network path; internal only preferred. |
 | `BACKEND_URL` | No | `http://localhost:8000` | Used for internal webhook URL composition. | Internal routing only. |
-| `TRACE_BUFFER_CHANNEL_MAP` | No | `1:66,2:67,3:70,4:71` | Mapping of logical channel to PLC trace buffer number. | Verify against PLC configuration. |
+| `TRACE_BUFFER_CHANNEL_MAP` | No | `1:67,2:71,3:75,4:79` | Mapping of logical channel to PLC trace buffer number for raw acceleration. | Verify against PLC configuration. |
 | `TRACE_BUFFER_LENGTH` | No | `4097` | PLC trace buffer length used during collection. | Keep aligned with PLC and model input assumptions. |
 | `PYTHONUNBUFFERED` | No | `1` (in compose) | Disables output buffering for container logs. | Operational only. |
 
