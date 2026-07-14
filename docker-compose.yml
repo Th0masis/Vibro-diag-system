@@ -38,6 +38,8 @@ services:
       ACCESS_TOKEN_EXPIRE_MINUTES: 30
       ML_SERVICE_URL: http://ml_service:8001
       PYTHONUNBUFFERED: 1
+      DUPLICATE_CHANNEL_POLICY: warn
+      DEV_ALLOW_UNAUTH_READS: "1"
     ports:
       - "8000:8000"
     depends_on:

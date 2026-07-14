@@ -36,6 +36,19 @@ CREATE TABLE machines (
     created_at timestamp with time zone DEFAULT now()
 );
 
+CREATE TABLE machine_alert_policy (
+    id_machine integer PRIMARY KEY REFERENCES machines(id_machine) ON DELETE CASCADE,
+    operating_mode text NOT NULL DEFAULT 'normal',
+    anomaly_threshold_startup double precision NOT NULL DEFAULT 0.85,
+    anomaly_threshold_normal double precision NOT NULL DEFAULT 0.75,
+    anomaly_threshold_overload double precision NOT NULL DEFAULT 0.90,
+    anomaly_threshold_maintenance double precision NOT NULL DEFAULT 0.99,
+    consecutive_anomaly_limit integer NOT NULL DEFAULT 2,
+    cooldown_minutes integer NOT NULL DEFAULT 20,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now()
+);
+
 CREATE TABLE ml_models (
     id_model SERIAL PRIMARY KEY,
     name text NOT NULL,
@@ -56,9 +69,12 @@ CREATE TABLE sensors (
     status sensor_status_type DEFAULT 'available'::sensor_status_type,
     id_machine integer REFERENCES machines(id_machine) ON DELETE CASCADE,
     "position" text,
+    module_path text,
+    channel_no integer,
     sampling_rate double precision,
     calibration_date date,
-    created_at timestamp with time zone DEFAULT now()
+    created_at timestamp with time zone DEFAULT now(),
+    UNIQUE (id_machine, channel_no)
 );
 
 -- PŘESTUPNÍ TABULKA PRO B&R IIoT CONNECTOR
@@ -137,6 +153,28 @@ CREATE TABLE service_notes (
     content text NOT NULL,
     severity severity_type DEFAULT 'INFO'::severity_type
 );
+
+CREATE TABLE buffer_download_jobs (
+    id_job SERIAL PRIMARY KEY,
+    id_machine integer NOT NULL REFERENCES machines(id_machine) ON DELETE CASCADE,
+    id_sensor integer REFERENCES sensors(id_sensor) ON DELETE SET NULL,
+    work_id text NOT NULL,
+    buffer_type text NOT NULL DEFAULT 'raw',
+    channel integer NOT NULL,
+    buffer_number integer NOT NULL,
+    status text NOT NULL DEFAULT 'queued',
+    csv_filename text,
+    remote_path text,
+    local_path text,
+    file_hash text,
+    error_detail text,
+    created_at timestamp with time zone DEFAULT now(),
+    updated_at timestamp with time zone DEFAULT now(),
+    finished_at timestamp with time zone
+);
+
+CREATE INDEX idx_buffer_download_jobs_machine_created ON buffer_download_jobs(id_machine, created_at DESC);
+CREATE INDEX idx_buffer_download_jobs_work_id ON buffer_download_jobs(work_id);
 
 -- 5. Samotné převedení časových tabulek na TimescaleDB Hypertables
 SELECT create_hypertable('measurements', 'timestamp');
@@ -220,12 +258,16 @@ VALUES (
     TRUE
 );
 
+INSERT INTO machine_alert_policy (id_machine)
+VALUES (1)
+ON CONFLICT (id_machine) DO NOTHING;
+
 INSERT INTO sensors (id_sensor, serial_number, description, status, id_machine, "position", sampling_rate, calibration_date)
 VALUES
-    (1, 'auto-1', 'Channel 1 sensor', 'active', 1, 'Channel 1', 0, CURRENT_DATE),
-    (2, 'auto-2', 'Channel 2 sensor', 'active', 1, 'Channel 2', 0, CURRENT_DATE),
-    (3, 'auto-3', 'Channel 3 sensor', 'active', 1, 'Channel 3', 0, CURRENT_DATE),
-    (4, 'auto-4', 'Channel 4 sensor', 'active', 1, 'Channel 4', 0, CURRENT_DATE);
+    (1, 'auto-1', 'Channel 1 sensor', 'active', 1, 'Channel 1', 'IF3.ST1.IF1.ST2', 1, 0, CURRENT_DATE),
+    (2, 'auto-2', 'Channel 2 sensor', 'active', 1, 'Channel 2', 'IF3.ST1.IF1.ST2', 2, 0, CURRENT_DATE),
+    (3, 'auto-3', 'Channel 3 sensor', 'active', 1, 'Channel 3', 'IF3.ST1.IF1.ST2', 3, 0, CURRENT_DATE),
+    (4, 'auto-4', 'Channel 4 sensor', 'active', 1, 'Channel 4', 'IF3.ST1.IF1.ST2', 4, 0, CURRENT_DATE);
 
 -- 8. Vlozeni vychoziho katalogu ML modelu
 INSERT INTO ml_models (name, version, type, path_to_model, accuracy, description, is_active, training_status)

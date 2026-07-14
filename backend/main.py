@@ -1,6 +1,7 @@
 import os
 import json
 import ssl
+import hashlib
 import logging
 import asyncio
 import requests
@@ -32,18 +33,32 @@ ALGORITHM = os.getenv("ALGORITHM")
 BACKEND_URL = os.getenv("BACKEND_URL", "http://localhost:8000")
 ML_SERVICE_URL = os.getenv("ML_SERVICE_URL", "http://localhost:8001")
 DB_URL = os.getenv("DATABASE_URL", "postgresql://admin:secret@localhost:5432/vibro_diag")
+DEV_ALLOW_UNAUTH_READS = (os.getenv("DEV_ALLOW_UNAUTH_READS", "") or "").strip().lower()
 
 # CM4810 defaults (can be overridden by env):
-# TRACE_BUFFER_CHANNEL_MAP="1:66,2:67,3:70,4:71"
+# TRACE_BUFFER_CHANNEL_MAP="1:67,2:71,3:75,4:79"
 # TRACE_BUFFER_LENGTH="4097"
-TRACE_BUFFER_CHANNEL_MAP = os.getenv("TRACE_BUFFER_CHANNEL_MAP", "1:66,2:67,3:70,4:71")
+TRACE_BUFFER_CHANNEL_MAP = os.getenv("TRACE_BUFFER_CHANNEL_MAP", "1:67,2:71,3:75,4:79")
 TRACE_BUFFER_LENGTH = int(os.getenv("TRACE_BUFFER_LENGTH", "4097"))
+TRACE_BUFFER_PLAN_JSON = (os.getenv("TRACE_BUFFER_PLAN_JSON", "") or "").strip()
+DUPLICATE_CHANNEL_POLICY = (os.getenv("DUPLICATE_CHANNEL_POLICY", "warn") or "warn").strip().lower()
+DEFAULT_MODULE_PATH = os.getenv("DEFAULT_MODULE_PATH", "IF3.ST1.IF1.ST2")
 
 ANOMALY_THRESHOLD = 0.75
 FAULT_RUL_DAYS = 7.0
 FAULT_CONFIDENCE = 0.90
 
 MIN_MODEL_EVAL_SCORE = float(os.getenv("MIN_MODEL_EVAL_SCORE", "0.55"))
+
+DEFAULT_ANOMALY_THRESHOLDS = {
+    "startup": 0.85,
+    "normal": 0.75,
+    "overload": 0.90,
+    "maintenance": 0.99,
+}
+
+DEFAULT_CONSECUTIVE_ANOMALY_LIMIT = 2
+DEFAULT_ALERT_COOLDOWN_MINUTES = 20
 
 
 def translate_path_for_ml(path: str) -> str:
@@ -78,11 +93,258 @@ COLLECTION_OBS: Dict[str, Any] = {
     "last_successful_collection_at": None,
     "last_error": None,
     "last_summary": {},
+    "current_machine_id": None,
+    "current_phase": None,
+    "current_work_id": None,
+    "current_sensor_id": None,
+    "current_sensor_description": None,
+    "current_channel": None,
+    "current_buffer_number": None,
+    "current_buffer_type": None,
+    "current_job_index": 0,
+    "current_total_jobs": 0,
+    "current_progress_percent": 0,
+    "current_csv_filename": None,
 }
 
 
 def _utc_now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _file_sha256(path: str) -> str:
+    h = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def _update_collection_obs(**kwargs):
+    COLLECTION_OBS.update(kwargs)
+
+
+def get_duplicate_hash_groups(channel_hashes: Dict[int, str]) -> List[List[int]]:
+    buckets: Dict[str, List[int]] = {}
+    for channel, file_hash in (channel_hashes or {}).items():
+        if not file_hash:
+            continue
+        buckets.setdefault(file_hash, []).append(int(channel))
+    return [sorted(channels) for channels in buckets.values() if len(channels) > 1]
+
+
+def get_trace_buffer_plan() -> Dict[str, Dict[int, int]]:
+    if TRACE_BUFFER_PLAN_JSON:
+        try:
+            parsed = json.loads(TRACE_BUFFER_PLAN_JSON)
+            plan: Dict[str, Dict[int, int]] = {}
+            for buffer_type, channel_map in (parsed or {}).items():
+                if not isinstance(channel_map, dict):
+                    continue
+                mapped: Dict[int, int] = {}
+                for ch, buf in channel_map.items():
+                    mapped[int(ch)] = int(buf)
+                if mapped:
+                    plan[str(buffer_type).strip().lower()] = mapped
+            if plan:
+                return plan
+        except Exception:
+            logger.warning("TRACE_BUFFER_PLAN_JSON is invalid. Falling back to TRACE_BUFFER_CHANNEL_MAP.")
+
+    return {"raw": get_trace_buffer_mapping()}
+
+
+def _iter_trace_buffer_jobs(plan: Dict[str, Dict[int, int]]):
+    preferred_order = ["raw", "envelope", "fft_raw", "fft_envelope"]
+    plan = plan or {}
+
+    ordered_types = [t for t in preferred_order if t in plan]
+    ordered_types.extend([t for t in plan.keys() if t not in ordered_types])
+
+    for buffer_type in ordered_types:
+        mapping = plan.get(buffer_type) or {}
+        for channel in sorted(mapping.keys()):
+            yield buffer_type, int(channel), int(mapping[channel])
+
+
+def _base_alert_policy() -> Dict[str, Any]:
+    return {
+        "operating_mode": "normal",
+        "anomaly_threshold_startup": DEFAULT_ANOMALY_THRESHOLDS["startup"],
+        "anomaly_threshold_normal": DEFAULT_ANOMALY_THRESHOLDS["normal"],
+        "anomaly_threshold_overload": DEFAULT_ANOMALY_THRESHOLDS["overload"],
+        "anomaly_threshold_maintenance": DEFAULT_ANOMALY_THRESHOLDS["maintenance"],
+        "consecutive_anomaly_limit": DEFAULT_CONSECUTIVE_ANOMALY_LIMIT,
+        "cooldown_minutes": DEFAULT_ALERT_COOLDOWN_MINUTES,
+    }
+
+
+def _duplicate_policy_is_blocking() -> bool:
+    return DUPLICATE_CHANNEL_POLICY == "block"
+
+
+def _resolve_mode_threshold(policy: Dict[str, Any]) -> float:
+    mode = str((policy or {}).get("operating_mode") or "normal").strip().lower()
+    key = f"anomaly_threshold_{mode}"
+    value = _to_float((policy or {}).get(key))
+    if value is None:
+        value = _to_float((policy or {}).get("anomaly_threshold_normal"))
+    if value is None:
+        value = DEFAULT_ANOMALY_THRESHOLDS["normal"]
+    return float(value)
+
+
+def _get_machine_alert_policy(conn, machine_id: int) -> Dict[str, Any]:
+    policy = _base_alert_policy()
+    try:
+        row = conn.execute(text("""
+            SELECT operating_mode,
+                   anomaly_threshold_startup,
+                   anomaly_threshold_normal,
+                   anomaly_threshold_overload,
+                   anomaly_threshold_maintenance,
+                   consecutive_anomaly_limit,
+                   cooldown_minutes
+            FROM machine_alert_policy
+            WHERE id_machine = :mid
+            LIMIT 1
+        """), {"mid": machine_id}).fetchone()
+        if not row:
+            return policy
+
+        m = row._mapping
+        for k in policy.keys():
+            if k in m and m[k] is not None:
+                policy[k] = m[k]
+    except Exception:
+        return policy
+    return policy
+
+
+def _safe_create_buffer_job(conn, machine_id: int, sensor_id: Optional[int], work_id: str, buffer_type: str, channel: int, buffer_number: int):
+    try:
+        return conn.execute(text("""
+            INSERT INTO buffer_download_jobs (
+                id_machine, id_sensor, work_id, buffer_type, channel, buffer_number, status, created_at, updated_at
+            )
+            VALUES (:mid, :sid, :wid, :btype, :ch, :bnum, 'queued', NOW(), NOW())
+            RETURNING id_job
+        """), {
+            "mid": machine_id,
+            "sid": sensor_id,
+            "wid": work_id,
+            "btype": buffer_type,
+            "ch": channel,
+            "bnum": buffer_number,
+        }).scalar()
+    except Exception:
+        return None
+
+
+def _safe_update_buffer_job(conn, job_id: Optional[int], status: str, **fields):
+    if not job_id:
+        return
+    payload = {
+        "id": job_id,
+        "status": status,
+        "csv_filename": fields.get("csv_filename"),
+        "remote_path": fields.get("remote_path"),
+        "local_path": fields.get("local_path"),
+        "file_hash": fields.get("file_hash"),
+        "error_detail": fields.get("error_detail"),
+        "finished": fields.get("finished", False),
+    }
+    try:
+        conn.execute(text("""
+            UPDATE buffer_download_jobs
+            SET status = :status,
+                csv_filename = COALESCE(:csv_filename, csv_filename),
+                remote_path = COALESCE(:remote_path, remote_path),
+                local_path = COALESCE(:local_path, local_path),
+                file_hash = COALESCE(:file_hash, file_hash),
+                error_detail = :error_detail,
+                updated_at = NOW(),
+                finished_at = CASE WHEN :finished THEN NOW() ELSE finished_at END
+            WHERE id_job = :id
+        """), payload)
+    except Exception:
+        return
+
+
+def _safe_warn_duplicate_batch(conn, machine_id: int, work_id_prefix: str, duplicate_groups: List[List[int]]):
+    if not duplicate_groups:
+        return
+    try:
+        content = f"AUTO_ALERT: anomaly-guard duplicate channels detected for batch {work_id_prefix}: {duplicate_groups}"
+        conn.execute(text("""
+            INSERT INTO service_notes (id_machine, id_user, timestamp, content, severity)
+            VALUES (:mid, 1, NOW(), :content, 'WARNING')
+        """), {"mid": machine_id, "content": content})
+        conn.execute(text("UPDATE machines SET status = 'WARNING' WHERE id_machine = :mid"), {"mid": machine_id})
+    except Exception:
+        return
+
+
+def _safe_register_anomaly_alert(conn, machine_id: int, anomaly_score: Optional[float], policy: Dict[str, Any]) -> Dict[str, Any]:
+    threshold = _resolve_mode_threshold(policy)
+    score = _to_float(anomaly_score)
+    if score is None or score <= threshold:
+        return {"triggered": False, "reason": "below-threshold", "threshold": threshold}
+
+    limit = int((policy or {}).get("consecutive_anomaly_limit") or DEFAULT_CONSECUTIVE_ANOMALY_LIMIT)
+    cooldown_minutes = int((policy or {}).get("cooldown_minutes") or DEFAULT_ALERT_COOLDOWN_MINUTES)
+
+    try:
+        rows = conn.execute(text("""
+            SELECT ar.prediction_value
+            FROM analysis_results ar
+            JOIN measurements m ON ar.id_measurement = m.id_measurement
+            JOIN sensors s ON m.id_sensor = s.id_sensor
+            WHERE s.id_machine = :mid AND ar.prediction_type = 'Anomaly Detection'
+            ORDER BY ar.timestamp DESC
+            LIMIT 20
+        """), {"mid": machine_id}).fetchall()
+    except Exception:
+        return {"triggered": False, "reason": "history-unavailable", "threshold": threshold}
+
+    consecutive = 0
+    for row in rows:
+        val = _to_float(row[0])
+        if val is None or val <= threshold:
+            break
+        consecutive += 1
+
+    if consecutive < limit:
+        return {"triggered": False, "reason": "insufficient-consecutive", "threshold": threshold, "consecutive": consecutive}
+
+    try:
+        latest_note = conn.execute(text("""
+            SELECT timestamp
+            FROM service_notes
+            WHERE id_machine = :mid AND content LIKE 'AUTO_ALERT: anomaly-threshold%'
+            ORDER BY timestamp DESC
+            LIMIT 1
+        """), {"mid": machine_id}).fetchone()
+        if latest_note and latest_note[0]:
+            note_ts = latest_note[0]
+            if datetime.now(timezone.utc) - note_ts <= timedelta(minutes=cooldown_minutes):
+                return {"triggered": False, "reason": "cooldown", "threshold": threshold, "consecutive": consecutive}
+    except Exception:
+        pass
+
+    try:
+        content = (
+            f"AUTO_ALERT: anomaly-threshold reached (mode={policy.get('operating_mode','normal')}, "
+            f"score={score:.4f}, threshold={threshold:.4f}, consecutive={consecutive})"
+        )
+        conn.execute(text("""
+            INSERT INTO service_notes (id_machine, id_user, timestamp, content, severity)
+            VALUES (:mid, 1, NOW(), :content, 'WARNING')
+        """), {"mid": machine_id, "content": content})
+    except Exception:
+        return {"triggered": False, "reason": "note-write-failed", "threshold": threshold, "consecutive": consecutive}
+
+    return {"triggered": True, "reason": "alert-created", "threshold": threshold, "consecutive": consecutive}
 
 
 def _min_eval_threshold(model_name: str, model_type: str) -> float:
@@ -157,9 +419,12 @@ def recalculate_machine_status(conn, machine_id: int) -> str:
     """)
     rul_row = conn.execute(query_rul, {"mid": machine_id}).fetchone()
 
+    policy = _get_machine_alert_policy(conn, machine_id)
+    anomaly_threshold = _resolve_mode_threshold(policy)
+
     anomaly_score = _to_float(anomaly_row[0]) if anomaly_row else None
     anomaly_label = anomaly_row[1] if anomaly_row else None
-    anomaly_by_score = anomaly_score is not None and anomaly_score > ANOMALY_THRESHOLD
+    anomaly_by_score = anomaly_score is not None and anomaly_score > anomaly_threshold
     anomaly_by_label = _label_signals_fault(anomaly_label)
     is_anomaly = anomaly_by_score or anomaly_by_label
 
@@ -186,6 +451,7 @@ engine = create_engine(DB_URL)
 
 # Konfigurace zabezpečení JWT OAuth2
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="login", auto_error=False)
 
 # --- PYDANTIC DATOVÉ MODELY (DTOs) ---
 
@@ -226,6 +492,16 @@ class MachineSettingsUpdate(BaseModel):
     is_active_collection: bool
     opc_ua: OPCSettings
     ftp: FTPSettings
+
+
+class MachineAlertPolicyUpdate(BaseModel):
+    operating_mode: Optional[str] = None
+    anomaly_threshold_startup: Optional[float] = None
+    anomaly_threshold_normal: Optional[float] = None
+    anomaly_threshold_overload: Optional[float] = None
+    anomaly_threshold_maintenance: Optional[float] = None
+    consecutive_anomaly_limit: Optional[int] = None
+    cooldown_minutes: Optional[int] = None
 
 class SegmentInfo(BaseModel):
     id_machine: int
@@ -280,16 +556,27 @@ app.add_middleware(
 
 # --- POMOCNÉ FUNKCE AUTENTIZACE ---
 
+def _decode_user_role(token: str):
+    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+    role: str = payload.get("role")
+    if role is None:
+        raise HTTPException(status_code=401, detail="Token neobsahuje uživatelskou roli.")
+    return role
+
+
+def _is_dev_unauth_reads_enabled() -> bool:
+    if DEV_ALLOW_UNAUTH_READS:
+        return DEV_ALLOW_UNAUTH_READS in ["1", "true", "yes", "on"]
+    txt = (BACKEND_URL or "").lower()
+    return "localhost" in txt or "127.0.0.1" in txt
+
+
 def get_current_user_role(token: str = Depends(oauth2_scheme)):
     """
     Dekóduje JWT token z hlavičky požadavku a extrahuje roli přihlášeného uživatele.
     """
     try:
-        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        role: str = payload.get("role")
-        if role is None:
-            raise HTTPException(status_code=401, detail="Token neobsahuje uživatelskou roli.")
-        return role
+        return _decode_user_role(token)
     except JWTError:
         raise HTTPException(status_code=401, detail="Neplatný nebo expirovaný přístupový token.")
 
@@ -305,6 +592,47 @@ def home():
 def get_collection_health(role: str = Depends(get_current_user_role)):
     """Lehký observability endpoint pro periodický sběr dat."""
     return COLLECTION_OBS
+
+
+@app.get("/machines/{machine_id}/buffer-jobs/recent")
+def get_recent_buffer_jobs(machine_id: int, limit: int = 30, token: Optional[str] = Depends(oauth2_scheme_optional)):
+    """Vrátí poslední buffer download joby pro stroj (queue/state náhled pro UI)."""
+    safe_limit = max(1, min(int(limit or 30), 200))
+
+    if not token and not _is_dev_unauth_reads_enabled():
+        raise HTTPException(status_code=401, detail="Not authenticated")
+
+    if token:
+        try:
+            _decode_user_role(token)
+        except JWTError:
+            raise HTTPException(status_code=401, detail="Neplatný nebo expirovaný přístupový token.")
+
+    with engine.connect() as conn:
+        machine = conn.execute(text("SELECT id_machine FROM machines WHERE id_machine = :mid"), {"mid": machine_id}).fetchone()
+        if not machine:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+
+        rows = conn.execute(text("""
+            SELECT id_job, id_machine, id_sensor, work_id, buffer_type, channel, buffer_number,
+                   status, csv_filename, remote_path, local_path, file_hash, error_detail,
+                   created_at, updated_at, finished_at
+            FROM buffer_download_jobs
+            WHERE id_machine = :mid
+            ORDER BY created_at DESC
+            LIMIT :lim
+        """), {"mid": machine_id, "lim": safe_limit}).fetchall()
+
+    jobs = []
+    for row in rows:
+        jobs.append(dict(row._mapping))
+
+    return {
+        "machine_id": machine_id,
+        "count": len(jobs),
+        "limit": safe_limit,
+        "items": jobs,
+    }
 
 
 # ==========================================
@@ -494,8 +822,9 @@ def get_all_sensors(token: str = Depends(oauth2_scheme)):
     """
     with engine.connect() as conn:
         query = text("""
-            SELECT s.id_sensor, s.serial_number, s.description, s.status, 
-                   s.id_machine, s.position, s.sampling_rate, s.calibration_date
+             SELECT s.id_sensor, s.serial_number, s.description, s.status, 
+                 s.id_machine, s.position, s.sampling_rate, s.calibration_date,
+                 s.module_path, s.channel_no
             FROM sensors s
             ORDER BY s.id_sensor ASC
         """)
@@ -511,7 +840,9 @@ def get_all_sensors(token: str = Depends(oauth2_scheme)):
                 "id_machine": row[4],
                 "position": row[5],
                 "sampling_rate": row[6],
-                "calibration_date": row[7]
+                "calibration_date": row[7],
+                "module_path": row[8],
+                "channel_no": row[9]
             })
         return sensors_list
 
@@ -527,16 +858,31 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
     status = sensor_data.get('status', 'available')
     machine_id = sensor_data.get('id_machine')
     position = sensor_data.get('position')
+    module_path = _normalize_module_path(sensor_data.get('module_path')) or DEFAULT_MODULE_PATH
+    channel_no = _normalize_channel_no(sensor_data.get('channel_no'))
 
     if machine_id and status == 'available':
         status = 'active'
     if not machine_id and status == 'active':
         status = 'available'
+    if machine_id and channel_no is None:
+        raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je channel_no povinné.")
+    if machine_id and not module_path:
+        raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je module_path povinné.")
 
     with engine.connect() as conn:
+        if machine_id and channel_no is not None:
+            dup = conn.execute(text("""
+                SELECT 1 FROM sensors
+                WHERE id_machine = :mid AND channel_no = :ch
+                LIMIT 1
+            """), {"mid": machine_id, "ch": channel_no}).fetchone()
+            if dup:
+                raise HTTPException(status_code=400, detail="Pro tento stroj už existuje senzor pro zvolený channel_no.")
+
         query = text("""
-            INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status, id_machine, position)
-            VALUES (:sn, :desc, :rate, :cal, :status, :mid, :pos)
+            INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status, id_machine, position, module_path, channel_no)
+            VALUES (:sn, :desc, :rate, :cal, :status, :mid, :pos, :module_path, :channel_no)
         """)
         try:
             conn.execute(query, {
@@ -546,7 +892,9 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
                 "cal": sensor_data.get('calibration_date'),
                 "status": status,
                 "mid": machine_id,
-                "pos": position
+                "pos": position,
+                "module_path": module_path,
+                "channel_no": channel_no
             })
             conn.commit()
         except Exception as e:
@@ -566,12 +914,30 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
     new_status = updated_data.get('status')
     machine_id = updated_data.get('id_machine')
     position = updated_data.get('position')
+    module_path = _normalize_module_path(updated_data.get('module_path'))
+    channel_no = _normalize_channel_no(updated_data.get('channel_no'))
 
     if new_status in ['available', 'maintenance']:
         machine_id = None
         position = None
+        module_path = None
+        channel_no = None
+
+    if machine_id and channel_no is None:
+        raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je channel_no povinné.")
+    if machine_id and not module_path:
+        raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je module_path povinné.")
 
     with engine.connect() as conn:
+        if machine_id and channel_no is not None:
+            dup = conn.execute(text("""
+                SELECT 1 FROM sensors
+                WHERE id_machine = :mid AND channel_no = :ch AND id_sensor <> :sid
+                LIMIT 1
+            """), {"mid": machine_id, "ch": channel_no, "sid": sensor_id}).fetchone()
+            if dup:
+                raise HTTPException(status_code=400, detail="Pro tento stroj už existuje senzor pro zvolený channel_no.")
+
         query = text("""
             UPDATE sensors 
             SET description = :desc, 
@@ -579,7 +945,9 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
                 id_machine = :machine_id, 
                 position = :pos,
                 sampling_rate = :rate,
-                calibration_date = :cal
+                calibration_date = :cal,
+                module_path = :module_path,
+                channel_no = :channel_no
             WHERE id_sensor = :sid
         """)
         result = conn.execute(query, {
@@ -590,6 +958,8 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
             "pos": position,      
             "rate": updated_data.get('sampling_rate'),
             "cal": updated_data.get('calibration_date'),
+            "module_path": module_path,
+            "channel_no": channel_no,
             "sid": sensor_id
         })
         conn.commit()
@@ -862,6 +1232,92 @@ def update_machine_settings(machine_id: int, payload: MachineSettingsUpdate, rol
             raise HTTPException(status_code=404, detail="Stroj nenalezen")
             
         return {"message": "Nastavení stroje bylo úspěšně aktualizováno."}   
+
+
+@app.get("/machines/{machine_id}/alert-policy")
+def get_machine_alert_policy(machine_id: int, token: str = Depends(oauth2_scheme)):
+    with engine.connect() as conn:
+        machine = conn.execute(text("SELECT id_machine FROM machines WHERE id_machine = :mid"), {"mid": machine_id}).fetchone()
+        if not machine:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+        policy = _get_machine_alert_policy(conn, machine_id)
+        policy["effective_anomaly_threshold"] = _resolve_mode_threshold(policy)
+        return policy
+
+
+@app.put("/machines/{machine_id}/alert-policy")
+def update_machine_alert_policy(machine_id: int, payload: MachineAlertPolicyUpdate, role: str = Depends(get_current_user_role)):
+    if role not in ["admin", "operator"]:
+        raise HTTPException(status_code=403, detail="Nemáte oprávnění měnit alert policy.")
+
+    incoming = payload.model_dump(exclude_none=True)
+    if not incoming:
+        raise HTTPException(status_code=400, detail="Chybí data k aktualizaci.")
+
+    with engine.connect() as conn:
+        machine = conn.execute(text("SELECT id_machine FROM machines WHERE id_machine = :mid"), {"mid": machine_id}).fetchone()
+        if not machine:
+            raise HTTPException(status_code=404, detail="Stroj nenalezen")
+
+        current = _get_machine_alert_policy(conn, machine_id)
+        merged = {**current, **incoming}
+
+        update_result = None
+        try:
+            update_result = conn.execute(text("""
+                UPDATE machine_alert_policy
+                SET operating_mode = :mode,
+                    anomaly_threshold_startup = :th_startup,
+                    anomaly_threshold_normal = :th_normal,
+                    anomaly_threshold_overload = :th_overload,
+                    anomaly_threshold_maintenance = :th_maintenance,
+                    consecutive_anomaly_limit = :consecutive,
+                    cooldown_minutes = :cooldown,
+                    updated_at = NOW()
+                WHERE id_machine = :mid
+            """), {
+                "mid": machine_id,
+                "mode": str(merged.get("operating_mode") or "normal").strip().lower(),
+                "th_startup": merged.get("anomaly_threshold_startup"),
+                "th_normal": merged.get("anomaly_threshold_normal"),
+                "th_overload": merged.get("anomaly_threshold_overload"),
+                "th_maintenance": merged.get("anomaly_threshold_maintenance"),
+                "consecutive": merged.get("consecutive_anomaly_limit"),
+                "cooldown": merged.get("cooldown_minutes"),
+            })
+        except Exception:
+            raise HTTPException(status_code=500, detail="Tabulka machine_alert_policy není dostupná. Proveďte DB migraci.")
+
+        if update_result and update_result.rowcount == 0:
+            conn.execute(text("""
+                INSERT INTO machine_alert_policy (
+                    id_machine, operating_mode,
+                    anomaly_threshold_startup, anomaly_threshold_normal,
+                    anomaly_threshold_overload, anomaly_threshold_maintenance,
+                    consecutive_anomaly_limit, cooldown_minutes,
+                    created_at, updated_at
+                )
+                VALUES (
+                    :mid, :mode,
+                    :th_startup, :th_normal,
+                    :th_overload, :th_maintenance,
+                    :consecutive, :cooldown,
+                    NOW(), NOW()
+                )
+            """), {
+                "mid": machine_id,
+                "mode": str(merged.get("operating_mode") or "normal").strip().lower(),
+                "th_startup": merged.get("anomaly_threshold_startup"),
+                "th_normal": merged.get("anomaly_threshold_normal"),
+                "th_overload": merged.get("anomaly_threshold_overload"),
+                "th_maintenance": merged.get("anomaly_threshold_maintenance"),
+                "consecutive": merged.get("consecutive_anomaly_limit"),
+                "cooldown": merged.get("cooldown_minutes"),
+            })
+
+        conn.commit()
+        merged["effective_anomaly_threshold"] = _resolve_mode_threshold(merged)
+        return merged
 
 @app.post("/machines/{machine_id}/test-connection")
 async def test_machine_connection(machine_id: int, type: str, payload: TestConnectionPayload, role: str = Depends(get_current_user_role)):
@@ -1356,12 +1812,21 @@ def analyze_machine_anomaly(machine_id: int, token: str = Depends(oauth2_scheme)
         """)
         try:
             conn.execute(query_insert, {"mid": id_measurement, "modid": id_model, "val": anomaly_score, "label": label, "conf": 1.0})
+            policy = _get_machine_alert_policy(conn, machine_id)
+            alert_state = _safe_register_anomaly_alert(conn, machine_id, anomaly_score, policy)
             machine_status = recalculate_machine_status(conn, machine_id)
             conn.commit()
         except Exception as e:
             raise HTTPException(status_code=500, detail=f"Nepodařilo se uložit výsledek analýzy do databáze: {e}")
             
-        return {"anomaly_score": anomaly_score, "is_anomaly": is_anomaly, "machine_status": machine_status, "message": "Analýza úspěšně dokončena"}
+        return {
+            "anomaly_score": anomaly_score,
+            "is_anomaly": is_anomaly,
+            "machine_status": machine_status,
+            "anomaly_threshold": alert_state.get("threshold"),
+            "alert_gate": alert_state,
+            "message": "Analýza úspěšně dokončena"
+        }
     
 @app.post("/machines/{machine_id}/classify-fault")
 def classify_machine_fault(machine_id: int, token: str = Depends(oauth2_scheme)):
@@ -1459,7 +1924,11 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
         rows = conn.execute(query_features, {"mid": machine_id}).fetchall()
         
         if len(rows) == 0:
-            raise HTTPException(status_code=400, detail="Nejsou k dispozici žádná data (RMS) pro výpočet RUL.")
+            return {
+                "status": "pending",
+                "reason": "Nejsou k dispozici žádná zpracovaná data (RMS) pro výpočet RUL.",
+                "required": "Nejprve proveďte sběr a zpracování měření.",
+            }
             
         # Otočíme data z DB do chronologického pořadí pro LSTM (od nejstaršího po nejnovější)
         rows = rows[::-1]
@@ -1467,7 +1936,11 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
         # Odstraníme nekompletní řádky (None v některé ze 6 charakteristik)
         valid_rows = [r for r in rows if all(v is not None for v in r[:6])]
         if len(valid_rows) == 0:
-            raise HTTPException(status_code=400, detail="Nejsou k dispozici kompletní feature vektory pro výpočet RUL.")
+            return {
+                "status": "pending",
+                "reason": "Nejsou k dispozici kompletní feature vektory pro výpočet RUL.",
+                "required": "Zkontrolujte zpracování měření (RMS, kurtosis, peak, envelope, dif, skewness).",
+            }
 
         # Sestavíme tenzor: Seznam 10 listů, kde každý list má 6 float hodnot
         sequence = [[float(val) for val in row[:6]] for row in valid_rows]
@@ -1506,7 +1979,13 @@ def predict_machine_rul(machine_id: int, token: str = Depends(oauth2_scheme)):
         machine_status = recalculate_machine_status(conn, machine_id)
         conn.commit() 
         
-        return {"rul_value": rul_days, "unit": "dní", "used_model": used_model, "machine_status": machine_status}
+        return {
+            "status": "success",
+            "rul_value": rul_days,
+            "unit": "dní",
+            "used_model": used_model,
+            "machine_status": machine_status,
+        }
     
 @app.get("/training-segments")
 def get_training_segments(
@@ -1908,6 +2387,35 @@ def get_trace_buffer_mapping() -> dict:
     return parsed or fallback
 
 
+def get_buffer_number_for_channel(channel: int) -> Optional[int]:
+    return get_trace_buffer_mapping().get(int(channel))
+
+
+def _normalize_channel_no(value) -> Optional[int]:
+    if value in [None, "", "null"]:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _normalize_module_path(value) -> Optional[str]:
+    if value in [None, ""]:
+        return None
+    return str(value).strip() or None
+
+
+def _resolve_bound_sensor(conn, machine_id: int, channel_no: int):
+    return conn.execute(text("""
+        SELECT id_sensor, description, module_path, channel_no
+        FROM sensors
+        WHERE id_machine = :mid AND channel_no = :ch
+        ORDER BY id_sensor ASC
+        LIMIT 1
+    """), {"mid": machine_id, "ch": channel_no}).fetchone()
+
+
 async def resolve_trace_nodes(client: Client):
     """
     Najde správný namespace index pro gTrace uzly v OPC UA serveru.
@@ -1925,6 +2433,10 @@ async def resolve_trace_nodes(client: Client):
         "bufnum": [
             "::AsGlobalPV:gTrace.BufferNumber",
             "::AsGlobalPV:gTrace.BufferUpload.BufferNumber",
+        ],
+        "modulepath": [
+            "::AsGlobalPV:gTrace.BufferUpload.ModulePath",
+            "::AsGlobalPV:gTrace.ModulePath",
         ],
         "start": [
             "::AsGlobalPV:gTrace.BufferUpload.Start",
@@ -1991,6 +2503,31 @@ async def resolve_trace_nodes(client: Client):
     )
 
 
+async def _pulse_reset(node_reset):
+    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+    await asyncio.sleep(0.3)
+    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+
+
+async def _wait_done_value(node_done, expected: bool, timeout_seconds: int):
+    waited = 0.0
+    poll = 0.2
+    while True:
+        if bool(await node_done.read_value()) is expected:
+            return
+        await asyncio.sleep(poll)
+        waited += poll
+        if waited >= timeout_seconds:
+            raise TimeoutError(f"PLC Done flag did not reach expected={expected} within {timeout_seconds}s")
+
+
+async def _prepare_plc_job_cycle(node_start, node_reset, node_done):
+    # Ensure next job waits for a fresh Done rising edge, not stale True from previous channel.
+    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+    await _pulse_reset(node_reset)
+    await _wait_done_value(node_done, expected=False, timeout_seconds=8)
+
+
 async def collect_raw_data_for_machine_once(machine_id: int):
     """
     Provede jednorázový ruční sběr z PLC pro zvolený stroj.
@@ -2013,9 +2550,28 @@ async def collect_raw_data_for_machine_once(machine_id: int):
         raise HTTPException(status_code=400, detail="Stroj nemá nastavené OPC UA/FTP připojení.")
 
     work_id_prefix = f"manual_mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-    buffer_mapping = get_trace_buffer_mapping()
+    buffer_plan = get_trace_buffer_plan()
+    trace_jobs = [job for job in _iter_trace_buffer_jobs(buffer_plan) if job[1] >= 1]
+    total_jobs = len(trace_jobs)
     created_measurements = []
     errors = []
+    warnings = []
+    raw_channel_hashes: Dict[int, str] = {}
+
+    _update_collection_obs(
+        current_machine_id=mach_id,
+        current_phase="starting",
+        current_work_id=None,
+        current_sensor_id=None,
+        current_sensor_description=None,
+        current_channel=None,
+        current_buffer_number=None,
+        current_buffer_type=None,
+        current_job_index=0,
+        current_total_jobs=total_jobs,
+        current_progress_percent=0,
+        current_csv_filename=None,
+    )
 
     try:
         async with Client(url=plc_opc_url) as client:
@@ -2023,37 +2579,79 @@ async def collect_raw_data_for_machine_once(machine_id: int):
             node_workid = trace_nodes["workid"]
             node_buflen = trace_nodes["buflen"]
             node_bufnum = trace_nodes["bufnum"]
+            node_modulepath = trace_nodes["modulepath"]
             node_start = trace_nodes["start"]
             node_done = trace_nodes["done"]
             node_csv = trace_nodes["csv"]
             node_reset = trace_nodes["reset"]
+            prev_csv_filename = None
 
             await node_buflen.write_value(ua.DataValue(ua.Variant(TRACE_BUFFER_LENGTH, ua.VariantType.UInt32)))
 
-            for channel, buffer_number in buffer_mapping.items():
-                current_work_id = f"{work_id_prefix}_CH{channel}"
+            for job_index, (buffer_type, channel, buffer_number) in enumerate(trace_jobs, start=1):
+                suffix = f"_{buffer_type.upper()}" if buffer_type != "raw" else ""
+                current_work_id = f"{work_id_prefix}{suffix}_CH{channel}"
+                with engine.connect() as conn:
+                    sensor_row = _resolve_bound_sensor(conn, mach_id, channel)
+                    sensor_id_for_channel = sensor_row[0] if sensor_row else None
+                    sensor_description = sensor_row[1] if sensor_row else None
+                    sensor_module_path = sensor_row[2] if sensor_row else None
+                    job_id = _safe_create_buffer_job(
+                        conn,
+                        machine_id=mach_id,
+                        sensor_id=sensor_id_for_channel,
+                        work_id=current_work_id,
+                        buffer_type=buffer_type,
+                        channel=channel,
+                        buffer_number=buffer_number,
+                    )
+                    conn.commit()
                 try:
+                    if not sensor_row:
+                        raise RuntimeError(f"Chybí vazba senzoru pro channel {channel} na stroji {mach_id}.")
+
+                    sensor_module_path = sensor_module_path or DEFAULT_MODULE_PATH
+                    current_work_id = f"{work_id_prefix}{suffix}_CH{channel}"
+                    _update_collection_obs(
+                        current_machine_id=mach_id,
+                        current_phase="preparing",
+                        current_work_id=current_work_id,
+                        current_sensor_id=sensor_id_for_channel,
+                        current_sensor_description=sensor_description,
+                        current_channel=channel,
+                        current_buffer_number=buffer_number,
+                        current_buffer_type=buffer_type,
+                        current_job_index=job_index,
+                        current_total_jobs=total_jobs,
+                        current_progress_percent=int(((job_index - 1) / max(total_jobs, 1)) * 100),
+                        current_csv_filename=None,
+                    )
+                    await _prepare_plc_job_cycle(node_start, node_reset, node_done)
+                    _update_collection_obs(current_phase="waiting-plc")
                     await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
+                    await node_modulepath.write_value(ua.DataValue(ua.Variant(sensor_module_path, ua.VariantType.String)))
                     await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.Byte)))
                     await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
 
-                    timeout = 0
-                    while True:
-                        if await node_done.read_value():
-                            break
-                        await asyncio.sleep(1)
-                        timeout += 1
-                        if timeout > 45:
-                            raise TimeoutError(f"Timeout na PLC u kanálu {channel}")
+                    _update_collection_obs(current_phase="downloading-buffer")
+                    await _wait_done_value(node_done, expected=True, timeout_seconds=45)
 
                     csv_filename = await node_csv.read_value()
+                    if prev_csv_filename and str(csv_filename) == str(prev_csv_filename):
+                        raise RuntimeError(f"PLC vrátil stejný CSVFileName jako předchozí job: {csv_filename}")
+                    prev_csv_filename = csv_filename
+
+                    with engine.connect() as conn:
+                        _safe_update_buffer_job(conn, job_id, "plc_done", csv_filename=csv_filename)
+                        conn.commit()
 
                     await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
-                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
-                    await asyncio.sleep(0.5)
-                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                    await _pulse_reset(node_reset)
 
-                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
+                    base_local_dir = f"./data/mach{mach_id}"
+                    if buffer_type != "raw":
+                        base_local_dir = f"{base_local_dir}/{buffer_type}"
+                    local_filepath = f"{base_local_dir}/{csv_filename}"
                     os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
 
                     remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
@@ -2064,6 +2662,28 @@ async def collect_raw_data_for_machine_once(machine_id: int):
                         plc_ftp_pass,
                         remote_path,
                         local_filepath,
+                    )
+
+                    file_hash = _file_sha256(local_filepath)
+
+                    with engine.connect() as conn:
+                        _safe_update_buffer_job(
+                            conn,
+                            job_id,
+                            "downloaded",
+                            remote_path=remote_path,
+                            local_path=local_filepath,
+                            file_hash=file_hash,
+                        )
+                        conn.commit()
+
+                    if buffer_type == "raw":
+                        raw_channel_hashes[channel] = file_hash
+
+                    _update_collection_obs(
+                        current_phase="completed",
+                        current_progress_percent=int((job_index / max(total_jobs, 1)) * 100),
+                        current_csv_filename=str(csv_filename),
                     )
 
                     with engine.connect() as conn:
@@ -2077,7 +2697,7 @@ async def collect_raw_data_for_machine_once(machine_id: int):
                         """)
                         sensor_id = conn.execute(query_sensor).scalar()
 
-                        if sensor_id:
+                        if sensor_id and buffer_type == "raw":
                             inserted_id = conn.execute(text("""
                                 INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
                                 VALUES (:sid, :ts, :path, :notes)
@@ -2086,8 +2706,9 @@ async def collect_raw_data_for_machine_once(machine_id: int):
                                 "sid": sensor_id,
                                 "ts": datetime.now(timezone.utc),
                                 "path": local_filepath,
-                                "notes": f"Manual collect: {work_id_prefix} | Kanál {channel}"
+                                "notes": f"Manual collect: {work_id_prefix} | Buffer raw | Kanál {channel}"
                             }).scalar()
+                            _safe_update_buffer_job(conn, job_id, "persisted", finished=True)
                             conn.commit()
 
                             created_measurements.append({
@@ -2096,20 +2717,46 @@ async def collect_raw_data_for_machine_once(machine_id: int):
                                 "sensor_id": sensor_id,
                                 "file": local_filepath
                             })
-                        else:
+                        elif buffer_type == "raw":
                             errors.append(f"Kanál {channel}: nenalezen odpovídající senzor")
+                            _safe_update_buffer_job(conn, job_id, "failed", error_detail="No sensor mapped", finished=True)
+                            conn.commit()
+                        else:
+                            _safe_update_buffer_job(conn, job_id, "persisted", finished=True)
+                            conn.commit()
 
                 except Exception as channel_error:
-                    errors.append(f"Kanál {channel}: {str(channel_error)}")
+                    errors.append(f"Kanál {channel} ({buffer_type}): {str(channel_error)}")
+                    with engine.connect() as conn:
+                        _safe_update_buffer_job(conn, job_id, "failed", error_detail=str(channel_error), finished=True)
+                        conn.commit()
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Kritická chyba ručního sběru: {str(e)}")
+
+    duplicate_groups = get_duplicate_hash_groups(raw_channel_hashes)
+    ai_guard_state = "ok"
+    if duplicate_groups:
+        duplicate_message = f"Duplicate-channel guard: shodný payload mezi kanály {duplicate_groups}"
+        if _duplicate_policy_is_blocking():
+            errors.append(duplicate_message)
+            ai_guard_state = "blocked"
+        else:
+            warnings.append(duplicate_message)
+            ai_guard_state = "warn"
+        with engine.connect() as conn:
+            _safe_warn_duplicate_batch(conn, mach_id, work_id_prefix, duplicate_groups)
+            conn.commit()
 
     return {
         "machine_id": mach_id,
         "created_count": len(created_measurements),
         "measurements": created_measurements,
-        "errors": errors
+        "errors": errors,
+        "warnings": warnings,
+        "duplicate_channel_groups": duplicate_groups,
+        "ai_guard": ai_guard_state,
+        "duplicate_policy": DUPLICATE_CHANNEL_POLICY,
     }
 
 
@@ -2130,6 +2777,14 @@ async def collect_now(machine_id: int, run_ai: bool = False, role: str = Depends
     }
 
     if run_ai and collection["created_count"] > 0:
+        if collection.get("ai_guard") == "blocked":
+            response["ai"] = {
+                "status": "skipped",
+                "reason": "duplicate-channel-guard",
+                "duplicate_channel_groups": collection.get("duplicate_channel_groups", []),
+            }
+            return response
+
         ai = {}
 
         try:
@@ -2176,6 +2831,8 @@ async def download_and_process_raw_data():
         "machines_total": 0,
         "machines_processed": 0,
         "records_created": 0,
+        "duplicate_batches": 0,
+        "duplicate_policy": DUPLICATE_CHANNEL_POLICY,
         "errors": 0,
     }
     logger.info(json.dumps({"event": "collection_run_started", "started_at": started_at}, ensure_ascii=True))
@@ -2220,7 +2877,25 @@ async def download_and_process_raw_data():
             continue
             
         work_id_prefix = f"mach{mach_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        buffer_mapping = get_trace_buffer_mapping()
+        buffer_plan = get_trace_buffer_plan()
+        trace_jobs = [job for job in _iter_trace_buffer_jobs(buffer_plan) if job[1] >= 1]
+        total_jobs = len(trace_jobs)
+        raw_channel_hashes: Dict[int, str] = {}
+
+        _update_collection_obs(
+            current_machine_id=mach_id,
+            current_phase="starting",
+            current_work_id=None,
+            current_sensor_id=None,
+            current_sensor_description=None,
+            current_channel=None,
+            current_buffer_number=None,
+            current_buffer_type=None,
+            current_job_index=0,
+            current_total_jobs=total_jobs,
+            current_progress_percent=0,
+            current_csv_filename=None,
+        )
 
         try:
             async with Client(url=plc_opc_url) as client:
@@ -2233,37 +2908,78 @@ async def download_and_process_raw_data():
                 node_done = trace_nodes["done"]
                 node_csv = trace_nodes["csv"]
                 node_reset = trace_nodes["reset"]
+                prev_csv_filename = None
 
                 await node_buflen.write_value(ua.DataValue(ua.Variant(TRACE_BUFFER_LENGTH, ua.VariantType.UInt32)))
 
-                for channel, buffer_number in buffer_mapping.items():
-                    current_work_id = f"{work_id_prefix}_CH{channel}"
-                    await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
-                    await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.Byte)))
-                    await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
-                    
-                    timeout = 0
-                    while True:
-                        if await node_done.read_value():
-                            break
-                        await asyncio.sleep(1)
-                        timeout += 1
-                        if timeout > 45:
-                            print(f"[{mach_id}] Timeout na PLC u kanálu {channel}!")
-                            break
-                    
-                    csv_filename = await node_csv.read_value()
-                    await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
-                    await node_reset.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
-                    await asyncio.sleep(0.5) 
-                    await node_reset.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
-                    
-                    local_filepath = f"./data/mach{mach_id}/{csv_filename}"
-                    os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
-                    
-                    remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
-                        
+                for job_index, (buffer_type, channel, buffer_number) in enumerate(trace_jobs, start=1):
+                    suffix = f"_{buffer_type.upper()}" if buffer_type != "raw" else ""
+
+                    with engine.connect() as conn:
+                        sensor_row = _resolve_bound_sensor(conn, mach_id, channel)
+                        sensor_id_for_channel = sensor_row[0] if sensor_row else None
+                        sensor_description = sensor_row[1] if sensor_row else None
+                        sensor_module_path = sensor_row[2] if sensor_row else None
+                        current_work_id = f"{work_id_prefix}{suffix}_CH{channel}"
+                        job_id = _safe_create_buffer_job(
+                            conn,
+                            machine_id=mach_id,
+                            sensor_id=sensor_id_for_channel,
+                            work_id=current_work_id,
+                            buffer_type=buffer_type,
+                            channel=channel,
+                            buffer_number=buffer_number,
+                        )
+                        conn.commit()
+
                     try:
+                        if not sensor_row:
+                            raise RuntimeError(f"[{mach_id}] Chybí vazba senzoru pro channel {channel}.")
+
+                        sensor_module_path = sensor_module_path or DEFAULT_MODULE_PATH
+                        _update_collection_obs(
+                            current_machine_id=mach_id,
+                            current_phase="preparing",
+                            current_work_id=current_work_id,
+                            current_sensor_id=sensor_id_for_channel,
+                            current_sensor_description=sensor_description,
+                            current_channel=channel,
+                            current_buffer_number=buffer_number,
+                            current_buffer_type=buffer_type,
+                            current_job_index=job_index,
+                            current_total_jobs=total_jobs,
+                            current_progress_percent=int(((job_index - 1) / max(total_jobs, 1)) * 100),
+                            current_csv_filename=None,
+                        )
+                        await _prepare_plc_job_cycle(node_start, node_reset, node_done)
+                        _update_collection_obs(current_phase="waiting-plc")
+                        await node_workid.write_value(ua.DataValue(ua.Variant(current_work_id, ua.VariantType.String)))
+                        await node_modulepath.write_value(ua.DataValue(ua.Variant(sensor_module_path, ua.VariantType.String)))
+                        await node_bufnum.write_value(ua.DataValue(ua.Variant(buffer_number, ua.VariantType.Byte)))
+                        await node_start.write_value(ua.DataValue(ua.Variant(True, ua.VariantType.Boolean)))
+
+                        _update_collection_obs(current_phase="downloading-buffer")
+                        await _wait_done_value(node_done, expected=True, timeout_seconds=45)
+
+                        csv_filename = await node_csv.read_value()
+                        if prev_csv_filename and str(csv_filename) == str(prev_csv_filename):
+                            raise RuntimeError(f"[{mach_id}] PLC vrátil stejný CSVFileName jako předchozí job: {csv_filename}")
+                        prev_csv_filename = csv_filename
+                        with engine.connect() as conn:
+                            _safe_update_buffer_job(conn, job_id, "plc_done", csv_filename=csv_filename)
+                            conn.commit()
+
+                        await node_start.write_value(ua.DataValue(ua.Variant(False, ua.VariantType.Boolean)))
+                        await _pulse_reset(node_reset)
+
+                        base_local_dir = f"./data/mach{mach_id}"
+                        if buffer_type != "raw":
+                            base_local_dir = f"{base_local_dir}/{buffer_type}"
+                        local_filepath = f"{base_local_dir}/{csv_filename}"
+                        os.makedirs(os.path.dirname(local_filepath), exist_ok=True)
+
+                        remote_path = f"{plc_remote_dir.rstrip('/')}/{csv_filename}"
+
                         await asyncio.to_thread(
                             ftp_fetch_file_with_fallback,
                             plc_ftp_host,
@@ -2272,24 +2988,64 @@ async def download_and_process_raw_data():
                             remote_path,
                             local_filepath,
                         )
+
+                        file_hash = _file_sha256(local_filepath)
+                        with engine.connect() as conn:
+                            _safe_update_buffer_job(
+                                conn,
+                                job_id,
+                                "downloaded",
+                                remote_path=remote_path,
+                                local_path=local_filepath,
+                                file_hash=file_hash,
+                            )
+                            conn.commit()
+
+                        if buffer_type == "raw":
+                            raw_channel_hashes[channel] = file_hash
+
+                        _update_collection_obs(
+                            current_phase="completed",
+                            current_progress_percent=int((job_index / max(total_jobs, 1)) * 100),
+                            current_csv_filename=str(csv_filename),
+                        )
+
                         with engine.connect() as conn:
                             query_sensor = text(f"SELECT id_sensor FROM sensors WHERE id_machine = {mach_id} ORDER BY id_sensor ASC OFFSET {channel - 1} LIMIT 1")
                             sensor_id = conn.execute(query_sensor).scalar()
-                            
-                            if sensor_id:
+
+                            if sensor_id and buffer_type == "raw":
                                 conn.execute(text("""
                                     INSERT INTO measurements (id_sensor, timestamp, raw_data_path, notes)
                                     VALUES (:sid, :ts, :path, :notes)
                                 """), {
                                     "sid": sensor_id, "ts": datetime.now(timezone.utc),
-                                    "path": local_filepath, "notes": f"Batch: {work_id_prefix} | Kanál {channel}"
+                                    "path": local_filepath, "notes": f"Batch: {work_id_prefix} | Buffer raw | Kanál {channel}"
                                 })
+                                _safe_update_buffer_job(conn, job_id, "persisted", finished=True)
                                 conn.commit()
                                 run_summary["records_created"] += 1
+                            elif buffer_type == "raw":
+                                _safe_update_buffer_job(conn, job_id, "failed", error_detail="No sensor mapped", finished=True)
+                                conn.commit()
+                                run_summary["errors"] += 1
+                            else:
+                                _safe_update_buffer_job(conn, job_id, "persisted", finished=True)
+                                conn.commit()
                     except Exception as e:
                         COLLECTION_OBS["last_error"] = str(e)
                         run_summary["errors"] += 1
-                        print(f"[{mach_id}] Chyba FTP přenosu nebo DB u kanálu {channel}: {e}")
+                        with engine.connect() as conn:
+                            _safe_update_buffer_job(conn, job_id, "failed", error_detail=str(e), finished=True)
+                            conn.commit()
+                        print(f"[{mach_id}] Chyba sběru u kanálu {channel} ({buffer_type}): {e}")
+
+                duplicate_groups = get_duplicate_hash_groups(raw_channel_hashes)
+                if duplicate_groups:
+                    run_summary["duplicate_batches"] += 1
+                    with engine.connect() as conn:
+                        _safe_warn_duplicate_batch(conn, mach_id, work_id_prefix, duplicate_groups)
+                        conn.commit()
         except Exception as e:
             COLLECTION_OBS["last_error"] = str(e)
             run_summary["errors"] += 1
@@ -2298,6 +3054,19 @@ async def download_and_process_raw_data():
     finished_at = _utc_now_iso()
     COLLECTION_OBS["last_run_finished_at"] = finished_at
     COLLECTION_OBS["last_summary"] = run_summary
+    _update_collection_obs(
+        current_phase=None,
+        current_work_id=None,
+        current_sensor_id=None,
+        current_sensor_description=None,
+        current_channel=None,
+        current_buffer_number=None,
+        current_buffer_type=None,
+        current_job_index=0,
+        current_total_jobs=0,
+        current_progress_percent=0,
+        current_csv_filename=None,
+    )
     if run_summary["records_created"] > 0:
         COLLECTION_OBS["successful_runs"] += 1
         COLLECTION_OBS["last_successful_collection_at"] = finished_at
