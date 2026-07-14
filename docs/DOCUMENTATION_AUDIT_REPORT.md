@@ -98,3 +98,13 @@ docs/
 
 - Security-sensitive and role-authorization behaviors are documented as implemented, including known risks where relevant.
 - API docs intentionally follow backend route behavior even when some endpoint protections are inconsistent.
+
+## Addendum (2026-07-14)
+
+Performed a maintenance pass to align docs with current implementation:
+
+- Added roadmap status tracking (done / partial / not started) in research summary.
+- Updated schema docs to include `machine_alert_policy`, `buffer_download_jobs`, and sensor routing fields.
+- Updated config docs with `TRACE_BUFFER_PLAN_JSON`, `DUPLICATE_CHANNEL_POLICY`, and `DEFAULT_MODULE_PATH`.
+- Updated developer guide testing section with existing backend pytest coverage.
+- Removed clearly unused documentation artifacts from active docs tree.

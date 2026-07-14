@@ -258,3 +258,37 @@ Actions:
 5. Keep existing position field as free text, but use mount_group enum for analytics-ready grouping.
 6. Add per-batch channel hash verification (CH1-CH4) to detect duplicate payloads before AI processing.
 7. If duplicate-channel artifact is detected, persist warning and skip automatic AI/RUL chain for that batch.
+
+## 7) Status update (2026-07-14)
+
+This section supersedes the missing-item status above where implementation has since progressed.
+
+### Roadmap status matrix
+
+| Item | Status | Notes |
+|---|---|---|
+| P0.1 Fix RUL training reliability bug | Done | `train_rul` now accepts both dict and list/tuple feature formats via `_to_rul_feature_vector`, reducing failure risk from feature structure mismatch. |
+| P0.2 Model quality gate before activation | Done | Activation path enforces `training_status='ready'` and minimum `evaluation_score` threshold before allowing `/models/{id}/activate`. |
+| P0.3 Download pipeline observability | Done | Collection health endpoint and job status tracking are available (`/collection/health`, `buffer_download_jobs`). |
+| P1.1 Full 4-buffer CM4810 acquisition | Partially done | Backend supports multi-buffer plan through `TRACE_BUFFER_PLAN_JSON` and persists per-buffer jobs. Full production value depends on configured PLC buffer map and downstream feature usage. |
+| P1.2 Robust buffer job tracking | Done | `buffer_download_jobs` table, status transitions, recent-jobs API, and duplicate-channel hash guard are implemented. |
+| P1.3 Threshold policy and operating modes | Done | `machine_alert_policy` with mode-specific thresholds, consecutive anomaly rule, and cooldown is implemented in DB and backend runtime. |
+| P2.1 Commissioning baseline workflow | Not started | No dedicated commissioning session model or technician baseline approval loop in current schema/API. |
+| P2.2 Human-in-the-loop feedback loop | Not started | No explicit anomaly/fault/RUL correction workflow connected to retraining labels. |
+| P2.3 Structured maintenance log linked to ML outcomes | In progress (partial) | Generic service notes exist, but no dedicated maintenance-event lifecycle linked to RUL reset logic. |
+| P3.1 Adaptive event-driven RUL scheduler | Not started | RUL inference exists; adaptive/event-driven scheduler policy is not implemented. |
+| P3.2 Profile versioning and richer templates | Not started | Basic machine/sensor metadata exists; profile versioning and rich templates are missing. |
+| P3.3 Drift monitoring and active learning dashboard | Not started | No implemented drift telemetry and active-learning recommendations dashboard. |
+
+### Addendum status correction (2026-07-10 -> 2026-07-14)
+
+The following addendum points are now implemented or partially implemented:
+
+- ModulePath write before PLC trigger: implemented in backend collection flow.
+- Explicit sensor binding fields: implemented partially via `sensors.module_path` and `sensors.channel_no`.
+- Per-batch duplicate hash verification and AI guard: implemented.
+
+Still open from addendum:
+
+- Dedicated `mount_group`/`mount_point` schema and first-class grouping model.
+- Full explicit card pool abstraction for shared-card multi-machine deployments.

@@ -42,7 +42,18 @@ Development entry points:
 
 ## Testing and Validation
 
-Current repository does not provide a consolidated automated test suite.
+Current repository includes backend pytest coverage for critical guards and model activation quality gate.
+
+Existing tests:
+- `backend/tests/test_model_activation_gate.py`
+- `backend/tests/test_phase1_guards.py`
+
+Run backend tests:
+
+```bash
+cd backend
+pytest -q
+```
 
 Recommended manual checks:
 - Login and token refresh flow

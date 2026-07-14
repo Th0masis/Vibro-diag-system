@@ -24,9 +24,12 @@ This folder contains implementation-aligned documentation for Vibro-diag System.
 - [Developer Guide](development/developer-guide.md)
 - [Operations Guide](operations/operations-guide.md)
 - [Operator Runbook](operations/operator-runbook.md)
-- [Phase 1 Buffer Ops Note](operations/phase1-buffer-ops.md)
 - [Security Audit Report (2026-07-11)](operations/SECURITY_AUDIT_REPORT_2026-07-11.md)
 
 ## Historical and Legacy Material
 
 Historical and superseded documents are stored under [archive](archive/).
+
+For roadmap status tracking (done / partial / not started), see:
+
+- [AI Research Implementation Summary + Status Update](archive/research/AI_RESEARCH_IMPLEMENTATION_SUMMARY_2026-07-06.md)

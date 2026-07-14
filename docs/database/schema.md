@@ -24,6 +24,15 @@ Schema bootstrap file: `init.sql`
   - `ftp_host`, `ftp_user`, `ftp_password`, `ftp_dir`
   - `is_active_collection`
 
+### machine_alert_policy
+- Purpose: per-machine runtime anomaly policy with operating modes and anti-spam controls
+- Key columns:
+  - `id_machine` PK/FK -> machines
+  - `operating_mode` (`startup`, `normal`, `overload`, `maintenance` expected by runtime)
+  - `anomaly_threshold_startup`, `anomaly_threshold_normal`, `anomaly_threshold_overload`, `anomaly_threshold_maintenance`
+  - `consecutive_anomaly_limit`
+  - `cooldown_minutes`
+
 ### sensors
 - Purpose: physical sensors with assignment to machine
 - Key columns:
@@ -32,6 +41,8 @@ Schema bootstrap file: `init.sql`
   - `status` enum: `available`, `maintenance`, `active`
   - `id_machine` FK -> machines
   - `position`, `sampling_rate`, `calibration_date`
+  - `module_path` (PLC module routing)
+  - `channel_no` (strict per-machine channel binding)
 
 ### measurements (hypertable)
 - Purpose: measurement-level records (raw path + extracted features)
@@ -78,6 +89,19 @@ Schema bootstrap file: `init.sql`
   - `severity` enum: `INFO`, `WARNING`, `CRITICAL`
   - `content`, `timestamp`
 
+### buffer_download_jobs
+- Purpose: buffer-collection queue and audit trail for multi-buffer CM4810 acquisition
+- Key columns:
+  - `id_job` PK
+  - `id_machine` FK -> machines
+  - `id_sensor` FK -> sensors (nullable)
+  - `work_id` (batch/job correlation)
+  - `buffer_type` (`raw`, `envelope`, `fft_raw`, `fft_envelope` by configuration)
+  - `channel`, `buffer_number`
+  - `status` (`queued`, `plc_done`, `downloaded`, `persisted`, `failed`)
+  - `csv_filename`, `remote_path`, `local_path`, `file_hash`, `error_detail`
+  - `created_at`, `updated_at`, `finished_at`
+
 ### iiot_buffer
 - Purpose: raw JSON staging from IIoT connector for trigger-based transformation into `feature_data`
 
@@ -106,17 +130,22 @@ Behavior:
 erDiagram
   USERS ||--o{ SERVICE_NOTES : writes
   MACHINES ||--o{ SENSORS : has
+  MACHINES ||--|| MACHINE_ALERT_POLICY : policy
   MACHINES ||--o{ FEATURE_DATA : produces
+  MACHINES ||--o{ BUFFER_DOWNLOAD_JOBS : collects
   MACHINES ||--o{ SERVICE_NOTES : has
   SENSORS ||--o{ MEASUREMENTS : records
   SENSORS ||--o{ FEATURE_DATA : streams
+  SENSORS ||--o{ BUFFER_DOWNLOAD_JOBS : source
   MEASUREMENTS ||--o{ ANALYSIS_RESULTS : analyzed_by
   ML_MODELS ||--o{ ANALYSIS_RESULTS : produced
 ```
 
 ## Indexes and Retention
 
-- Explicit custom indexes beyond primary keys are not defined in `init.sql`.
+- Explicit custom indexes are defined for `buffer_download_jobs`:
+  - `idx_buffer_download_jobs_machine_created`
+  - `idx_buffer_download_jobs_work_id`
 - Automatic retention/compression policies are not defined in `init.sql`.
 
 If long-term operation is required, add retention and index strategy as a future migration task.

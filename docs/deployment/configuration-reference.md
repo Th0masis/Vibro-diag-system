@@ -15,7 +15,10 @@ This reference is derived from `docker-compose.yml`, `backend/main.py`, `backend
 | `ML_SERVICE_URL` | No | `http://localhost:8001` | URL used by backend to call ML endpoints. | Restrict network path; internal only preferred. |
 | `BACKEND_URL` | No | `http://localhost:8000` | Used for internal webhook URL composition. | Internal routing only. |
 | `TRACE_BUFFER_CHANNEL_MAP` | No | `1:67,2:71,3:75,4:79` | Mapping of logical channel to PLC trace buffer number for raw acceleration. | Verify against PLC configuration. |
+| `TRACE_BUFFER_PLAN_JSON` | No | none | JSON map for multi-buffer collection plan (`raw`, `envelope`, `fft_raw`, `fft_envelope`) per channel. | Validate against PLC CM4810 buffer numbers before enabling in production. |
 | `TRACE_BUFFER_LENGTH` | No | `4097` | PLC trace buffer length used during collection. | Keep aligned with PLC and model input assumptions. |
+| `DUPLICATE_CHANNEL_POLICY` | No | `warn` | Duplicate raw payload guard policy: `warn` or `block` for automatic AI chain. | Use `block` in production to avoid contaminated AI/RUL runs. |
+| `DEFAULT_MODULE_PATH` | No | `IF3.ST1.IF1.ST2` | Fallback PLC module path when sensor-specific `module_path` is missing. | Prefer explicit per-sensor `module_path` in DB. |
 | `PYTHONUNBUFFERED` | No | `1` (in compose) | Disables output buffering for container logs. | Operational only. |
 
 ## ML Service Environment Variables
@@ -61,6 +64,8 @@ This reference is derived from `docker-compose.yml`, `backend/main.py`, `backend
 - Backend can call ML service via configured URL.
 - Database health check passes.
 - PLC settings per machine are valid (OPC UA URL, FTP host, credentials, directory).
+- If using multi-buffer collection, `TRACE_BUFFER_PLAN_JSON` matches real PLC buffers.
+- Duplicate-channel guard policy is explicitly set for target environment (`warn`/`block`).
 
 See also:
 
