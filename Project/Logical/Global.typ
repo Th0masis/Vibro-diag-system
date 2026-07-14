@@ -35,7 +35,7 @@ TYPE
 	BufferUploadCmd : 	STRUCT 
 		WorkID : STRING[80] := 'debug_123'; (* Unique job ID: "mach5_sens12_1234567890_raw" *)
 		ModulePath : STRING[30] := 'IF3.ST1.IF1.ST2'; (* "IF3.ST1.IF1.ST2" - X2X module path *)
-		BufferNumber : USINT := 66; (* Buffer to download: 9,11,13,15,25,27,29,31,66,67,70,71... *)
+		BufferNumber : USINT := 67; (* Raw acceleration buffers: 67,71,75,79 by channel 1..4 *)
 		BufferLength : UDINT := 4097; (* Number of values: 4097, 8193, or 65535 *)
 		Start : BOOL := 0; (* Edge trigger - set TRUE to start job *)
 		Reset : BOOL := 0; (* Edge trigger - set TRUE to reset after Done *)
