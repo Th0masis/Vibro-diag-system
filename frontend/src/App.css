@@ -532,6 +532,58 @@ button {
   border-color: #BFDBFE;
 }
 
+.diag-live-status {
+  margin-bottom: 1rem;
+  background: #F8FAFC;
+  border-color: #E2E8F0;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+}
+
+.diag-live-row {
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.diag-live-value {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #1F2937;
+  line-height: 1.2;
+  text-align: right;
+}
+
+.diag-live-sensor {
+  max-width: 62%;
+  overflow-wrap: anywhere;
+}
+
+.diag-live-progress-wrap {
+  margin-top: 0.75rem;
+}
+
+.diag-live-progress-track {
+  height: 8px;
+  border-radius: 999px;
+  background: #E2E8F0;
+  overflow: hidden;
+}
+
+.diag-live-progress-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--primary);
+  transition: width 0.2s ease;
+}
+
+.diag-live-progress-meta {
+  margin-top: 0.4rem;
+  display: flex;
+  justify-content: flex-start;
+  font-size: 0.8rem;
+  color: #64748B;
+  font-weight: 600;
+}
+
 .diag-result-row {
   display: flex;
   justify-content: space-between;
@@ -545,13 +597,14 @@ button {
 }
 
 .diag-result-value {
-  font-size: 1.25rem;
-  font-weight: 700;
+  font-size: 0.85rem;
+  font-weight: 500;
+  line-height: 1.2;
   color: var(--text-main);
 }
 
 .diag-result-value--large {
-  font-size: 1.05rem;
+  font-size: 0.95rem;
 }
 
 .diag-reset-btn {
@@ -663,6 +716,10 @@ button {
 
   .diag-card {
     min-height: 0;
+  }
+
+  .diag-live-sensor {
+    max-width: 58%;
   }
 }
 
@@ -2217,73 +2274,6 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   gap: 0.75rem;
 }
 
-.collection-health-chip {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  min-height: 34px;
-  padding: 0.45rem 0.7rem;
-  border-radius: 8px;
-  border: 1px solid #CBD5E1;
-  background: #F8FAFC;
-  color: #334155;
-  white-space: nowrap;
-}
-
-.collection-health-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #94A3B8;
-  flex-shrink: 0;
-}
-
-.collection-health-text {
-  font-size: 0.76rem;
-  font-weight: 600;
-  letter-spacing: 0.01em;
-}
-
-.collection-health-chip--ok {
-  border-color: #A7F3D0;
-  background: #ECFDF5;
-  color: #065F46;
-}
-
-.collection-health-chip--ok .collection-health-dot {
-  background: #10B981;
-}
-
-.collection-health-chip--warn {
-  border-color: #FDE68A;
-  background: #FFFBEB;
-  color: #92400E;
-}
-
-.collection-health-chip--warn .collection-health-dot {
-  background: #F59E0B;
-}
-
-.collection-health-chip--error {
-  border-color: #FECACA;
-  background: #FEF2F2;
-  color: #991B1B;
-}
-
-.collection-health-chip--error .collection-health-dot {
-  background: #EF4444;
-}
-
-.collection-health-chip--muted {
-  border-color: #CBD5E1;
-  background: #F8FAFC;
-  color: #475569;
-}
-
-.collection-health-chip--muted .collection-health-dot {
-  background: #94A3B8;
-}
-
 .status-stat {
   display: flex;
   align-items: center;
@@ -2322,6 +2312,27 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   color: #6B7280;
   font-weight: 500;
 }
+
+.status-stat--collection {
+  gap: 5px;
+}
+
+.status-stat-collection-value {
+  font-size: 0.72rem;
+  font-weight: 600;
+  color: #334155;
+  line-height: 1;
+}
+
+.status-stat-dot--collection-ok { background: #10B981; }
+.status-stat-dot--collection-warn { background: #F59E0B; }
+.status-stat-dot--collection-error { background: #EF4444; }
+.status-stat-dot--collection-muted { background: #94A3B8; }
+
+.status-stat--collection-ok .status-stat-collection-value { color: #047857; }
+.status-stat--collection-warn .status-stat-collection-value { color: #B45309; }
+.status-stat--collection-error .status-stat-collection-value { color: #B91C1C; }
+.status-stat--collection-muted .status-stat-collection-value { color: #475569; }
 
 /* Legacy chip classes — kept for compatibility */
 .dashboard-pro-chip { display: none; }
@@ -2640,6 +2651,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
     justify-content: space-between;
     flex-wrap: wrap;
   }
+
 
   .machine-card-pro-main {
     grid-template-rows: minmax(110px, 1fr) minmax(82px, auto);

@@ -1,39 +1,82 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import axios from 'axios';
 
 function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
-  // --- 0. STAV: RUČNÍ SBĚR + AUTO AI ---
   const [collectLoading, setCollectLoading] = useState(false);
   const [collectResult, setCollectResult] = useState(null);
+  const [collectionStatus, setCollectionStatus] = useState(null);
 
-  // --- 1. STAV: DETEKCE ANOMÁLIÍ (AE_ANOWGAN) ---
   const [anomalyLoading, setAnomalyLoading] = useState(false);
   const [anomalyResult, setAnomalyResult] = useState(null);
 
-  // --- 2. STAV: KLASIFIKACE PORUCH (1D_CNNwWGN) ---
   const [classLoading, setClassLoading] = useState(false);
   const [classResult, setClassResult] = useState(null);
 
-  // --- 3. STAV: PREDIKCE RUL (Bi-LSTM) ---
   const [rulLoading, setRulLoading] = useState(false);
   const [rulResult, setRulResult] = useState(null);
 
-  // Získání tokenu (podle toho, jak ho máš v aplikaci uložený)
-  const getAuthHeader = () => {
+  const getAuthConfig = () => {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
-    return token ? { Authorization: `Bearer ${token}` } : {};
+    return token ? { headers: { Authorization: `Bearer ${token}` } } : {};
   };
 
-  // --- FUNKCE PRO SPUŠTĚNÍ JEDNOTLIVÝCH MODELŮ ---
+  const fetchCollectionStatus = async () => {
+    try {
+      const res = await axios.get('/collection/health', getAuthConfig());
+      if (!res.data || !res.data.current_machine_id || Number(res.data.current_machine_id) === Number(machineId)) {
+        setCollectionStatus(res.data);
+      }
+    } catch (error) {
+      console.error('Failed to load collection status:', error);
+    }
+  };
+
+  useEffect(() => {
+    if (!collectLoading) return undefined;
+
+    let alive = true;
+
+    const pollStatus = async () => {
+      if (!alive) return;
+      await fetchCollectionStatus();
+    };
+
+    pollStatus();
+    const timer = setInterval(pollStatus, 800);
+
+    return () => {
+      alive = false;
+      clearInterval(timer);
+    };
+  }, [collectLoading, machineId]);
+
+  const currentPhaseRaw = String(collectionStatus?.current_phase || '').toLowerCase();
+  const currentProgress = Math.max(0, Math.min(100, collectionStatus?.current_progress_percent ?? 0));
+  const currentJobIndex = collectionStatus?.current_job_index ?? 0;
+  const currentTotal = collectionStatus?.current_total_jobs ?? 0;
+  const currentDownloaded = Math.max(0, currentPhaseRaw === 'completed' ? currentJobIndex : currentJobIndex - 1);
+  const currentSensorLabel = collectionStatus?.current_sensor_description
+    ? `#${collectionStatus.current_sensor_id} ${collectionStatus.current_sensor_description}`
+    : (collectionStatus?.current_sensor_id ? `#${collectionStatus.current_sensor_id}` : '—');
+  const currentBufferLabel = collectionStatus?.current_buffer_number ?? '—';
+  const phaseLabels = {
+    starting: 'Starting',
+    preparing: 'Preparing',
+    'waiting-plc': 'Waiting For PLC',
+    'downloading-buffer': 'Downloading Buffer',
+    completed: 'Completed',
+  };
+  const currentPhaseLabel = phaseLabels[currentPhaseRaw] || 'Idle';
 
   const runManualCollectAndAi = async () => {
     setCollectLoading(true);
     setCollectResult(null);
+    setCollectionStatus(null);
     try {
       const res = await axios.post(
         `/machines/${machineId}/collect-now?run_ai=true`,
         {},
-        { headers: getAuthHeader() }
+        getAuthConfig()
       );
       setCollectResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
@@ -51,7 +94,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       const res = await axios.post(
         `/machines/${machineId}/analyze-anomaly`,
         {}, 
-        { headers: getAuthHeader() }
+        getAuthConfig()
       );
       setAnomalyResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
@@ -69,7 +112,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       const res = await axios.post(
         `/machines/${machineId}/classify-fault`,
         {}, 
-        { headers: getAuthHeader() }
+        getAuthConfig()
       );
       setClassResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
@@ -87,9 +130,16 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       const res = await axios.post(
         `/machines/${machineId}/predict-rul`,
         {},
-        { headers: getAuthHeader() }
+        getAuthConfig()
       );
-      setRulResult(res.data);
+      if (res.data?.status === 'pending') {
+        setRulResult({
+          pending: true,
+          message: res.data.reason || 'RUL prediction is waiting for processed data.'
+        });
+      } else {
+        setRulResult(res.data);
+      }
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
       alert('RUL prediction failed: ' + (error.response?.data?.detail || error.message));
@@ -115,6 +165,35 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
           <span className="role-badge user diag-model-badge">PLC FTP + AI Chain</span>
         </div>
 
+        {collectLoading && !collectResult && (
+          <div className="diag-result diag-result--info diag-live-status">
+            <div className="diag-result-row diag-live-row">
+              <span className="diag-result-label">Phase</span>
+              <span className="diag-result-value diag-live-value">{currentPhaseLabel}</span>
+            </div>
+            <div className="diag-result-row diag-live-row">
+              <span className="diag-result-label">Sensor</span>
+              <span className="diag-result-value diag-live-value diag-live-sensor">{currentSensorLabel}</span>
+            </div>
+            <div className="diag-result-row diag-live-row">
+              <span className="diag-result-label">Buffer number</span>
+              <span className="diag-result-value diag-live-value">{currentBufferLabel}</span>
+            </div>
+            <div className="diag-result-row diag-live-row">
+              <span className="diag-result-label">Downloaded</span>
+              <span className="diag-result-value diag-live-value">{currentDownloaded}/{currentTotal || '—'}</span>
+            </div>
+            <div className="diag-live-progress-wrap">
+              <div className="diag-live-progress-track">
+                <div className="diag-live-progress-fill" style={{ width: `${currentProgress}%` }} />
+              </div>
+              <div className="diag-live-progress-meta">
+                <span>{currentProgress}%</span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {collectResult ? (
           <div className="diag-result diag-result--info">
             <div className="diag-result-row">
@@ -125,11 +204,32 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
               <span className="diag-result-label">Collection errors</span>
               <span className="diag-result-value">{collectResult.collection?.errors?.length ?? 0}</span>
             </div>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Collection warnings</span>
+              <span className="diag-result-value">{collectResult.collection?.warnings?.length ?? 0}</span>
+            </div>
+            <div className="diag-result-row">
+              <span className="diag-result-label">Duplicate policy</span>
+              <span className="diag-result-value">{collectResult.collection?.duplicate_policy || 'warn'}</span>
+            </div>
+            <div className="diag-result-row">
+              <span className="diag-result-label">AI guard</span>
+              <span className="diag-result-value">{collectResult.collection?.ai_guard || 'ok'}</span>
+            </div>
             {!!collectResult.collection?.errors?.length && (
               <div style={{ marginTop: '0.6rem', textAlign: 'left' }}>
                 {collectResult.collection.errors.map((err, idx) => (
                   <div key={`${idx}-${err}`} style={{ fontSize: '0.82rem', opacity: 0.9, marginBottom: '0.24rem' }}>
                     • {err}
+                  </div>
+                ))}
+              </div>
+            )}
+            {!!collectResult.collection?.warnings?.length && (
+              <div style={{ marginTop: '0.6rem', textAlign: 'left' }}>
+                {collectResult.collection.warnings.map((warn, idx) => (
+                  <div key={`${idx}-${warn}`} style={{ fontSize: '0.82rem', opacity: 0.9, marginBottom: '0.24rem' }}>
+                    • Warning: {warn}
                   </div>
                 ))}
               </div>
@@ -239,11 +339,18 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
 
         {rulResult ? (
           <div className="diag-result diag-result--info">
-            <div className="diag-rul-display">
-              <span className="diag-rul-label">Remaining Useful Life</span>
-              <span className="diag-rul-value">{rulResult.rul_value} <span className="diag-rul-unit">{rulResult.unit}</span></span>
-              <span className="diag-rul-model">Model: {rulResult.used_model}</span>
-            </div>
+            {rulResult.pending ? (
+              <div className="diag-rul-display">
+                <span className="diag-rul-label">Remaining Useful Life</span>
+                <span className="diag-rul-model">{rulResult.message}</span>
+              </div>
+            ) : (
+              <div className="diag-rul-display">
+                <span className="diag-rul-label">Remaining Useful Life</span>
+                <span className="diag-rul-value">{rulResult.rul_value} <span className="diag-rul-unit">{rulResult.unit}</span></span>
+                <span className="diag-rul-model">Model: {rulResult.used_model}</span>
+              </div>
+            )}
             <button onClick={() => setRulResult(null)} className="btn-cancel diag-reset-btn">
               Clear result
             </button>

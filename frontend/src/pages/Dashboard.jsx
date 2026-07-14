@@ -9,6 +9,25 @@ function normalizeMachinesPayload(payload) {
   return [];
 }
 
+function formatRelativeTime(iso) {
+  if (!iso) return null;
+
+  const ts = new Date(iso).getTime();
+  if (!Number.isFinite(ts)) return null;
+
+  const diffMs = Date.now() - ts;
+  const diffMin = Math.max(0, Math.floor(diffMs / 60000));
+
+  if (diffMin < 1) return 'just now';
+  if (diffMin < 60) return `${diffMin} min ago`;
+
+  const diffHr = Math.floor(diffMin / 60);
+  if (diffHr < 24) return `${diffHr} h ago`;
+
+  const diffDay = Math.floor(diffHr / 24);
+  return `${diffDay} d ago`;
+}
+
 function Dashboard({ token }) {
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -139,20 +158,27 @@ function Dashboard({ token }) {
   const isRecentSuccess = Boolean(lastSuccessTs) && (nowTs - lastSuccessTs <= 6 * 60 * 60 * 1000);
 
   let healthTone = 'muted';
-  let healthLabel = 'Collection: Waiting';
+  let healthLabel = 'Waiting';
+  let healthSubtext = 'Awaiting first successful run';
+
+  const relativeLastSuccess = formatRelativeTime(collectionHealth?.last_successful_collection_at);
 
   if (collectionHealth?.last_error) {
     healthTone = 'error';
-    healthLabel = 'Collection: Error';
+    healthLabel = 'Error';
+    healthSubtext = 'Collector error detected. Check backend logs.';
   } else if (collectionHealth?.scheduler_running === false) {
     healthTone = 'error';
-    healthLabel = 'Collection: Stopped';
+    healthLabel = 'Stopped';
+    healthSubtext = 'Scheduler is disabled.';
   } else if (collectionHealth?.scheduler_running && isRecentSuccess) {
     healthTone = 'ok';
-    healthLabel = 'Collection: Healthy';
+    healthLabel = 'Healthy';
+    healthSubtext = relativeLastSuccess ? `Last success ${relativeLastSuccess}` : 'Running on schedule.';
   } else if (collectionHealth?.scheduler_running) {
     healthTone = 'warn';
-    healthLabel = 'Collection: Delayed';
+    healthLabel = 'Stale';
+    healthSubtext = relativeLastSuccess ? `Last success ${relativeLastSuccess}` : 'No successful collection yet.';
   }
 
   const healthHint = collectionHealth?.last_successful_collection_at
@@ -190,11 +216,16 @@ function Dashboard({ token }) {
               <strong className="status-stat-count">{machines.length}</strong>
               <span className="status-stat-label">Total</span>
             </div>
-          </div>
-
-          <div className={`collection-health-chip collection-health-chip--${healthTone}`} role="status" aria-live="polite" title={collectionHealth?.last_error ? `${healthHint}. Error: ${collectionHealth.last_error}` : healthHint}>
-            <span className="collection-health-dot" aria-hidden="true"></span>
-            <span className="collection-health-text">{healthLabel}</span>
+            <span className="status-stat-divider" aria-hidden="true"></span>
+            <div
+              className={`status-stat status-stat--collection status-stat--collection-${healthTone}`}
+              aria-label={`Collection ${healthLabel}. ${healthSubtext}`}
+              title={collectionHealth?.last_error ? `${healthHint}. Error: ${collectionHealth.last_error}` : healthHint}
+            >
+              <span className={`status-stat-dot status-stat-dot--collection-${healthTone}`} aria-hidden="true"></span>
+              <span className="status-stat-label">Collection</span>
+              <strong className="status-stat-collection-value">{healthLabel}</strong>
+            </div>
           </div>
         </div>
       </div>

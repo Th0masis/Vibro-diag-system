@@ -3,6 +3,9 @@ import axios from 'axios';
 
 import ConfirmModal from '../components/ConfirmModal';
 
+const DEFAULT_MODULE_PATH = 'IF3.ST1.IF1.ST2';
+const CHANNEL_OPTIONS = [1, 2, 3, 4];
+
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
   if (Array.isArray(payload?.data)) return payload.data;
@@ -28,6 +31,8 @@ function Sensors() {
     sampling_rate: '',
     calibration_date: '',
     position: '',
+    module_path: DEFAULT_MODULE_PATH,
+    channel_no: '',
     status: 'available',
     id_machine: ''
   });
@@ -71,7 +76,7 @@ function Sensors() {
       setIsAddModalOpen(false);
       setNewSensor({ 
         serial_number: '', description: '', sampling_rate: '', 
-        calibration_date: '', position: '', status: 'available', id_machine: '' 
+        calibration_date: '', position: '', module_path: DEFAULT_MODULE_PATH, channel_no: '', status: 'available', id_machine: '' 
       });
       fetchData();
     } catch (error) {
@@ -112,9 +117,11 @@ function Sensors() {
     
     if (machineId) {
       updates.status = 'active'; // Připojuji ke stroji -> musí být aktivní
+      if (!currentState.module_path) updates.module_path = DEFAULT_MODULE_PATH;
     } else {
       updates.status = 'available'; // Odpojuji -> jde do skladu
       updates.position = '';
+      updates.channel_no = '';
     }
     setter({ ...currentState, ...updates });
   };
@@ -210,6 +217,8 @@ function Sensors() {
                         <>
                           <span className="machine-position-name">{getMachineName(selectedSensor.id_machine)}</span>
                           <span className="machine-position-muted">Position: {selectedSensor.position}</span>
+                          <span className="machine-position-muted">Channel: {selectedSensor.channel_no ?? '—'}</span>
+                          <span className="machine-position-muted">Module path: {selectedSensor.module_path || '—'}</span>
                         </>
                     ) : 'Warehouse (Unassigned)'}
                   </p>
@@ -247,6 +256,32 @@ function Sensors() {
                         </option>
                     ))}
                 </select>
+              </div>
+
+              <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                  <div className="form-group">
+                    <label>Channel selection</label>
+                    <select
+                        value={editingSensor.channel_no || ''}
+                        onChange={(e) => setEditingSensor({...editingSensor, channel_no: e.target.value})}
+                        disabled={!editingSensor.id_machine}
+                    >
+                        <option value="">-- Select channel --</option>
+                        {CHANNEL_OPTIONS.map((ch) => (
+                          <option key={ch} value={ch}>{ch}</option>
+                        ))}
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>Module path</label>
+                    <input
+                        type="text"
+                        value={editingSensor.module_path || ''}
+                        onChange={(e) => setEditingSensor({...editingSensor, module_path: e.target.value})}
+                        placeholder={DEFAULT_MODULE_PATH}
+                        disabled={!editingSensor.id_machine}
+                    />
+                  </div>
               </div>
 
               {/* Placement and status depend on assigned machine */}
@@ -322,16 +357,44 @@ function Sensors() {
               </div>
 
               {newSensor.id_machine && (
-                  <div className="form-group">
-                  <label>Machine position *</label>
-                    <input 
-                        type="text" 
-                    placeholder="e.g. Bearing 1" 
-                        value={newSensor.position}
-                        onChange={(e) => setNewSensor({...newSensor, position: e.target.value})}
-                        required
-                    />
-                  </div>
+                  <>
+                    <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
+                      <div className="form-group">
+                        <label>Channel selection *</label>
+                        <select
+                          value={newSensor.channel_no}
+                          onChange={(e) => setNewSensor({...newSensor, channel_no: e.target.value})}
+                          required
+                        >
+                          <option value="">-- Select channel --</option>
+                          {CHANNEL_OPTIONS.map((ch) => (
+                            <option key={ch} value={ch}>{ch}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="form-group">
+                        <label>Module path *</label>
+                        <input 
+                          type="text"
+                          placeholder={DEFAULT_MODULE_PATH}
+                          value={newSensor.module_path}
+                          onChange={(e) => setNewSensor({...newSensor, module_path: e.target.value})}
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div className="form-group">
+                      <label>Machine position *</label>
+                      <input 
+                          type="text" 
+                          placeholder="e.g. Bearing 1" 
+                          value={newSensor.position}
+                          onChange={(e) => setNewSensor({...newSensor, position: e.target.value})}
+                          required
+                      />
+                    </div>
+                  </>
               )}
 
               <div className="form-group">

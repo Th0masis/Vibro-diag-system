@@ -121,6 +121,8 @@ function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, on
               <div className="detail-item"><label>Sampling rate</label><p>{selectedSensor.sampling_rate ? `${selectedSensor.sampling_rate} Hz` : '-'}</p></div>
               <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
               <div className="detail-item"><label>Position</label><p>{selectedSensor.position || '-'}</p></div>
+              <div className="detail-item"><label>Channel</label><p>{selectedSensor.channel_no ?? '-'}</p></div>
+              <div className="detail-item"><label>Module path</label><p>{selectedSensor.module_path || '-'}</p></div>
               <div className="detail-item"><label>Sensor ID</label><p>#{selectedSensor.id_sensor}</p></div>
             </div>
           </div>
