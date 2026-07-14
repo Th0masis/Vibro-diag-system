@@ -12,8 +12,42 @@ const AiIcon = () => (
 function formatDate(ts) {
   if (!ts) return '';
   try {
-    return new Date(ts).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
+    const date = parseTimestamp(ts);
+    if (Number.isNaN(date.getTime())) return '';
+    return date.toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' });
   } catch { return ts; }
+}
+
+function parseTimestamp(ts) {
+  if (ts == null) return new Date(NaN);
+
+  if (ts instanceof Date) return ts;
+
+  if (typeof ts === 'number') {
+    const value = ts < 1e12 ? ts * 1000 : ts;
+    return new Date(value);
+  }
+
+  if (typeof ts === 'string') {
+    const trimmed = ts.trim();
+
+    // Backend format: dd.mm.yyyy HH:MM
+    const czechMatch = trimmed.match(/^(\d{2})\.(\d{2})\.(\d{4})(?:\s+(\d{2}):(\d{2}))?$/);
+    if (czechMatch) {
+      const [, dd, mm, yyyy, hh = '00', mi = '00'] = czechMatch;
+      return new Date(Number(yyyy), Number(mm) - 1, Number(dd), Number(hh), Number(mi));
+    }
+
+    if (/^\d+$/.test(trimmed)) {
+      const asNumber = Number(trimmed);
+      const value = trimmed.length <= 10 ? asNumber * 1000 : asNumber;
+      return new Date(value);
+    }
+
+    return new Date(trimmed);
+  }
+
+  return new Date(ts);
 }
 
 function AiStatusBanner({ machineId }) {
@@ -61,7 +95,16 @@ function AiStatusBanner({ machineId }) {
   const rulData = safeAiData.rul;
 
   const timestamps = [anomalyData?.timestamp, faultData?.timestamp, rulData?.timestamp].filter(Boolean);
-  const latestDate = timestamps.length > 0 ? [...timestamps].sort().reverse()[0] : null;
+  const latestDate = timestamps.length > 0
+    ? timestamps.reduce((latest, current) => {
+        if (!latest) return current;
+        const latestTime = parseTimestamp(latest).getTime();
+        const currentTime = parseTimestamp(current).getTime();
+        if (Number.isNaN(currentTime)) return latest;
+        if (Number.isNaN(latestTime)) return current;
+        return currentTime > latestTime ? current : latest;
+      }, null)
+    : null;
 
   const ANOMALY_THRESHOLD = 0.75;
   const anomalyScore = Number(anomalyData?.value);

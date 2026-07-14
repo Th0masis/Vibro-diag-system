@@ -3286,6 +3286,7 @@ a, button, [role="button"], input[type="checkbox"], input[type="radio"] {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
+  width: 100%;
   margin-bottom: 7px;
   padding-bottom: 6px;
   border-bottom: 1px solid rgba(0,0,0,0.06);
