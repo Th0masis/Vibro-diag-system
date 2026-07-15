@@ -33,3 +33,4 @@ Historical and superseded documents are stored under [archive](archive/).
 For roadmap status tracking (done / partial / not started), see:
 
 - [AI Research Implementation Summary + Status Update](archive/research/AI_RESEARCH_IMPLEMENTATION_SUMMARY_2026-07-06.md)
+- [Phase 1 Diagnostic Characteristic Values, Charts and Labels](archive/research/VIBRO_CHARACTERISTIC_VALUES_PHASE1_2026-07-14.md)
