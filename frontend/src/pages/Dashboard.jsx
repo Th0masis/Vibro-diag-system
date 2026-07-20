@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useNavigate } from 'react-router-dom';
 import MachineCard from '../components/MachineCard';
 
 function normalizeMachinesPayload(payload) {
@@ -29,6 +30,7 @@ function formatRelativeTime(iso) {
 }
 
 function Dashboard({ token }) {
+  const navigate = useNavigate();
   const [machines, setMachines] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -100,9 +102,18 @@ function Dashboard({ token }) {
   if (loading) {
     return (
       <div className="page-container">
-        <div className="loading-message">
-          <span className="loading-spinner" aria-hidden="true"></span>
-          <span>Loading machines…</span>
+        <div className="skeleton-grid" role="status" aria-label="Loading machines">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <div className="skeleton-card" key={i} aria-hidden="true">
+              <div className="skeleton-block skeleton-block--title" />
+              <div className="skeleton-block skeleton-block--subtitle" />
+              <div className="skeleton-block skeleton-block--banner" />
+              <div className="skeleton-block skeleton-block--graph" />
+              <div className="skeleton-block skeleton-block--note" />
+              <div className="skeleton-block skeleton-block--actions" />
+            </div>
+          ))}
+          <span className="sr-only">Loading machines…</span>
         </div>
       </div>
     );
@@ -135,6 +146,9 @@ function Dashboard({ token }) {
           <p className="empty-state-description">
             Add a machine to start collecting vibration data and running AI diagnostics.
           </p>
+          <button type="button" className="btn-diagnose empty-state-cta" onClick={() => navigate('/machines')}>
+            + Add machine
+          </button>
         </div>
       </div>
     );
@@ -196,19 +210,19 @@ function Dashboard({ token }) {
           <div className="dashboard-pro-summary" aria-live="polite" role="status" aria-label="Machine fleet status">
             <div className="status-stat">
               <span className="status-stat-dot status-stat-dot--ok" aria-hidden="true"></span>
-              <strong className="status-stat-count" style={summary.ok > 0 ? {color:'#059669'} : undefined}>{summary.ok}</strong>
+              <strong className={`status-stat-count${summary.ok > 0 ? ' status-stat-count--ok' : ''}`}>{summary.ok}</strong>
               <span className="status-stat-label">OK</span>
             </div>
             <span className="status-stat-divider" aria-hidden="true"></span>
             <div className="status-stat">
               <span className="status-stat-dot status-stat-dot--warning" aria-hidden="true"></span>
-              <strong className="status-stat-count" style={summary.warning > 0 ? {color:'#B45309'} : undefined}>{summary.warning}</strong>
+              <strong className={`status-stat-count${summary.warning > 0 ? ' status-stat-count--warning' : ''}`}>{summary.warning}</strong>
               <span className="status-stat-label">Warning</span>
             </div>
             <span className="status-stat-divider" aria-hidden="true"></span>
             <div className="status-stat">
               <span className="status-stat-dot status-stat-dot--fault" aria-hidden="true"></span>
-              <strong className="status-stat-count" style={summary.fault > 0 ? {color:'#DC2626'} : undefined}>{summary.fault}</strong>
+              <strong className={`status-stat-count${summary.fault > 0 ? ' status-stat-count--fault' : ''}`}>{summary.fault}</strong>
               <span className="status-stat-label">Fault</span>
             </div>
             <span className="status-stat-divider" aria-hidden="true"></span>

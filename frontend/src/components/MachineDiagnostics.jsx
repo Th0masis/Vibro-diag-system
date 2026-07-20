@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
+import { useToast } from './ToastProvider';
 
 function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
+  const toast = useToast();
   const [collectLoading, setCollectLoading] = useState(false);
   const [collectResult, setCollectResult] = useState(null);
   const [collectionStatus, setCollectionStatus] = useState(null);
@@ -81,7 +83,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setCollectResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert('Manual collection failed: ' + (error.response?.data?.detail || error.message));
+      toast.error('Manual collection failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setCollectLoading(false);
     }
@@ -99,7 +101,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setAnomalyResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert('Anomaly detection failed: ' + (error.response?.data?.detail || error.message));
+      toast.error('Anomaly detection failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setAnomalyLoading(false);
     }
@@ -117,7 +119,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       setClassResult(res.data);
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert('Fault classification failed: ' + (error.response?.data?.detail || error.message));
+      toast.error('Fault classification failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setClassLoading(false);
     }
@@ -142,7 +144,7 @@ function MachineDiagnostics({ machineId, onDiagnosisComplete }) {
       }
       if (onDiagnosisComplete) onDiagnosisComplete();
     } catch (error) {
-      alert('RUL prediction failed: ' + (error.response?.data?.detail || error.message));
+      toast.error('RUL prediction failed: ' + (error.response?.data?.detail || error.message));
     } finally {
       setRulLoading(false);
     }

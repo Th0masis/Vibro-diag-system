@@ -3,8 +3,10 @@ import axios from 'axios';
 import { 
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine 
 } from 'recharts';
+import { useToast } from './ToastProvider';
 
 function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = false }) {
+  const toast = useToast();
   // --- ZÁKLADNÍ STAVY ---
   const [loading, setLoading] = useState(true);
   const [details, setDetails] = useState(null); 
@@ -109,7 +111,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
       await fetchDetail(); 
       if (onProcessed) onProcessed(); 
     } catch (error) {
-      alert('Processing failed: ' + error.message);
+      toast.error('Processing failed: ' + error.message);
     } finally {
       setIsProcessing(false);
     }

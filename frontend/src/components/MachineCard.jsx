@@ -4,9 +4,11 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, YAxis, ResponsiveContainer } from 'recharts';
 // Importujeme nový pásek pro AI diagnostiku
 import AiStatusBanner from './AiStatusBanner'; // Ujisti se, že cesta odpovídá umístění souboru
+import { useToast } from './ToastProvider';
 
 function MachineCard({ machine }) {
   const navigate = useNavigate();
+  const toast = useToast();
   const [graphData, setGraphData] = useState([]);
   const [sensors, setSensors] = useState([]); 
   const [graphReady, setGraphReady] = useState(false);
@@ -169,7 +171,7 @@ function MachineCard({ machine }) {
                               if (source === 'raw_analysis') {
                                 goToMeasurementDetail(measId);
                               } else {
-                                alert("This point comes from IIoT Connector data and does not include a raw source file for detailed signal analysis.");
+                                toast.info("This point comes from IIoT Connector data and does not include a raw source file for detailed signal analysis.");
                               }
                             }
                           }

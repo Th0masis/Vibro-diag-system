@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 
-import ConfirmModal from '../components/ConfirmModal';
+import { useToast } from '../components/ToastProvider';
 
 const DEFAULT_MODULE_PATH = 'IF3.ST1.IF1.ST2';
 const CHANNEL_OPTIONS = [1, 2, 3, 4];
@@ -16,6 +16,7 @@ function normalizeListPayload(payload) {
 }
 
 function Sensors() {
+  const toast = useToast();
   const [sensors, setSensors] = useState([]);
   const [machines, setMachines] = useState([]); // NOVÉ: Seznam strojů pro dropdown
   const [loading, setLoading] = useState(true);
@@ -23,7 +24,6 @@ function Sensors() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [selectedSensor, setSelectedSensor] = useState(null);
   const [editingSensor, setEditingSensor] = useState(null);
-  const [sensorToDelete, setSensorToDelete] = useState(null);
 
   const [newSensor, setNewSensor] = useState({
     serial_number: '',
@@ -79,8 +79,9 @@ function Sensors() {
         calibration_date: '', position: '', module_path: DEFAULT_MODULE_PATH, channel_no: '', status: 'available', id_machine: '' 
       });
       fetchData();
+      toast.success('Sensor registered successfully.');
     } catch (error) {
-      alert('Failed to register sensor: ' + error.response?.data?.detail);
+      toast.error('Failed to register sensor: ' + error.response?.data?.detail);
     }
   };
 
@@ -95,18 +96,31 @@ function Sensors() {
       setEditingSensor(null);
       setSelectedSensor(null);
       fetchData();
+      toast.success('Sensor updated.');
     } catch (error) {
-      alert('Update failed.');
+      toast.error('Update failed.');
     }
   };
 
-  const confirmDelete = async () => {
+  const confirmDelete = async (sensor) => {
+    // Optimistic soft-delete: remove from the list immediately and offer Undo
+    // instead of an "Are you sure?" dialog (low-risk, reversible action).
+    setSensors((prev) => prev.filter((s) => s.id_sensor !== sensor.id_sensor));
+
     try {
-      await axios.delete(`/sensors/${sensorToDelete}`);
-      setSensorToDelete(null);
-      fetchData();
+      await axios.delete(`/sensors/${sensor.id_sensor}`);
+      toast.undo(`Sensor "${sensor.serial_number}" deleted.`, async () => {
+        try {
+          await axios.post(`/sensors/${sensor.id_sensor}/restore`);
+          fetchData();
+          toast.success('Sensor restored.');
+        } catch (error) {
+          toast.error('Failed to restore sensor.');
+        }
+      });
     } catch (error) {
-      alert('Delete failed.');
+      toast.error('Delete failed.');
+      fetchData();
     }
   };
 
@@ -178,7 +192,7 @@ function Sensors() {
                       </button>
                       <button
                         className="sensor-btn sensor-btn-delete"
-                        onClick={() => setSensorToDelete(s.id_sensor)}
+                        onClick={() => confirmDelete(s)}
                         title="Delete sensor"
                         aria-label="Delete sensor"
                       >
@@ -322,15 +336,6 @@ function Sensors() {
           </div>
         </div>
       )}
-
-      {/* MODAL: Smazání (zůstává stejný) */}
-      <ConfirmModal 
-        isOpen={!!sensorToDelete}
-        onClose={() => setSensorToDelete(null)}
-        onConfirm={confirmDelete}
-        title="Confirm sensor deletion"
-        message="Are you sure you want to permanently delete this sensor? This cannot be undone."
-      />
 
       {/* MODAL: REGISTER NEW SENSOR */}
       {isAddModalOpen && (

@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react';
 import axios from 'axios';
 import ConfirmModal from './ConfirmModal';
+import { useToast } from './ToastProvider';
 
 function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, onPreselectedSensorHandled }) {
+  const toast = useToast();
   // Stavy pro panely
   const [selectedSensor, setSelectedSensor] = useState(null); // Pro detail
   const [sensorToDetach, setSensorToDetach] = useState(null); // Pro odpojení
@@ -13,7 +15,7 @@ function MachineSensors({ sensors, machineId, onRefresh, preselectedSensorId, on
       await axios.post(`/machines/${machineId}/sensors/${sensorToDetach.id_sensor}/detach`);
       onRefresh(); // Aktualizuje data v rodiči (MachineDetail)
     } catch (error) {
-      alert('Failed to detach sensor. Please try again.');
+      toast.error('Failed to detach sensor. Please try again.');
     } finally {
       setSensorToDetach(null);
     }

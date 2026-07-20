@@ -19,6 +19,20 @@ const TabIcons = {
   settings:    (<svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/></svg>),
 };
 
+const TAB_ORDER = [
+  { key: 'graphs', label: 'Charts' },
+  { key: 'diagnostics', label: 'AI Analysis', priority: true },
+  { key: 'notes', label: 'Maintenance Log' },
+  { key: 'history', label: 'History' },
+  { key: 'sensors', label: 'Sensors' },
+  { key: 'settings', label: 'Settings' },
+];
+
+/* Mobile (≤639px) shows only the most-used tabs directly; the rest live behind
+   a "More" bottom sheet instead of reusing the shrunk-down desktop tab bar. */
+const MOBILE_PRIMARY_KEYS = ['graphs', 'diagnostics', 'history', 'sensors'];
+
+
 function MachineDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -28,6 +42,7 @@ function MachineDetail() {
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
   const [preselectedSensorId, setPreselectedSensorId] = useState(null);
+  const [moreMenuOpen, setMoreMenuOpen] = useState(false);
 
   const fetchDetail = async () => {
     try {
@@ -49,6 +64,36 @@ function MachineDetail() {
       setActiveTab(location.state.tab);
     }
   }, [location.state]);
+
+  const handleTabKeyDown = (event) => {
+    const currentIndex = TAB_ORDER.findIndex((t) => t.key === activeTab);
+    let nextIndex = null;
+
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % TAB_ORDER.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = TAB_ORDER.length - 1;
+    else return;
+
+    event.preventDefault();
+    const nextTab = TAB_ORDER[nextIndex].key;
+    setActiveTab(nextTab);
+    requestAnimationFrame(() => {
+      document.getElementById(`tab-btn-${nextTab}`)?.focus();
+    });
+  };
+
+  useEffect(() => {
+    if (!moreMenuOpen) return undefined;
+    const onKeyDown = (event) => {
+      if (event.key === 'Escape') setMoreMenuOpen(false);
+    };
+    document.addEventListener('keydown', onKeyDown);
+    return () => document.removeEventListener('keydown', onKeyDown);
+  }, [moreMenuOpen]);
+
+  const secondaryTabs = TAB_ORDER.filter((t) => !MOBILE_PRIMARY_KEYS.includes(t.key));
+  const isSecondaryTabActive = secondaryTabs.some((t) => t.key === activeTab);
 
   if (loading || !data) return <div className="page-container"><div className="loading-message"><span className="loading-spinner" aria-hidden="true"></span><span>Loading machine…</span></div></div>;
 
@@ -145,16 +190,68 @@ return (
 
       {/* 3. TABS (Záložky) */}
       <div className="tabs-container">
-        <div className="tabs-header">
-          <button className={`tab-btn ${activeTab === 'graphs' ? 'active' : ''}`} onClick={() => setActiveTab('graphs')}>{TabIcons.graphs} Charts</button>
-          <button className={`tab-btn tab-btn--priority ${activeTab === 'diagnostics' ? 'active' : ''}`} onClick={() => setActiveTab('diagnostics')}>{TabIcons.diagnostics} AI Analysis</button>
-          <button className={`tab-btn ${activeTab === 'notes' ? 'active' : ''}`} onClick={() => setActiveTab('notes')}>{TabIcons.notes} Maintenance Log</button>
-          <button className={`tab-btn ${activeTab === 'history' ? 'active' : ''}`} onClick={() => setActiveTab('history')}>{TabIcons.history} History</button>
-          <button className={`tab-btn ${activeTab === 'sensors' ? 'active' : ''}`} onClick={() => setActiveTab('sensors')}>{TabIcons.sensors} Sensors</button>
-          <button className={`tab-btn ${activeTab === 'settings' ? 'active' : ''}`} onClick={() => setActiveTab('settings')}>{TabIcons.settings} Settings</button>
+        <div className="tabs-header" role="tablist" aria-label="Machine detail sections" onKeyDown={handleTabKeyDown}>
+          {TAB_ORDER.map(({ key, label, priority }) => (
+            <button
+              key={key}
+              id={`tab-btn-${key}`}
+              role="tab"
+              type="button"
+              aria-selected={activeTab === key}
+              aria-controls={`tab-panel-${key}`}
+              tabIndex={activeTab === key ? 0 : -1}
+              className={`tab-btn ${MOBILE_PRIMARY_KEYS.includes(key) ? '' : 'tab-btn--secondary '}${priority ? 'tab-btn--priority ' : ''}${activeTab === key ? 'active' : ''}`}
+              onClick={() => setActiveTab(key)}
+            >
+              {TabIcons[key]} {label}
+            </button>
+          ))}
+          <button
+            type="button"
+            className={`tab-btn tab-btn--more ${isSecondaryTabActive ? 'active' : ''}`}
+            aria-haspopup="true"
+            aria-expanded={moreMenuOpen}
+            onClick={() => setMoreMenuOpen(true)}
+          >
+            <svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
+            More
+          </button>
         </div>
 
-        <div className="tab-content">
+        {moreMenuOpen && (
+          <div className="tab-sheet-backdrop" onClick={() => setMoreMenuOpen(false)}>
+            <div
+              className="tab-sheet"
+              role="menu"
+              aria-label="More sections"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="tab-sheet-handle" aria-hidden="true" />
+              {secondaryTabs.map(({ key, label }) => (
+                <button
+                  key={key}
+                  type="button"
+                  role="menuitem"
+                  className={`tab-sheet-item ${activeTab === key ? 'active' : ''}`}
+                  onClick={() => {
+                    setActiveTab(key);
+                    setMoreMenuOpen(false);
+                  }}
+                >
+                  {TabIcons[key]} {label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div
+          className="tab-content"
+          role="tabpanel"
+          id={`tab-panel-${activeTab}`}
+          aria-labelledby={`tab-btn-${activeTab}`}
+          key={activeTab}
+        >
           {activeTab === 'graphs' && (<MachineGraphs machineId={info.id_machine} />)}
           {activeTab === 'diagnostics' && (<MachineDiagnostics machineId={info.id_machine} onDiagnosisComplete={fetchDetail} />)}
           {activeTab === 'notes' && (<ServiceNotes machineId={info.id_machine} onNoteAdded={() => fetchDetail()}/>)}

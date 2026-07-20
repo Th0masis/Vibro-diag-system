@@ -1,8 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import ConfirmModal from './ConfirmModal';
+import { useToast } from './ToastProvider';
 
 function ServiceNotes({ machineId, onNoteAdded }) {
+  const toast = useToast();
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [newTitle, setNewTitle] = useState('');
@@ -10,8 +11,6 @@ function ServiceNotes({ machineId, onNoteAdded }) {
   const [severity, setSeverity] = useState("INFO");
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
-
-  const [noteToDelete, setNoteToDelete] = useState(null);
 
   const parseNoteContent = (content) => {
     const normalized = (content || '').replace(/\r\n/g, '\n').trim();
@@ -77,23 +76,33 @@ function ServiceNotes({ machineId, onNoteAdded }) {
       fetchNotes();
       if (onNoteAdded) onNoteAdded();
     } catch (err) {
-      alert('Failed to save note: ' + (err.response?.data?.detail || err.message));
+      toast.error('Failed to save note: ' + (err.response?.data?.detail || err.message));
     }
   };
 
-  const handleDeleteClick = (noteId) => {
-    setNoteToDelete(noteId);
-  };
+  const handleDeleteClick = async (noteId) => {
+    // Optimistic soft-delete: remove from the list immediately and offer Undo
+    // instead of an "Are you sure?" dialog (low-risk, reversible action).
+    const removedNote = notes.find((n) => n.id_note === noteId);
+    setNotes((prev) => prev.filter((n) => n.id_note !== noteId));
+    setSelectedNoteId((prev) => (prev === noteId ? null : prev));
 
-  const performDelete = async () => {
     try {
-      await axios.delete(`/machines/${machineId}/notes/${noteToDelete}`);
-      fetchNotes();
+      await axios.delete(`/machines/${machineId}/notes/${noteId}`);
       if (onNoteAdded) onNoteAdded();
+      toast.undo('Maintenance record deleted.', async () => {
+        try {
+          await axios.post(`/machines/${machineId}/notes/${noteId}/restore`);
+          fetchNotes();
+          if (onNoteAdded) onNoteAdded();
+          toast.success('Record restored.');
+        } catch (error) {
+          toast.error('Failed to restore record.');
+        }
+      });
     } catch (error) {
-      alert('Failed to delete note.');
-    } finally {
-      setNoteToDelete(null);
+      toast.error('Failed to delete note.');
+      if (removedNote) fetchNotes();
     }
   };
 
@@ -262,14 +271,6 @@ function ServiceNotes({ machineId, onNoteAdded }) {
         </div>
       )}
 
-      <ConfirmModal 
-        isOpen={!!noteToDelete}
-        onClose={() => setNoteToDelete(null)}
-        onConfirm={performDelete}
-        title="Delete note"
-        message="Are you sure you want to permanently delete this maintenance record? This cannot be undone."
-        confirmText="Delete record"
-      />
     </div>
   );
 }

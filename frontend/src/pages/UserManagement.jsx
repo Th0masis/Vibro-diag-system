@@ -3,6 +3,7 @@ import axios from 'axios';
 import { jwtDecode } from 'jwt-decode';
 
 import ConfirmModal from '../components/ConfirmModal';
+import { useToast } from '../components/ToastProvider';
 
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -13,6 +14,7 @@ function normalizeListPayload(payload) {
 }
 
 function UserManagement() {
+  const toast = useToast();
   const [users, setUsers] = useState([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -53,8 +55,9 @@ function UserManagement() {
       // Po úspěšném smazání aktualizujeme seznam uživatelů
       setUsers(users.filter(u => u.id_user !== userToDelete));
       setUserToDelete(null); // Zavřít okno
+      toast.success('User deleted.');
     } catch (error) {
-      alert('Failed to delete user: ' + error.response?.data?.detail);
+      toast.error('Failed to delete user: ' + error.response?.data?.detail);
       setUserToDelete(null);
     }
   };
@@ -66,8 +69,9 @@ function UserManagement() {
       setIsAddModalOpen(false);
       setNewUser({ username: '', password: '', email: '', role: 'user' }); // Reset
       fetchUsers(); // Znovu načíst tabulku
+      toast.success('User created.');
     } catch (error) {
-      alert('Error: ' + error.response?.data?.detail);
+      toast.error('Error: ' + error.response?.data?.detail);
     }
   };
 
@@ -91,8 +95,9 @@ function UserManagement() {
       await axios.put(`/users/${editingUser.id_user}`, payload);
       setEditingUser(null);
       fetchUsers();
+      toast.success('User updated.');
     } catch (error) {
-      alert('Update failed: ' + error.response?.data?.detail);
+      toast.error('Update failed: ' + error.response?.data?.detail);
     }
   };
 

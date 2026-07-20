@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import ModelTrainingModal from '../components/ModelTrainingModal';
+import ConfirmModal from '../components/ConfirmModal';
+import { useToast } from '../components/ToastProvider';
 
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -11,10 +13,12 @@ function normalizeListPayload(payload) {
 }
 
 function MlSector() {
+  const toast = useToast();
   const [models, setModels] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedModel, setSelectedModel] = useState(null);
+  const [modelPendingActivation, setModelPendingActivation] = useState(null);
   
   // Stav pro otevírání nového tréninkového wizardu
   const [isTrainingModalOpen, setIsTrainingModalOpen] = useState(false);
@@ -62,19 +66,23 @@ function MlSector() {
   }, []);
 
   // Funkce pro nasazení modelu do produkce
-  const handleActivateModel = async (id_model) => {
-    if (!window.confirm("Are you sure you want to deploy this model version to production? This will replace the currently running model.")) {
-      return;
-    }
-    
+  const handleActivateModel = (id_model) => {
+    setModelPendingActivation(id_model);
+  };
+
+  const confirmActivateModel = async () => {
+    const id_model = modelPendingActivation;
+    setModelPendingActivation(null);
+    if (!id_model) return;
+
     try {
       await axios.put(`/models/${id_model}/activate`, {}, getAuthHeader());
-      
-      alert("Model activated successfully and is now in production.");
+
+      toast.success("Model activated successfully and is now in production.");
       await fetchModels(); // Ihned po aktivaci stáhneme čerstvá data
     } catch (err) {
       console.error('Failed to activate model:', err);
-      alert("Failed to activate model. Check backend connection.");
+      toast.error("Failed to activate model. Check backend connection.");
     }
   };
   
@@ -276,6 +284,15 @@ function MlSector() {
           }} 
         />
       )}
+
+      <ConfirmModal
+        isOpen={Boolean(modelPendingActivation)}
+        onClose={() => setModelPendingActivation(null)}
+        onConfirm={confirmActivateModel}
+        title="Deploy model to production?"
+        message={`This will replace the currently running production model with "${models.find(m => m.id_model === modelPendingActivation)?.name || 'this model'} v${models.find(m => m.id_model === modelPendingActivation)?.version || ''}". The previous model will stop receiving traffic immediately.`}
+        confirmText="Deploy"
+      />
 
     </div>
   );

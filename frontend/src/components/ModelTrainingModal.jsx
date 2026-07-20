@@ -1,7 +1,9 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useToast } from './ToastProvider';
 
 function ModelTrainingModal({ model, onClose }) {
+  const toast = useToast();
   const [step, setStep] = useState(1);
   const [trainingPhase, setTrainingPhase] = useState('');
 
@@ -72,7 +74,7 @@ function ModelTrainingModal({ model, onClose }) {
       setSearchResults(response.data);
     } catch (error) {
       console.error('Segment search failed:', error);
-      alert('Failed to find data segments.');
+      toast.error('Failed to find data segments.');
     } finally {
       setIsSearching(false);
     }
@@ -86,12 +88,12 @@ function ModelTrainingModal({ model, onClose }) {
 
   const startTraining = async () => {
     if (selectedSegments.length === 0) {
-      alert('Select at least one data segment before training.');
+      toast.warning('Select at least one data segment before training.');
       return;
     }
 
     if (isRUL && (!rulDates.installation || !rulDates.replacement)) {
-      alert('RUL training requires both installation and replacement dates.');
+      toast.warning('RUL training requires both installation and replacement dates.');
       return;
     }
 
@@ -122,7 +124,7 @@ function ModelTrainingModal({ model, onClose }) {
       setStep(3);
     } catch (error) {
       console.error('Training start failed:', error);
-      alert("Error: " + (error.response?.data?.detail || error.message));
+      toast.error("Error: " + (error.response?.data?.detail || error.message));
       setStep(1);
     }
   };

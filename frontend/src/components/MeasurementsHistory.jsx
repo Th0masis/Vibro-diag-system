@@ -1,8 +1,10 @@
 import { useState, useEffect, useMemo } from 'react';
 import axios from 'axios';
 import MeasurementDetailModal from './MeasurementDetailModal'; 
+import { useToast } from './ToastProvider';
 
 function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null }) {
+  const toast = useToast();
   const [data, setData] = useState([]);
   const [loading, setLoading] = useState(true);
   
@@ -111,7 +113,7 @@ function MeasurementsHistory({ machineId, initialSelectedMeasurementId = null })
       await axios.post(`/measurements/${id}/process`, {}, getAuthHeader());
       await fetchData(); 
     } catch (error) {
-      alert('Processing failed: ' + error.message);
+      toast.error('Processing failed: ' + error.message);
     } finally {
       setProcessingId(null);
     }

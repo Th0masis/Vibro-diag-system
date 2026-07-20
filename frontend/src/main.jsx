@@ -1,6 +1,7 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import App from './App.jsx'
+import { ToastProvider } from './components/ToastProvider.jsx'
 import axios from 'axios'
 
 import '@fontsource/inter/400.css'
@@ -15,6 +16,8 @@ axios.defaults.baseURL = import.meta.env.VITE_API_URL || '/api';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <App />
+    <ToastProvider>
+      <App />
+    </ToastProvider>
   </StrictMode>,
 )

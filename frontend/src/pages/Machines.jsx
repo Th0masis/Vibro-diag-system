@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
+import { useToast } from '../components/ToastProvider';
 
 function normalizeListPayload(payload) {
     if (Array.isArray(payload)) return payload;
@@ -11,6 +12,7 @@ function normalizeListPayload(payload) {
 }
 
 function Machines() {
+    const toast = useToast();
     // Variables
     const [machines, setMachines] = useState([]);
     const [loading, setLoading] = useState(true);
@@ -61,8 +63,9 @@ function Machines() {
             
             // Obnovení seznamu
             fetchMachines();
+            toast.success('Machine added successfully.');
         } catch (error) {
-            alert('Failed to add machine: ' + (error.response?.data?.detail || error.message));
+            toast.error('Failed to add machine: ' + (error.response?.data?.detail || error.message));
         }
     };
 
