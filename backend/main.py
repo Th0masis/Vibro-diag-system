@@ -8,6 +8,7 @@ import requests
 import uvicorn
 import aioftp
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Dict, Any
 from contextlib import asynccontextmanager
@@ -19,6 +20,7 @@ from fastapi.security import OAuth2PasswordRequestForm, OAuth2PasswordBearer
 from jose import JWTError, jwt
 from pydantic import BaseModel
 from sqlalchemy import create_engine, text
+from sqlalchemy.exc import IntegrityError
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from asyncua import Client, ua
 from ftplib import FTP, FTP_TLS, error_perm
@@ -77,6 +79,72 @@ def translate_path_for_ml(path: str) -> str:
         return f"/app/backend_data/{normalized[len('/app/data/'):] }"
 
     return path
+
+
+def post_ml_service(endpoint: str, payload: Optional[Dict[str, Any]] = None, timeout: int = 120):
+    """
+    Call ML service with a local fallback for host-based runs.
+    Docker setup uses http://ml_service:8001, while local runs often need http://localhost:8001.
+    """
+    endpoint = endpoint if endpoint.startswith("/") else f"/{endpoint}"
+    primary_base = (ML_SERVICE_URL or "http://localhost:8001").rstrip("/")
+
+    candidate_urls = [f"{primary_base}{endpoint}"]
+    if "ml_service" in primary_base and not primary_base.startswith("http://localhost"):
+        candidate_urls.append(f"http://localhost:8001{endpoint}")
+
+    last_error = None
+    for url in candidate_urls:
+        try:
+            return requests.post(url, json=payload, timeout=timeout)
+        except requests.exceptions.RequestException as exc:
+            last_error = exc
+
+    if last_error:
+        raise last_error
+
+    raise HTTPException(status_code=500, detail="ML service request failed")
+
+
+def resolve_backend_csv_path(path: str) -> str:
+    if not path:
+        return path
+
+    normalized = str(path).replace('\\', '/')
+    backend_root = os.path.dirname(os.path.abspath(__file__))
+
+    if normalized.startswith('./'):
+        return os.path.join(backend_root, normalized[2:])
+    if normalized.startswith('data/'):
+        return os.path.join(backend_root, normalized)
+
+    return path
+
+
+def read_signal_from_csv(path: str) -> np.ndarray:
+    csv_path = resolve_backend_csv_path(path)
+    df = pd.read_csv(csv_path)
+
+    if 'yAxis' in df.columns:
+        source_col = 'yAxis'
+    else:
+        numeric_cols = list(df.select_dtypes(include=['number']).columns)
+        preferred_cols = ['value', 'signal', 'amplitude', 'vibration']
+        source_col = None
+
+        for col in preferred_cols:
+            if col in numeric_cols:
+                source_col = col
+                break
+
+        if not source_col:
+            source_col = numeric_cols[-1] if numeric_cols else df.columns[-1]
+
+    signal = pd.to_numeric(df[source_col], errors='coerce').dropna().to_numpy(dtype=float)
+    if signal.size == 0:
+        raise ValueError(f"CSV signal is empty: {csv_path}")
+
+    return signal
 
 
 logger = logging.getLogger("vibrodiag.backend")
@@ -857,10 +925,12 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
         raise HTTPException(status_code=403, detail="Pouze administrátor může registrovat senzory")
     
     status = sensor_data.get('status', 'available')
-    machine_id = sensor_data.get('id_machine')
+    machine_id = _normalize_machine_id(sensor_data.get('id_machine'))
     position = sensor_data.get('position')
     module_path = _normalize_module_path(sensor_data.get('module_path')) or DEFAULT_MODULE_PATH
     channel_no = _normalize_channel_no(sensor_data.get('channel_no'))
+    sampling_rate = _normalize_optional_int(sensor_data.get('sampling_rate'))
+    calibration_date = _normalize_optional_date(sensor_data.get('calibration_date'))
 
     if machine_id and status == 'available':
         status = 'active'
@@ -872,14 +942,14 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
         raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je module_path povinné.")
 
     with engine.connect() as conn:
-        if machine_id and channel_no is not None:
+        if channel_no is not None:
             dup = conn.execute(text("""
                 SELECT 1 FROM sensors
-                WHERE id_machine = :mid AND channel_no = :ch AND deleted_at IS NULL
+                WHERE module_path = :mp AND channel_no = :ch AND deleted_at IS NULL
                 LIMIT 1
-            """), {"mid": machine_id, "ch": channel_no}).fetchone()
+            """), {"mp": module_path, "ch": channel_no}).fetchone()
             if dup:
-                raise HTTPException(status_code=400, detail="Pro tento stroj už existuje senzor pro zvolený channel_no.")
+                raise HTTPException(status_code=400, detail="Senzor s tímto module_path + channel_no již existuje v systému.")
 
         query = text("""
             INSERT INTO sensors (serial_number, description, sampling_rate, calibration_date, status, id_machine, position, module_path, channel_no)
@@ -889,8 +959,8 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
             conn.execute(query, {
                 "sn": sensor_data['serial_number'],
                 "desc": sensor_data['description'],
-                "rate": sensor_data.get('sampling_rate'),
-                "cal": sensor_data.get('calibration_date'),
+                "rate": sampling_rate,
+                "cal": calibration_date,
                 "status": status,
                 "mid": machine_id,
                 "pos": position,
@@ -898,6 +968,11 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
                 "channel_no": channel_no
             })
             conn.commit()
+        except IntegrityError as e:
+            msg = str(getattr(e, 'orig', e))
+            if "idx_sensors_machine_module_channel_unique" in msg or "(id_machine, module_path, channel_no)" in msg:
+                raise HTTPException(status_code=400, detail="Kombinace module_path + channel už na tomto stroji existuje.")
+            raise HTTPException(status_code=400, detail="Nelze uložit senzor kvůli konfliktu dat.")
         except Exception as e:
             raise HTTPException(status_code=400, detail=str(e))
             
@@ -913,10 +988,12 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
         raise HTTPException(status_code=403, detail="Pouze administrátor může upravovat senzory")
 
     new_status = updated_data.get('status')
-    machine_id = updated_data.get('id_machine')
+    machine_id = _normalize_machine_id(updated_data.get('id_machine'))
     position = updated_data.get('position')
     module_path = _normalize_module_path(updated_data.get('module_path'))
     channel_no = _normalize_channel_no(updated_data.get('channel_no'))
+    sampling_rate = _normalize_optional_int(updated_data.get('sampling_rate'))
+    calibration_date = _normalize_optional_date(updated_data.get('calibration_date'))
 
     if new_status in ['available', 'maintenance']:
         machine_id = None
@@ -930,14 +1007,14 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
         raise HTTPException(status_code=400, detail="Při přiřazení ke stroji je module_path povinné.")
 
     with engine.connect() as conn:
-        if machine_id and channel_no is not None:
+        if channel_no is not None:
             dup = conn.execute(text("""
                 SELECT 1 FROM sensors
-                WHERE id_machine = :mid AND channel_no = :ch AND id_sensor <> :sid AND deleted_at IS NULL
+                WHERE module_path = :mp AND channel_no = :ch AND id_sensor <> :sid AND deleted_at IS NULL
                 LIMIT 1
-            """), {"mid": machine_id, "ch": channel_no, "sid": sensor_id}).fetchone()
+            """), {"mp": module_path, "ch": channel_no, "sid": sensor_id}).fetchone()
             if dup:
-                raise HTTPException(status_code=400, detail="Pro tento stroj už existuje senzor pro zvolený channel_no.")
+                raise HTTPException(status_code=400, detail="Senzor s tímto module_path + channel_no již existuje v systému.")
 
         query = text("""
             UPDATE sensors 
@@ -951,19 +1028,25 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
                 channel_no = :channel_no
             WHERE id_sensor = :sid
         """)
-        result = conn.execute(query, {
-            "desc": updated_data['description'],
-            "status": new_status,
-            "machine_id": machine_id,
-            "position": position,
-            "pos": position,      
-            "rate": updated_data.get('sampling_rate'),
-            "cal": updated_data.get('calibration_date'),
-            "module_path": module_path,
-            "channel_no": channel_no,
-            "sid": sensor_id
-        })
-        conn.commit()
+        try:
+            result = conn.execute(query, {
+                "desc": updated_data['description'],
+                "status": new_status,
+                "machine_id": machine_id,
+                "position": position,
+                "pos": position,      
+                "rate": sampling_rate,
+                "cal": calibration_date,
+                "module_path": module_path,
+                "channel_no": channel_no,
+                "sid": sensor_id
+            })
+            conn.commit()
+        except IntegrityError as e:
+            msg = str(getattr(e, 'orig', e))
+            if "idx_sensors_machine_module_channel_unique" in msg or "(id_machine, module_path, channel_no)" in msg:
+                raise HTTPException(status_code=400, detail="Kombinace module_path + channel už na tomto stroji existuje.")
+            raise HTTPException(status_code=400, detail="Nelze uložit změny senzoru kvůli konfliktu dat.")
         
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Senzor nenalezen")
@@ -1024,6 +1107,33 @@ def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_sc
     Montáž a logické přiřazení senzoru ke konkrétnímu stroji na specifikovanou pozici.
     """
     with engine.connect() as conn:
+        # Get the sensor's current module_path and channel_no
+        sensor = conn.execute(text("""
+            SELECT module_path, channel_no FROM sensors
+            WHERE id_sensor = :sid AND deleted_at IS NULL
+        """), {"sid": payload['sensor_id']}).fetchone()
+        
+        if not sensor:
+            raise HTTPException(status_code=404, detail="Senzor nebyl nalezen")
+        
+        module_path, channel_no = sensor
+        
+        # Check if another active sensor already exists globally with the same module_path + channel_no
+        if channel_no is not None:
+            dup = conn.execute(text("""
+                SELECT 1 FROM sensors
+                WHERE module_path = :mp AND channel_no = :ch 
+                  AND id_sensor != :sid AND deleted_at IS NULL
+                LIMIT 1
+            """), {
+                "mp": module_path, 
+                "ch": channel_no,
+                "sid": payload['sensor_id']
+            }).fetchone()
+            
+            if dup:
+                raise HTTPException(status_code=400, detail="Senzor s tímto module_path + channel_no již existuje v systému.")
+        
         query = text("""
             UPDATE sensors 
             SET id_machine = :mid, 
@@ -1668,7 +1778,7 @@ def process_measurement_data(id_measurement: int, role: str = Depends(get_curren
         
         # 2. Volání ML Service pro vyčištění souboru a výpočet (zůstává strukturálně stejné)
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/process-features", json={"path": ml_path})
+            ml_res = post_ml_service("/process-features", {"path": ml_path})
             if ml_res.status_code != 200:
                 raise HTTPException(status_code=500, detail=f"ML Service selhala při výpočtu: {ml_res.text}")
             
@@ -1722,18 +1832,21 @@ def proxy_raw_data(id_measurement: int):
         
         try:
             # Zavoláme ML službu o surová data pro graf
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-raw-data", json={"path": ml_path, "step": 16})
+            ml_res = post_ml_service("/get-raw-data", {"path": ml_path, "step": 16})
             
             # Kontrola, zda ML služba nevrátila chybu (jinak by spadl .json() parser)
             if ml_res.status_code != 200:
-                print(f"Chyba z ML Service: {ml_res.text}")
-                raise HTTPException(status_code=500, detail="ML Service nedokázala načíst data")
+                raise ValueError(f"ML service returned {ml_res.status_code}: {ml_res.text}")
                 
             return ml_res.json()
             
-        except requests.exceptions.RequestException as e:
-            print(f"Selhalo spojení s ML Service: {e}")
-            raise HTTPException(status_code=500, detail="Nelze se spojit s ML Service")
+        except Exception as e:
+            logger.warning(f"ML raw endpoint unavailable, using local CSV fallback: {e}")
+            try:
+                signal = read_signal_from_csv(path)
+                return {"signal": signal[::16].tolist()}
+            except Exception as fallback_error:
+                raise HTTPException(status_code=500, detail=f"Raw data unavailable: {fallback_error}")
 
 @app.get("/measurements/{id_measurement}/features")
 def get_measurement_features(id_measurement: int):
@@ -1755,12 +1868,32 @@ def proxy_fft_data(id_measurement: int):
             raise HTTPException(status_code=404, detail="Cesta nenalezena")
             
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-fft", json={"path": translate_path_for_ml(res[0])})
+            ml_res = post_ml_service("/get-fft", {"path": translate_path_for_ml(res[0])})
             if ml_res.status_code != 200:
-                raise HTTPException(status_code=500, detail="Chyba výpočtu FFT v ML službě")
+                raise ValueError(f"ML service returned {ml_res.status_code}: {ml_res.text}")
             return ml_res.json()
         except Exception as e:
-            raise HTTPException(status_code=500, detail=str(e))
+            logger.warning(f"ML FFT endpoint unavailable, using local FFT fallback: {e}")
+            try:
+                signal = read_signal_from_csv(res[0])
+                fs = 12800
+                n = len(signal)
+                if n == 0:
+                    return {"frequencies": [], "amplitudes": []}
+
+                fft_result = np.fft.fft(signal)
+                freqs = np.fft.fftfreq(n, d=1 / fs)
+                half_n = n // 2
+                pos_freqs = freqs[:half_n]
+                pos_amps = (2.0 / n) * np.abs(fft_result[:half_n])
+                step = 2
+
+                return {
+                    "frequencies": pos_freqs[::step].tolist(),
+                    "amplitudes": pos_amps[::step].tolist(),
+                }
+            except Exception as fallback_error:
+                raise HTTPException(status_code=500, detail=f"FFT unavailable: {fallback_error}")
         
 @app.get("/measurements/{id_measurement}/cwt")
 def proxy_cwt_data(id_measurement: int):
@@ -1770,7 +1903,7 @@ def proxy_cwt_data(id_measurement: int):
             raise HTTPException(status_code=404, detail="Cesta nenalezena")
             
         try:
-            ml_res = requests.post(f"{ML_SERVICE_URL}/get-cwt", json={"path": translate_path_for_ml(res[0])})
+            ml_res = post_ml_service("/get-cwt", {"path": translate_path_for_ml(res[0])})
             if ml_res.status_code != 200:
                 raise HTTPException(status_code=500, detail="Chyba výpočtu CWT v ML službě")
             return ml_res.json()
@@ -2439,6 +2572,35 @@ def _normalize_module_path(value) -> Optional[str]:
     if value in [None, ""]:
         return None
     return str(value).strip() or None
+
+
+def _normalize_machine_id(value) -> Optional[int]:
+    if value in [None, "", "null"]:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        return None
+
+
+def _normalize_optional_int(value) -> Optional[int]:
+    if value in [None, "", "null"]:
+        return None
+    try:
+        return int(value)
+    except Exception:
+        raise HTTPException(status_code=400, detail="sampling_rate musí být celé číslo nebo prázdné.")
+
+
+def _normalize_optional_date(value):
+    if value in [None, "", "null"]:
+        return None
+    if isinstance(value, datetime):
+        return value.date()
+    try:
+        return datetime.strptime(str(value), "%Y-%m-%d").date()
+    except Exception:
+        raise HTTPException(status_code=400, detail="calibration_date musí být ve formátu YYYY-MM-DD nebo prázdné.")
 
 
 def _resolve_bound_sensor(conn, machine_id: int, channel_no: int):

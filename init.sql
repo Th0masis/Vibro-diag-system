@@ -74,9 +74,12 @@ CREATE TABLE sensors (
     sampling_rate double precision,
     calibration_date date,
     created_at timestamp with time zone DEFAULT now(),
-    deleted_at timestamp with time zone,
-    UNIQUE (id_machine, channel_no)
+    deleted_at timestamp with time zone
 );
+
+CREATE UNIQUE INDEX idx_sensors_machine_module_channel_unique
+ON sensors (id_machine, module_path, channel_no)
+WHERE deleted_at IS NULL AND id_machine IS NOT NULL AND channel_no IS NOT NULL;
 
 -- PŘESTUPNÍ TABULKA PRO B&R IIoT CONNECTOR
 CREATE TABLE iiot_buffer (
