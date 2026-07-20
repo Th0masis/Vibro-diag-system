@@ -4,6 +4,7 @@ import { jwtDecode } from 'jwt-decode';
 
 import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../components/ToastProvider';
+import PageTitle from '../components/PageTitle';
 
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -27,6 +28,108 @@ function UserManagement() {
     role: 'user' // defaultní role
   });
   const [editingUser, setEditingUser] = useState(null);
+  const [addTouched, setAddTouched] = useState({});
+  const [addErrors, setAddErrors] = useState({});
+  const [addLiveValidation, setAddLiveValidation] = useState({});
+  const [editTouched, setEditTouched] = useState({});
+  const [editErrors, setEditErrors] = useState({});
+  const [editLiveValidation, setEditLiveValidation] = useState({});
+
+  const isValidEmail = (value) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(value || '').trim());
+
+  const validateAddField = (field, value) => {
+    const v = String(value || '').trim();
+    if (field === 'username') {
+      if (!v) return 'Username is required.';
+      if (v.length < 3) return 'Username must have at least 3 characters.';
+      return '';
+    }
+    if (field === 'email') {
+      if (!v) return 'E-mail is required.';
+      if (!isValidEmail(v)) return 'Please enter a valid e-mail address.';
+      return '';
+    }
+    if (field === 'password') {
+      if (!v) return 'Password is required.';
+      if (v.length < 8) return 'Password must have at least 8 characters.';
+      return '';
+    }
+    return '';
+  };
+
+  const validateEditField = (field, value) => {
+    const v = String(value || '').trim();
+    if (field === 'email') {
+      if (!v) return 'E-mail is required.';
+      if (!isValidEmail(v)) return 'Please enter a valid e-mail address.';
+      return '';
+    }
+    if (field === 'password') {
+      if (!v) return '';
+      if (v.length < 8) return 'If provided, password must have at least 8 characters.';
+      return '';
+    }
+    return '';
+  };
+
+  const validateAddForm = () => {
+    const nextErrors = {
+      username: validateAddField('username', newUser.username),
+      email: validateAddField('email', newUser.email),
+      password: validateAddField('password', newUser.password),
+    };
+    setAddErrors(nextErrors);
+    setAddTouched({ username: true, email: true, password: true });
+    const failed = Object.entries(nextErrors).filter(([, msg]) => msg).map(([f]) => f);
+    if (failed.length > 0) {
+      setAddLiveValidation((prev) => ({ ...prev, ...failed.reduce((acc, f) => ({ ...acc, [f]: true }), {}) }));
+      return false;
+    }
+    return true;
+  };
+
+  const validateEditForm = () => {
+    const nextErrors = {
+      email: validateEditField('email', editingUser?.email),
+      password: validateEditField('password', editingUser?.password),
+    };
+    setEditErrors(nextErrors);
+    setEditTouched({ email: true, password: true });
+    const failed = Object.entries(nextErrors).filter(([, msg]) => msg).map(([f]) => f);
+    if (failed.length > 0) {
+      setEditLiveValidation((prev) => ({ ...prev, ...failed.reduce((acc, f) => ({ ...acc, [f]: true }), {}) }));
+      return false;
+    }
+    return true;
+  };
+
+  const handleAddBlur = (field) => {
+    setAddTouched((prev) => ({ ...prev, [field]: true }));
+    const msg = validateAddField(field, newUser[field]);
+    setAddErrors((prev) => ({ ...prev, [field]: msg }));
+    if (msg) setAddLiveValidation((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const handleEditBlur = (field) => {
+    setEditTouched((prev) => ({ ...prev, [field]: true }));
+    const msg = validateEditField(field, editingUser?.[field]);
+    setEditErrors((prev) => ({ ...prev, [field]: msg }));
+    if (msg) setEditLiveValidation((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const getAddInputClass = (field, value) => {
+    if (!addTouched[field]) return '';
+    if (addErrors[field]) return 'form-input-error';
+    if (String(value || '').trim()) return 'form-input-success';
+    return '';
+  };
+
+  const getEditInputClass = (field, value) => {
+    if (!editTouched[field]) return '';
+    if (editErrors[field]) return 'form-input-error';
+    if (String(value || '').trim()) return 'form-input-success';
+    return '';
+  };
 
   const fetchUsers = async () => {
     try {
@@ -64,10 +167,17 @@ function UserManagement() {
 
   const handleAddUser = async (e) => {
     e.preventDefault();
+    if (!validateAddForm()) {
+      toast.warning('Please fix highlighted fields before creating user.');
+      return;
+    }
     try {
       await axios.post('/users', newUser);
       setIsAddModalOpen(false);
       setNewUser({ username: '', password: '', email: '', role: 'user' }); // Reset
+      setAddTouched({});
+      setAddErrors({});
+      setAddLiveValidation({});
       fetchUsers(); // Znovu načíst tabulku
       toast.success('User created.');
     } catch (error) {
@@ -77,10 +187,17 @@ function UserManagement() {
 
   const startEdit = (user) => {
     setEditingUser({ ...user }); // Vytvoříme kopii dat uživatele do stavu
+    setEditTouched({});
+    setEditErrors({});
+    setEditLiveValidation({});
   };  
 
   const handleUpdateUser = async (e) => {
     e.preventDefault();
+    if (!validateEditForm()) {
+      toast.warning('Please fix highlighted fields before saving.');
+      return;
+    }
     try {
       const payload = {
         email: editingUser.email,
@@ -94,6 +211,9 @@ function UserManagement() {
 
       await axios.put(`/users/${editingUser.id_user}`, payload);
       setEditingUser(null);
+      setEditTouched({});
+      setEditErrors({});
+      setEditLiveValidation({});
       fetchUsers();
       toast.success('User updated.');
     } catch (error) {
@@ -114,12 +234,36 @@ function UserManagement() {
     fetchUsers();
   }, []);
 
+  useEffect(() => {
+    const liveFields = Object.keys(addLiveValidation).filter((f) => addLiveValidation[f]);
+    if (liveFields.length === 0) return;
+    setAddErrors((prev) => {
+      const next = { ...prev };
+      liveFields.forEach((field) => {
+        next[field] = validateAddField(field, newUser[field]);
+      });
+      return next;
+    });
+  }, [newUser, addLiveValidation]);
+
+  useEffect(() => {
+    if (!editingUser) return;
+    const liveFields = Object.keys(editLiveValidation).filter((f) => editLiveValidation[f]);
+    if (liveFields.length === 0) return;
+    setEditErrors((prev) => {
+      const next = { ...prev };
+      liveFields.forEach((field) => {
+        next[field] = validateEditField(field, editingUser[field]);
+      });
+      return next;
+    });
+  }, [editingUser, editLiveValidation]);
+
 
 
   return (
     <div className="page-container">
-      <div className="section-header section-header-row">
-        <h2 className="section-header-title section-header-title-primary">Team</h2>
+      <PageTitle title="Team">
         {isAdmin &&(
           <button 
             className="btn-diagnose" 
@@ -128,7 +272,7 @@ function UserManagement() {
             + Add user
           </button>  
         )}
-      </div>
+      </PageTitle>
 
       <div className="table-wrapper">
         {loading ? (
@@ -213,27 +357,45 @@ function UserManagement() {
                   type="text" 
                   placeholder="Username" 
                   value={newUser.username}
+                  className={getAddInputClass('username', newUser.username)}
                   onChange={(e) => setNewUser({...newUser, username: e.target.value})}
+                  onBlur={() => handleAddBlur('username')}
+                  aria-invalid={Boolean(addTouched.username && addErrors.username)}
                   required 
                 />
+                {addTouched.username && addErrors.username && (
+                  <small className="form-helper-text error">{addErrors.username}</small>
+                )}
               </div>
               <div className="form-group">
                 <input 
                   type="email" 
                   placeholder="E-mail" 
                   value={newUser.email}
+                  className={getAddInputClass('email', newUser.email)}
                   onChange={(e) => setNewUser({...newUser, email: e.target.value})}
+                  onBlur={() => handleAddBlur('email')}
+                  aria-invalid={Boolean(addTouched.email && addErrors.email)}
                   required 
                 />
+                {addTouched.email && addErrors.email && (
+                  <small className="form-helper-text error">{addErrors.email}</small>
+                )}
               </div>
               <div className="form-group">
                 <input 
                   type="password" 
                   placeholder="Password" 
                   value={newUser.password}
+                  className={getAddInputClass('password', newUser.password)}
                   onChange={(e) => setNewUser({...newUser, password: e.target.value})}
+                  onBlur={() => handleAddBlur('password')}
+                  aria-invalid={Boolean(addTouched.password && addErrors.password)}
                   required 
                 />
+                {addTouched.password && addErrors.password && (
+                  <small className="form-helper-text error">{addErrors.password}</small>
+                )}
               </div>
               <div className="form-group">
                 <select 
@@ -246,7 +408,18 @@ function UserManagement() {
                 </select>
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setAddTouched({});
+                    setAddErrors({});
+                    setAddLiveValidation({});
+                  }}
+                >
+                  Cancel
+                </button>
                 <button type="submit" className="btn-add-confirm">Create User</button>
               </div>
             </form>
@@ -276,9 +449,15 @@ function UserManagement() {
                 <input 
                   type="email" 
                   value={editingUser.email}
+                  className={getEditInputClass('email', editingUser.email)}
                   onChange={(e) => setEditingUser({...editingUser, email: e.target.value})}
+                  onBlur={() => handleEditBlur('email')}
+                  aria-invalid={Boolean(editTouched.email && editErrors.email)}
                   required 
                 />
+                {editTouched.email && editErrors.email && (
+                  <small className="form-helper-text error">{editErrors.email}</small>
+                )}
               </div>
               <div className="form-group form-group-warning">
                 <label className="form-field-label form-field-label-warning">
@@ -288,12 +467,17 @@ function UserManagement() {
                   type="password" 
                   placeholder="Leave empty to keep old password"
                   value={editingUser.password || ''}
+                  className={`form-input-warning ${getEditInputClass('password', editingUser.password || '')}`.trim()}
                   onChange={(e) => setEditingUser({...editingUser, password: e.target.value})}
-                  className="form-input-warning"
+                  onBlur={() => handleEditBlur('password')}
+                  aria-invalid={Boolean(editTouched.password && editErrors.password)}
                 />
                 <small className="form-help-text">
                   If you fill this, the password will be changed
                 </small>
+                {editTouched.password && editErrors.password && (
+                  <small className="form-helper-text error">{editErrors.password}</small>
+                )}
               </div>
               <div className="form-group">
                 <label className="form-field-label">
@@ -309,7 +493,18 @@ function UserManagement() {
                 </select>
               </div>
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setEditingUser(null)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => {
+                    setEditingUser(null);
+                    setEditTouched({});
+                    setEditErrors({});
+                    setEditLiveValidation({});
+                  }}
+                >
+                  Cancel
+                </button>
                 <button type="submit" className="btn-add-confirm">Save changes</button>
               </div>
             </form>

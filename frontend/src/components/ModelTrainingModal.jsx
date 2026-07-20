@@ -34,6 +34,12 @@ function ModelTrainingModal({ model, onClose }) {
     { value: '3', label: 'Rolling element / cage fault (Other)' }
   ];
 
+  const TRAINING_STEPS = [
+    { id: 1, label: 'Configure' },
+    { id: 2, label: 'Run pipeline' },
+    { id: 3, label: 'Done' }
+  ];
+
   const getAuthHeader = () => {
     const token = sessionStorage.getItem('token') || localStorage.getItem('token');
     return token ? { Authorization: `Bearer ${token}` } : {};
@@ -308,6 +314,25 @@ function ModelTrainingModal({ model, onClose }) {
               <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
             </svg>
           </button>
+        </div>
+
+        <div className="training-stepper" role="list" aria-label="Training progress">
+          {TRAINING_STEPS.map((item) => {
+            const isDone = step > item.id;
+            const isActive = step === item.id;
+
+            return (
+              <div
+                key={item.id}
+                role="listitem"
+                className={`training-stepper-item ${isDone ? 'is-done' : ''} ${isActive ? 'is-active' : ''}`}
+                aria-current={isActive ? 'step' : undefined}
+              >
+                <span className="training-stepper-dot" aria-hidden="true">{item.id}</span>
+                <span className="training-stepper-label">{item.label}</span>
+              </div>
+            );
+          })}
         </div>
 
         {step === 1 && (

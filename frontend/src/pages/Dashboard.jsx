@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useNavigate } from 'react-router-dom';
 import MachineCard from '../components/MachineCard';
+import PageTitle from '../components/PageTitle';
 
 function normalizeMachinesPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -201,44 +202,56 @@ function Dashboard({ token }) {
 
   return (
     <div className="page-container">
-      <div className="dashboard-pro-header">
-        <div className="dashboard-pro-title-block">
-          <h1 className="dashboard-pro-title">Fleet Overview</h1>
-          <p className="dashboard-pro-subtitle">Live machinery status, vibration trends and AI diagnostic signals across the plant.</p>
-        </div>
-        <div className="dashboard-pro-right">
-          <div className="dashboard-pro-summary" aria-live="polite" role="status" aria-label="Machine fleet status">
-            <div className="status-stat">
-              <span className="status-stat-dot status-stat-dot--ok" aria-hidden="true"></span>
-              <strong className={`status-stat-count${summary.ok > 0 ? ' status-stat-count--ok' : ''}`}>{summary.ok}</strong>
-              <span className="status-stat-label">OK</span>
+      <PageTitle 
+        title="Fleet Overview"
+        subtitle="Live machinery status, vibration trends and AI diagnostic signals across the plant."
+      />
+      
+      <div className="dashboard-summary-card" aria-live="polite" role="status" aria-label="Machine fleet status">
+        <div className="dashboard-summary-grid">
+          <div className="dashboard-stat-box">
+            <div className="dashboard-stat-number" style={{ color: summary.ok > 0 ? 'var(--status-ok)' : 'var(--neutral-gray)' }}>
+              {summary.ok}
             </div>
-            <span className="status-stat-divider" aria-hidden="true"></span>
-            <div className="status-stat">
-              <span className="status-stat-dot status-stat-dot--warning" aria-hidden="true"></span>
-              <strong className={`status-stat-count${summary.warning > 0 ? ' status-stat-count--warning' : ''}`}>{summary.warning}</strong>
-              <span className="status-stat-label">Warning</span>
+            <div className="dashboard-stat-label">
+              <span className="dashboard-stat-indicator dashboard-stat-indicator--ok" aria-hidden="true"></span>
+              OK
             </div>
-            <span className="status-stat-divider" aria-hidden="true"></span>
-            <div className="status-stat">
-              <span className="status-stat-dot status-stat-dot--fault" aria-hidden="true"></span>
-              <strong className={`status-stat-count${summary.fault > 0 ? ' status-stat-count--fault' : ''}`}>{summary.fault}</strong>
-              <span className="status-stat-label">Fault</span>
+          </div>
+
+          <div className="dashboard-stat-box">
+            <div className="dashboard-stat-number" style={{ color: summary.warning > 0 ? 'var(--status-warning)' : 'var(--neutral-gray)' }}>
+              {summary.warning}
             </div>
-            <span className="status-stat-divider" aria-hidden="true"></span>
-            <div className="status-stat">
-              <strong className="status-stat-count">{machines.length}</strong>
-              <span className="status-stat-label">Total</span>
+            <div className="dashboard-stat-label">
+              <span className="dashboard-stat-indicator dashboard-stat-indicator--warning" aria-hidden="true"></span>
+              Warning
             </div>
-            <span className="status-stat-divider" aria-hidden="true"></span>
-            <div
-              className={`status-stat status-stat--collection status-stat--collection-${healthTone}`}
-              aria-label={`Collection ${healthLabel}. ${healthSubtext}`}
-              title={collectionHealth?.last_error ? `${healthHint}. Error: ${collectionHealth.last_error}` : healthHint}
-            >
-              <span className={`status-stat-dot status-stat-dot--collection-${healthTone}`} aria-hidden="true"></span>
-              <span className="status-stat-label">Collection</span>
-              <strong className="status-stat-collection-value">{healthLabel}</strong>
+          </div>
+
+          <div className="dashboard-stat-box">
+            <div className="dashboard-stat-number" style={{ color: summary.fault > 0 ? 'var(--status-fault)' : 'var(--neutral-gray)' }}>
+              {summary.fault}
+            </div>
+            <div className="dashboard-stat-label">
+              <span className="dashboard-stat-indicator dashboard-stat-indicator--fault" aria-hidden="true"></span>
+              Fault
+            </div>
+          </div>
+
+          <div className="dashboard-stat-box">
+            <div className="dashboard-stat-number">{machines.length}</div>
+            <div className="dashboard-stat-label">Total Machines</div>
+          </div>
+
+          <div className={`dashboard-stat-box dashboard-stat-box--collection dashboard-stat-box--collection-${healthTone}`}
+            aria-label={`Collection ${healthLabel}. ${healthSubtext}`}
+            title={collectionHealth?.last_error ? `${healthHint}. Error: ${collectionHealth.last_error}` : healthHint}
+          >
+            <div className="dashboard-stat-number dashboard-stat-collection-status">{healthLabel}</div>
+            <div className="dashboard-stat-label">
+              <span className={`dashboard-stat-indicator dashboard-stat-indicator--collection-${healthTone}`} aria-hidden="true"></span>
+              Collection
             </div>
           </div>
         </div>

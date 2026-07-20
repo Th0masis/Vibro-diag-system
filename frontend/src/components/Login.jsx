@@ -13,11 +13,57 @@ function Login({ setToken }) {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
+  const [touched, setTouched] = useState({});
+  const [errors, setErrors] = useState({});
+  const [liveValidation, setLiveValidation] = useState({});
+
+  const validateField = (field, value) => {
+    const v = String(value || '').trim();
+    if (field === 'username') return v ? '' : 'Username is required.';
+    if (field === 'password') return v ? '' : 'Password is required.';
+    return '';
+  };
+
+  const validateAll = () => {
+    const nextErrors = {
+      username: validateField('username', username),
+      password: validateField('password', password),
+    };
+    setErrors(nextErrors);
+    setTouched({ username: true, password: true });
+
+    const failed = Object.entries(nextErrors).filter(([, msg]) => msg).map(([key]) => key);
+    if (failed.length > 0) {
+      setLiveValidation((prev) => ({
+        ...prev,
+        ...failed.reduce((acc, key) => ({ ...acc, [key]: true }), {}),
+      }));
+      return false;
+    }
+    return true;
+  };
+
+  const handleBlur = (field) => {
+    setTouched((prev) => ({ ...prev, [field]: true }));
+    const msg = validateField(field, field === 'username' ? username : password);
+    setErrors((prev) => ({ ...prev, [field]: msg }));
+    if (msg) setLiveValidation((prev) => ({ ...prev, [field]: true }));
+  };
+
+  const getInputClass = (field, value) => {
+    if (!touched[field]) return 'form-input';
+    if (errors[field]) return 'form-input form-input-error';
+    if (String(value || '').trim()) return 'form-input form-input-success';
+    return 'form-input';
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    setLoading(true);
     setError('');
+
+    if (!validateAll()) return;
+
+    setLoading(true);
 
     const formData = new URLSearchParams();
     formData.append('username', username);
@@ -37,6 +83,20 @@ function Login({ setToken }) {
     }
   };
 
+  const handleUsernameChange = (value) => {
+    setUsername(value);
+    if (liveValidation.username) {
+      setErrors((prev) => ({ ...prev, username: validateField('username', value) }));
+    }
+  };
+
+  const handlePasswordChange = (value) => {
+    setPassword(value);
+    if (liveValidation.password) {
+      setErrors((prev) => ({ ...prev, password: validateField('password', value) }));
+    }
+  };
+
   return (
     <div className="login-card">
       <div className="login-logo-header">
@@ -49,13 +109,18 @@ function Login({ setToken }) {
           <input 
             type="text" 
             id="username"
-            className="form-input"
+            className={getInputClass('username', username)}
             value={username}
-            onChange={(e) => setUsername(e.target.value)}
+            onChange={(e) => handleUsernameChange(e.target.value)}
+            onBlur={() => handleBlur('username')}
             placeholder="e.g., operator@factory.local"
             aria-describedby={error ? "login-error" : undefined}
+            aria-invalid={Boolean(touched.username && errors.username)}
             required 
           />
+          {touched.username && errors.username && (
+            <small className="form-helper-text error">{errors.username}</small>
+          )}
         </div>
 
         <div className="form-group">
@@ -64,11 +129,13 @@ function Login({ setToken }) {
             <input 
               type={showPassword ? "text" : "password"} 
               id="password"
-              className="form-input"
+              className={getInputClass('password', password)}
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={(e) => handlePasswordChange(e.target.value)}
+              onBlur={() => handleBlur('password')}
               placeholder="Enter your password"
               aria-describedby={error ? "login-error" : undefined}
+              aria-invalid={Boolean(touched.password && errors.password)}
               required 
             />
             <button 
@@ -86,6 +153,9 @@ function Login({ setToken }) {
               />
             </button>
           </div>
+          {touched.password && errors.password && (
+            <small className="form-helper-text error">{errors.password}</small>
+          )}
         </div>
 
         {error && <p className="error-message" id="login-error" role="alert">{error}</p>}

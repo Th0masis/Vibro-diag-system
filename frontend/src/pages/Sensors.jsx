@@ -2,9 +2,51 @@ import { useState, useEffect } from 'react';
 import axios from 'axios';
 
 import { useToast } from '../components/ToastProvider';
+import PageTitle from '../components/PageTitle';
 
 const DEFAULT_MODULE_PATH = 'IF3.ST1.IF1.ST2';
 const CHANNEL_OPTIONS = [1, 2, 3, 4];
+
+function normalizeSensorPayload(raw) {
+  const payload = { ...raw };
+
+  payload.id_machine = payload.id_machine === '' || payload.id_machine === 'null'
+    ? null
+    : Number(payload.id_machine);
+
+  payload.channel_no = payload.channel_no === '' || payload.channel_no === 'null'
+    ? null
+    : Number(payload.channel_no);
+
+  payload.sampling_rate = payload.sampling_rate === '' || payload.sampling_rate == null
+    ? null
+    : Number(payload.sampling_rate);
+
+  payload.calibration_date = payload.calibration_date ? payload.calibration_date : null;
+  payload.position = payload.position ? payload.position.trim() : null;
+  payload.module_path = payload.module_path ? payload.module_path.trim() : null;
+
+  return payload;
+}
+
+function buildSensorErrorMessage(error, fallback) {
+  const detail = String(error?.response?.data?.detail || '').trim();
+  if (!detail) return fallback;
+
+  if (/idx_sensors_module_channel_unique|idx_sensors_machine_module_channel_unique|module_path.*channel|already exists|obsazen/i.test(detail)) {
+    return 'Module path + channel is already occupied globally.';
+  }
+
+  if (/calibration_date|invalid input syntax for type date/i.test(detail)) {
+    return 'Calibration date must be a valid date (YYYY-MM-DD) or empty.';
+  }
+
+  if (/sampling_rate/i.test(detail)) {
+    return 'Sampling rate must be a whole number.';
+  }
+
+  return detail.length > 220 ? `${detail.slice(0, 220)}...` : detail;
+}
 
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -36,6 +78,9 @@ function Sensors() {
     status: 'available',
     id_machine: ''
   });
+  const [addTouched, setAddTouched] = useState({});
+  const [addErrors, setAddErrors] = useState({});
+  const [addLiveValidation, setAddLiveValidation] = useState({});
 
   const formatStatusLabel = (status) => {
     if (status === 'active') return 'Active';
@@ -66,10 +111,145 @@ function Sensors() {
 
   // --- HANDLERS ---
 
+  const hasChannelCollision = (modulePath, channelNo, ignoreSensorId = null) => {
+    if (channelNo == null) return false;
+    const normalizedModulePath = String(modulePath || '').trim();
+    if (!normalizedModulePath) return false;
+
+    return sensors.some((s) => {
+      if (ignoreSensorId != null && s.id_sensor === ignoreSensorId) return false;
+      if (s.deleted_at) return false; // Ignore soft-deleted sensors
+      return (
+        Number(s.channel_no) === Number(channelNo) &&
+        String(s.module_path || '').trim() === normalizedModulePath
+      );
+    });
+  };
+
+  const validateAddField = (field, value, draft) => {
+    const isMachineAssigned = Boolean(draft.id_machine);
+    const trimmed = typeof value === 'string' ? value.trim() : value;
+
+    if (field === 'serial_number') {
+      return trimmed ? '' : 'Serial number is required.';
+    }
+
+    if (field === 'description') {
+      return trimmed ? '' : 'Description is required.';
+    }
+
+    if (field === 'channel_no') {
+      if (!isMachineAssigned) return '';
+      if (value === '' || value == null) return 'Channel is required when machine is selected.';
+      if (!String(draft.module_path || '').trim()) return 'Enter module path first.';
+      if (hasChannelCollision(draft.module_path, value)) return 'Module path + channel is already occupied globally.';
+      return '';
+    }
+
+    if (field === 'module_path') {
+      if (!isMachineAssigned) return '';
+      if (!trimmed) return 'Module path is required when machine is selected.';
+      if (draft.channel_no !== '' && draft.channel_no != null && hasChannelCollision(trimmed, draft.channel_no)) {
+        return 'Module path + channel is already occupied globally.';
+      }
+      return '';
+    }
+
+    if (field === 'position') {
+      if (!isMachineAssigned) return '';
+      return trimmed ? '' : 'Machine position is required when machine is selected.';
+    }
+
+    if (field === 'sampling_rate') {
+      if (value === '' || value == null) return '';
+      return /^\d+$/.test(String(value)) && Number(value) > 0
+        ? ''
+        : 'Sampling rate must be a positive whole number.';
+    }
+
+    if (field === 'calibration_date') {
+      if (!value) return '';
+      return /^\d{4}-\d{2}-\d{2}$/.test(String(value))
+        ? ''
+        : 'Calibration date must use YYYY-MM-DD format.';
+    }
+
+    return '';
+  };
+
+  const runAddValidation = (draft) => {
+    const fields = ['serial_number', 'description', 'sampling_rate', 'calibration_date'];
+    if (draft.id_machine) {
+      fields.push('channel_no', 'module_path', 'position');
+    }
+
+    const nextErrors = {};
+    fields.forEach((field) => {
+      nextErrors[field] = validateAddField(field, draft[field], draft);
+    });
+
+    setAddErrors(nextErrors);
+    setAddTouched(fields.reduce((acc, field) => ({ ...acc, [field]: true }), {}));
+
+    const failedFields = fields.filter((field) => nextErrors[field]);
+    if (failedFields.length > 0) {
+      setAddLiveValidation((prev) => ({
+        ...prev,
+        ...failedFields.reduce((acc, field) => ({ ...acc, [field]: true }), {})
+      }));
+    }
+
+    return failedFields.length === 0;
+  };
+
+  const handleAddFieldBlur = (field) => {
+    setAddTouched((prev) => ({ ...prev, [field]: true }));
+    const message = validateAddField(field, newSensor[field], newSensor);
+    setAddErrors((prev) => ({ ...prev, [field]: message }));
+    if (message) {
+      setAddLiveValidation((prev) => ({ ...prev, [field]: true }));
+    }
+  };
+
+  const getAddInputClass = (field) => {
+    if (!addTouched[field]) return '';
+    if (addErrors[field]) return 'form-input-error';
+
+    const value = newSensor[field];
+    const hasValue = value !== '' && value != null;
+    if (!hasValue) return '';
+
+    if (!newSensor.id_machine && ['channel_no', 'module_path', 'position'].includes(field)) return '';
+
+    return 'form-input-success';
+  };
+
+  useEffect(() => {
+    const liveFields = Object.keys(addLiveValidation).filter((field) => addLiveValidation[field]);
+    if (liveFields.length === 0) return;
+
+    setAddErrors((prev) => {
+      const next = { ...prev };
+      liveFields.forEach((field) => {
+        next[field] = validateAddField(field, newSensor[field], newSensor);
+      });
+      return next;
+    });
+  }, [newSensor, addLiveValidation, sensors]);
+
   const handleAddSensor = async (e) => {
     e.preventDefault();
-    const payload = { ...newSensor };
-    if (payload.id_machine === '') payload.id_machine = null;
+    const payload = normalizeSensorPayload(newSensor);
+
+    if (!runAddValidation(newSensor)) {
+      toast.warning('Please fix highlighted fields before registering the sensor.');
+      return;
+    }
+
+    if (hasChannelCollision(payload.module_path, payload.channel_no)) {
+      toast.warning('This module path + channel is already occupied globally.');
+      return;
+    }
 
     try {
       await axios.post('/sensors', payload);
@@ -78,18 +258,24 @@ function Sensors() {
         serial_number: '', description: '', sampling_rate: '', 
         calibration_date: '', position: '', module_path: DEFAULT_MODULE_PATH, channel_no: '', status: 'available', id_machine: '' 
       });
+      setAddTouched({});
+      setAddErrors({});
+      setAddLiveValidation({});
       fetchData();
       toast.success('Sensor registered successfully.');
     } catch (error) {
-      toast.error('Failed to register sensor: ' + error.response?.data?.detail);
+      toast.error(buildSensorErrorMessage(error, 'Failed to register sensor.'));
     }
   };
 
   const handleUpdateSensor = async (e) => {
     e.preventDefault();
-    const payload = { ...editingSensor };
-    // Konverze prázdného stringu na null pro backend
-    if (payload.id_machine === '' || payload.id_machine === 'null') payload.id_machine = null;
+    const payload = normalizeSensorPayload(editingSensor);
+
+    if (hasChannelCollision(payload.module_path, payload.channel_no, editingSensor.id_sensor)) {
+      toast.warning('This module path + channel is already occupied globally.');
+      return;
+    }
 
     try {
       await axios.put(`/sensors/${editingSensor.id_sensor}`, payload);
@@ -98,7 +284,7 @@ function Sensors() {
       fetchData();
       toast.success('Sensor updated.');
     } catch (error) {
-      toast.error('Update failed.');
+      toast.error(buildSensorErrorMessage(error, 'Update failed.'));
     }
   };
 
@@ -148,103 +334,136 @@ function Sensors() {
 
   return (
     <div className="page-container">
-      <div className="section-header section-header-row">
-        <h2 className="section-header-title">Sensor Management</h2>
+      <PageTitle title="Sensor Management">
         <button className="btn-diagnose" onClick={() => setIsAddModalOpen(true)}>+ Register sensor</button>
-      </div>
+      </PageTitle>
 
-      <div className="table-wrapper">
-        {loading ? ( <p style={{ padding: '20px' }}>Loading data...</p> ) : (
-          <table>
-            <thead>
-              <tr>
-                <th>Serial number</th>
-                <th>Model / Description</th>
-                <th>Assigned machine</th>
-                <th>Status</th>
-                <th style={{ textAlign: 'center' }}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {sensors.map((s) => (
-                <tr key={s.id_sensor}>
-                  <td><strong>{s.serial_number}</strong></td>
-                  <td>{s.description}</td>
-                  <td className={s.id_machine ? '' : 'table-cell-muted'}>
-                    {s.id_machine ? getMachineName(s.id_machine) : '— Warehouse —'}
-                  </td>
-                  <td>
-                    <span className={`role-badge ${s.status}`}>
-                      {formatStatusLabel(s.status)}
-                    </span>
-                  </td>
-                  <td className="table-actions-center">
-                    <div className="machine-sensors-actions-wrap">
-                      <button
-                        className="sensor-btn sensor-btn-detail"
-                        onClick={() => setSelectedSensor(s)}
-                        title="View sensor details"
-                        aria-label="View sensor details"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
-                        </svg>
-                      </button>
-                      <button
-                        className="sensor-btn sensor-btn-delete"
-                        onClick={() => confirmDelete(s)}
-                        title="Delete sensor"
-                        aria-label="Delete sensor"
-                      >
-                        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                          <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/>
-                        </svg>
-                      </button>
+      <div className="detail-layout">
+        {/* LEFT PANEL: SENSOR LIST */}
+        <div className="detail-card card-tech detail-catalog-card">
+          <div className="detail-catalog-header">
+            <h3 className="card-title detail-catalog-title">Sensor inventory</h3>
+            <span className="detail-catalog-count">{sensors.length}</span>
+          </div>
+          
+          <div className="detail-catalog-list">
+            {loading ? (
+              <p style={{ padding: '15px', textAlign: 'center', color: 'var(--neutral-gray)' }}>Loading sensors…</p>
+            ) : sensors.length === 0 ? (
+              <p style={{ padding: '15px', textAlign: 'center', color: 'var(--neutral-gray)' }}>No sensors registered yet</p>
+            ) : (
+              sensors.map((sensor) => {
+                const isSelected = selectedSensor?.id_sensor === sensor.id_sensor;
+                return (
+                  <button
+                    key={sensor.id_sensor}
+                    onClick={() => setSelectedSensor(sensor)}
+                    className={`detail-list-item ${isSelected ? 'is-selected' : ''}`}
+                  >
+                    <div className="detail-list-item-top">
+                      <span className={`detail-list-item-name ${isSelected ? 'is-selected' : ''}`}>
+                        {sensor.serial_number}
+                      </span>
+                      <span className="detail-list-item-type">{sensor.description}</span>
                     </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </div>
-
-      {/* MODAL: SENSOR DETAIL */}
-      {selectedSensor && !editingSensor && (
-        <div className="modal-overlay">
-          <div className="modal-content sensor-detail-card">
-            <div className="modal-header-row">
-              <h2 className="modal-title-primary">Sensor detail</h2>
-              <span className={`role-badge ${selectedSensor.status}`}>{formatStatusLabel(selectedSensor.status)}</span>
-            </div>
-            <div className="detail-grid">
-              <div className="detail-item"><label>S/N</label><p>{selectedSensor.serial_number}</p></div>
-              <div className="detail-item"><label>Model</label><p>{selectedSensor.description}</p></div>
-              <div className="detail-item"><label>Sampling</label><p>{selectedSensor.sampling_rate} Hz</p></div>
-              <div className="detail-item"><label>Calibration</label><p>{selectedSensor.calibration_date || 'Unknown'}</p></div>
-              
-              {/* Show assigned machine in detail */}
-              <div className="detail-item detail-item-highlight">
-                  <label>Placement</label>
-                  <p className="machine-position-meta">
-                    {selectedSensor.id_machine ? (
-                        <>
-                          <span className="machine-position-name">{getMachineName(selectedSensor.id_machine)}</span>
-                          <span className="machine-position-muted">Position: {selectedSensor.position}</span>
-                          <span className="machine-position-muted">Channel: {selectedSensor.channel_no ?? '—'}</span>
-                          <span className="machine-position-muted">Module path: {selectedSensor.module_path || '—'}</span>
-                        </>
-                    ) : 'Warehouse (Unassigned)'}
-                  </p>
-              </div>
-            </div>
-            <div className="modal-actions" style={{ marginTop: '30px' }}>
-              <button className="btn-update" onClick={() => setEditingSensor(selectedSensor)}>Edit details</button>
-              <button className="btn-cancel" onClick={() => setSelectedSensor(null)}>Close</button>
-            </div>
+                    <span className={`role-badge ${sensor.status} detail-list-item-badge`}>
+                      {formatStatusLabel(sensor.status)}
+                    </span>
+                  </button>
+                );
+              })
+            )}
           </div>
         </div>
-      )}
+
+        {/* RIGHT PANEL: SENSOR DETAIL */}
+        {selectedSensor ? (
+          <div className="detail-card card-sensors detail-content-card">
+            <div className="detail-header">
+              <div>
+                <div className="detail-header-main">
+                  <h2 className="detail-model-name">{selectedSensor.serial_number}</h2>
+                  <span className="role-badge" style={{ marginLeft: '12px' }}>
+                    {selectedSensor.description}
+                  </span>
+                </div>
+                <p className="detail-model-type">{formatStatusLabel(selectedSensor.status)}</p>
+              </div>
+              <div className="detail-cta-wrap">
+                <button 
+                  className="btn-update"
+                  onClick={() => setEditingSensor(selectedSensor)}
+                >
+                  Edit sensor
+                </button>
+                <button
+                  className="btn-cancel"
+                  onClick={() => confirmDelete(selectedSensor)}
+                  style={{ marginLeft: '8px' }}
+                >
+                  Delete
+                </button>
+              </div>
+            </div>
+
+            <div className="detail-body">
+              <div className="detail-grid">
+                <div className="detail-card">
+                  <label className="detail-label">Serial number</label>
+                  <div className="detail-value">{selectedSensor.serial_number}</div>
+                </div>
+
+                <div className="detail-card">
+                  <label className="detail-label">Model / Description</label>
+                  <div className="detail-value">{selectedSensor.description}</div>
+                </div>
+
+                <div className="detail-card">
+                  <label className="detail-label">Sampling rate</label>
+                  <div className="detail-value">{selectedSensor.sampling_rate} Hz</div>
+                </div>
+
+                <div className="detail-card">
+                  <label className="detail-label">Calibration date</label>
+                  <div className="detail-value">{selectedSensor.calibration_date || 'Unknown'}</div>
+                </div>
+              </div>
+
+              <div className="detail-section-block">
+                <h4 className="card-title">Assigned placement</h4>
+                {selectedSensor.id_machine ? (
+                  <div className="detail-grid">
+                    <div className="detail-card">
+                      <label className="detail-label">Machine</label>
+                      <div className="detail-value">{getMachineName(selectedSensor.id_machine)}</div>
+                    </div>
+                    <div className="detail-card">
+                      <label className="detail-label">Position</label>
+                      <div className="detail-value">{selectedSensor.position || '—'}</div>
+                    </div>
+                    <div className="detail-card">
+                      <label className="detail-label">Channel</label>
+                      <div className="detail-value">{selectedSensor.channel_no ?? '—'}</div>
+                    </div>
+                    <div className="detail-card">
+                      <label className="detail-label">Module path</label>
+                      <div className="detail-value"><code>{selectedSensor.module_path || '—'}</code></div>
+                    </div>
+                  </div>
+                ) : (
+                  <p style={{ color: 'var(--neutral-gray)' }}>Sensor in warehouse (unassigned)</p>
+                )}
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="detail-card card-sensors detail-content-card detail-empty">
+            <div style={{ textAlign: 'center', padding: '40px 20px', color: 'var(--neutral-gray)' }}>
+              <p>Select a sensor from the list to view details</p>
+            </div>
+          </div>
+        )}
+      </div>
 
       {/* MODAL: EDIT */}
       {editingSensor && (
@@ -343,16 +562,29 @@ function Sensors() {
           <div className="modal-content add-user-modal">
             <h2 className="modal-title-primary">New sensor</h2>
             <form onSubmit={handleAddSensor}>
-              <div className="form-group">
+              <div className="form-group form-group--validated">
                 <label>Serial number *</label>
-                <input type="text" onChange={(e) => setNewSensor({...newSensor, serial_number: e.target.value})} required />
+                <input
+                  type="text"
+                  value={newSensor.serial_number}
+                  className={getAddInputClass('serial_number')}
+                  onChange={(e) => setNewSensor({ ...newSensor, serial_number: e.target.value })}
+                  onBlur={() => handleAddFieldBlur('serial_number')}
+                  aria-invalid={Boolean(addTouched.serial_number && addErrors.serial_number)}
+                  required
+                />
+                <small className="form-helper-text error" aria-live="polite">{addTouched.serial_number ? (addErrors.serial_number || ' ') : ' '}</small>
               </div>
               
               <div className="form-group">
                 <label>Assign to machine (optional)</label>
                 <select 
                     value={newSensor.id_machine} 
-                    onChange={(e) => handleMachineChange(e, setNewSensor, newSensor)}
+                    onChange={(e) => {
+                      handleMachineChange(e, setNewSensor, newSensor);
+                      setAddTouched((prev) => ({ ...prev, id_machine: true }));
+                    }}
+                    onBlur={() => handleAddFieldBlur('id_machine')}
                 >
                     <option value="">-- Unassigned (Warehouse) --</option>
                     {machines.map(m => (
@@ -364,11 +596,14 @@ function Sensors() {
               {newSensor.id_machine && (
                   <>
                     <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                      <div className="form-group">
+                      <div className="form-group form-group--validated">
                         <label>Channel selection *</label>
                         <select
                           value={newSensor.channel_no}
-                          onChange={(e) => setNewSensor({...newSensor, channel_no: e.target.value})}
+                          className={getAddInputClass('channel_no')}
+                          onChange={(e) => setNewSensor({ ...newSensor, channel_no: e.target.value })}
+                          onBlur={() => handleAddFieldBlur('channel_no')}
+                          aria-invalid={Boolean(addTouched.channel_no && addErrors.channel_no)}
                           required
                         >
                           <option value="">-- Select channel --</option>
@@ -376,50 +611,95 @@ function Sensors() {
                             <option key={ch} value={ch}>{ch}</option>
                           ))}
                         </select>
+                        <small className="form-helper-text error" aria-live="polite">{addTouched.channel_no ? (addErrors.channel_no || ' ') : ' '}</small>
                       </div>
-                      <div className="form-group">
+                      <div className="form-group form-group--validated">
                         <label>Module path *</label>
                         <input 
                           type="text"
                           placeholder={DEFAULT_MODULE_PATH}
                           value={newSensor.module_path}
-                          onChange={(e) => setNewSensor({...newSensor, module_path: e.target.value})}
+                          className={getAddInputClass('module_path')}
+                          onChange={(e) => setNewSensor({ ...newSensor, module_path: e.target.value })}
+                          onBlur={() => handleAddFieldBlur('module_path')}
+                          aria-invalid={Boolean(addTouched.module_path && addErrors.module_path)}
                           required
                         />
+                        <small className="form-helper-text error" aria-live="polite">{addTouched.module_path ? (addErrors.module_path || ' ') : ' '}</small>
                       </div>
                     </div>
 
-                    <div className="form-group">
+                    <div className="form-group form-group--validated">
                       <label>Machine position *</label>
                       <input 
                           type="text" 
                           placeholder="e.g. Bearing 1" 
                           value={newSensor.position}
-                          onChange={(e) => setNewSensor({...newSensor, position: e.target.value})}
+                          className={getAddInputClass('position')}
+                          onChange={(e) => setNewSensor({ ...newSensor, position: e.target.value })}
+                          onBlur={() => handleAddFieldBlur('position')}
+                          aria-invalid={Boolean(addTouched.position && addErrors.position)}
                           required
                       />
+                      <small className="form-helper-text error" aria-live="polite">{addTouched.position ? (addErrors.position || ' ') : ' '}</small>
                     </div>
                   </>
               )}
 
-              <div className="form-group">
+              <div className="form-group form-group--validated">
                 <label>Description *</label>
-                <input type="text" onChange={(e) => setNewSensor({...newSensor, description: e.target.value})} required />
+                <input
+                  type="text"
+                  value={newSensor.description}
+                  className={getAddInputClass('description')}
+                  onChange={(e) => setNewSensor({ ...newSensor, description: e.target.value })}
+                  onBlur={() => handleAddFieldBlur('description')}
+                  aria-invalid={Boolean(addTouched.description && addErrors.description)}
+                  required
+                />
+                <small className="form-helper-text error" aria-live="polite">{addTouched.description ? (addErrors.description || ' ') : ' '}</small>
               </div>
               
               <div className="detail-grid" style={{ gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
-                <div className="form-group">
+                <div className="form-group form-group--validated">
                     <label>Sampling Rate (Hz)</label>
-                    <input type="number" onChange={(e) => setNewSensor({...newSensor, sampling_rate: e.target.value})} />
+                    <input
+                      type="number"
+                      value={newSensor.sampling_rate}
+                      className={getAddInputClass('sampling_rate')}
+                      onChange={(e) => setNewSensor({ ...newSensor, sampling_rate: e.target.value })}
+                      onBlur={() => handleAddFieldBlur('sampling_rate')}
+                      aria-invalid={Boolean(addTouched.sampling_rate && addErrors.sampling_rate)}
+                    />
+                    <small className="form-helper-text error" aria-live="polite">{addTouched.sampling_rate ? (addErrors.sampling_rate || ' ') : ' '}</small>
                 </div>
-                <div className="form-group">
+                <div className="form-group form-group--validated">
                     <label>Calibration</label>
-                    <input type="date" onChange={(e) => setNewSensor({...newSensor, calibration_date: e.target.value})} />
+                    <input
+                      type="date"
+                      value={newSensor.calibration_date}
+                      className={getAddInputClass('calibration_date')}
+                      onChange={(e) => setNewSensor({ ...newSensor, calibration_date: e.target.value })}
+                      onBlur={() => handleAddFieldBlur('calibration_date')}
+                      aria-invalid={Boolean(addTouched.calibration_date && addErrors.calibration_date)}
+                    />
+                    <small className="form-helper-text error" aria-live="polite">{addTouched.calibration_date ? (addErrors.calibration_date || ' ') : ' '}</small>
                 </div>
               </div>
 
               <div className="modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setIsAddModalOpen(false)}>Cancel</button>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => {
+                    setIsAddModalOpen(false);
+                    setAddTouched({});
+                    setAddErrors({});
+                    setAddLiveValidation({});
+                  }}
+                >
+                  Cancel
+                </button>
                 <button type="submit" className="btn-add-confirm">Register</button>
               </div>
             </form>

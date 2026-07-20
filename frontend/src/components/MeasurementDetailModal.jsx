@@ -18,6 +18,7 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
   const [fftData, setFftData] = useState([]);
   const [cwtImage, setCwtImage] = useState(null);
   const [loadingViz, setLoadingViz] = useState(false);
+  const [vizError, setVizError] = useState('');
 
   // XJTU-SY sampling parameters
   const SAMPLING_FREQ = 12800; 
@@ -73,10 +74,18 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
     if (measurementId) fetchDetail();
   }, [measurementId]);
 
+  useEffect(() => {
+    setActiveTab('time');
+    setFftData([]);
+    setCwtImage(null);
+    setVizError('');
+  }, [measurementId]);
+
   // 2. Načtení FFT a CWT podle aktivní záložky
   useEffect(() => {
     const fetchAdvancedViz = async () => {
       setLoadingViz(true);
+      setVizError('');
       try {
         // Voláme pouze pokud jsou data už zpracovaná
         if (!details || !details.rms_raw) return;
@@ -95,6 +104,8 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
         }
       } catch (err) {
         console.error(`Chyba načítání ${activeTab}:`, err);
+        const apiMessage = err?.response?.data?.detail;
+        setVizError(apiMessage || `Failed to load ${activeTab.toUpperCase()} data.`);
       } finally {
         setLoadingViz(false);
       }
@@ -216,6 +227,20 @@ function MeasurementDetailModal({ measurementId, onClose, onProcessed, inline = 
                   <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#94a3b8' }}>
                     Loading {activeTab.toUpperCase()}…
                   </div>
+                  ) : vizError ? (
+                    <div style={{
+                      height: '100%',
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      color: '#dc2626',
+                      textAlign: 'center',
+                      padding: '0 20px'
+                    }}>
+                      <p style={{ margin: 0, fontWeight: 600 }}>Visualization unavailable</p>
+                      <p style={{ marginTop: '8px', fontSize: '0.85rem', color: '#475569' }}>{vizError}</p>
+                    </div>
                 ) : (
                   <>
                     {/* 1. ČASOVÝ PRŮBĚH */}

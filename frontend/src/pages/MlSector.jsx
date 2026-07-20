@@ -3,6 +3,7 @@ import axios from 'axios';
 import ModelTrainingModal from '../components/ModelTrainingModal';
 import ConfirmModal from '../components/ConfirmModal';
 import { useToast } from '../components/ToastProvider';
+import PageTitle from '../components/PageTitle';
 
 function normalizeListPayload(payload) {
   if (Array.isArray(payload)) return payload;
@@ -86,23 +87,17 @@ function MlSector() {
     }
   };
   
-  if (loading && models.length === 0) return <div className="main-content">Loading ML sector...</div>;
-  if (error) return <div className="main-content ml-sector-error">{error}</div>;
+  if (loading && models.length === 0) return <div className="page-container ml-sector-page">Loading ML sector...</div>;
+  if (error) return <div className="page-container ml-sector-page"><div className="ml-sector-error">{error}</div></div>;
 
   return (
-    <div className="main-content ml-sector-page">
+    <div className="page-container ml-sector-page">
       
       {/* HLAVIČKA STRÁNKY */}
-      <div className="machine-header-container ml-sector-header">
-        <div className="machine-title-section">
-          <h1>
-            <span className="ml-sector-title-text">AI Models</span>
-          </h1>
-          <div className="machine-meta">
-            Predictive model management | Active in production: {models.filter(m => m.is_active).length}
-          </div>
-        </div>
-      </div>
+      <PageTitle 
+        title="AI Models"
+        subtitle={`Predictive model management | Active in production: ${models.filter(m => m.is_active).length}`}
+      />
 
       <div className="ml-sector-layout">
         

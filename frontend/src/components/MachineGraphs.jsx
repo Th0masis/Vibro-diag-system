@@ -26,6 +26,7 @@ function MachineGraphs({ machineId }) {
     skewness: { label: 'Skewness (-)', db_key: 'skewness' },
     envelope: { label: 'Signal envelope', db_key: 'rms_acl_env' }
   };
+  const metricKeys = Object.keys(metricsInfo);
 
   const sensorColors = ['#0284c7', '#cd3808', '#10b981', '#8b5cf6', '#f59e0b', '#64748b'];
 
@@ -103,15 +104,38 @@ function MachineGraphs({ machineId }) {
     }
   };
 
+  const handleMetricTabsKeyDown = (event) => {
+    const currentIndex = metricKeys.indexOf(metric);
+    let nextIndex = null;
+
+    if (event.key === 'ArrowRight') nextIndex = (currentIndex + 1) % metricKeys.length;
+    else if (event.key === 'ArrowLeft') nextIndex = (currentIndex - 1 + metricKeys.length) % metricKeys.length;
+    else if (event.key === 'Home') nextIndex = 0;
+    else if (event.key === 'End') nextIndex = metricKeys.length - 1;
+    else return;
+
+    event.preventDefault();
+    const nextMetric = metricKeys[nextIndex];
+    setMetric(nextMetric);
+    requestAnimationFrame(() => {
+      document.getElementById(`metric-tab-${nextMetric}`)?.focus();
+    });
+  };
+
   return (
     <div className="card-shadow machine-graphs-card">
       
       {/* KLIKACÍ NÁZVY VŠECH PARAMETRŮ (TABS) */}
-      <div className="machine-graphs-metric-tabs">
-        {Object.keys(metricsInfo).map(key => (
+      <div className="machine-graphs-metric-tabs" role="tablist" aria-label="Chart metric selector" onKeyDown={handleMetricTabsKeyDown}>
+        {metricKeys.map(key => (
           <button
             key={key}
+            id={`metric-tab-${key}`}
+            role="tab"
             onClick={() => setMetric(key)}
+            aria-selected={metric === key}
+            aria-controls={`metric-panel-${key}`}
+            tabIndex={metric === key ? 0 : -1}
             className={`machine-graphs-metric-tab ${metric === key ? 'is-active' : ''}`}
           >
             {metricsInfo[key].label}
@@ -141,7 +165,12 @@ function MachineGraphs({ machineId }) {
       </div>
 
       {/* VLASTNÍ GRAF */}
-      <div className="machine-graphs-plot-wrap">
+      <div
+        id={`metric-panel-${metric}`}
+        role="tabpanel"
+        aria-labelledby={`metric-tab-${metric}`}
+        className="machine-graphs-plot-wrap"
+      >
         {loading ? (
           <div className="machine-graphs-state">Loading chart data…</div>
         ) : chartData.length === 0 ? (

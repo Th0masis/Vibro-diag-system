@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
+import { useValidationState } from '../utils/validation';
 
 const MachineSettings = ({ machineId }) => {
   const [loading, setLoading] = useState(false);
@@ -17,6 +18,44 @@ const MachineSettings = ({ machineId }) => {
     password: '', 
     directory: '' 
   });
+
+  const settingsFormValues = {
+    opc_url: opcUa.url,
+    ftp_host: ftp.host,
+    ftp_username: ftp.username,
+    ftp_directory: ftp.directory,
+  };
+
+  const validateSettingsField = (field, value, values) => {
+    const v = String(value || '').trim();
+    if (field === 'opc_url') {
+      if (!v) return 'OPC UA endpoint is required.';
+      if (!/^opc\.tcp:\/\//i.test(v)) return 'OPC UA endpoint must start with opc.tcp://';
+      return '';
+    }
+    if (field === 'ftp_host') {
+      if (!v) return 'FTP host is required.';
+      return '';
+    }
+    if (field === 'ftp_username') {
+      if (!v) return 'FTP username is required.';
+      return '';
+    }
+    if (field === 'ftp_directory') {
+      if (!v) return 'FTP target folder is required.';
+      return '';
+    }
+    return '';
+  };
+
+  const {
+    touched,
+    errors,
+    onBlurField,
+    onChangeField,
+    validateForm,
+    getInputClass,
+  } = useValidationState(validateSettingsField);
 
   // 1. NAČTENÍ DAT PŘI OTEVŘENÍ
   useEffect(() => {
@@ -47,6 +86,13 @@ const MachineSettings = ({ machineId }) => {
     e.preventDefault();
     setLoading(true);
     setMessage({ text: '', type: '' });
+
+    const isValid = validateForm(['opc_url', 'ftp_host', 'ftp_username', 'ftp_directory'], settingsFormValues);
+    if (!isValid) {
+      setLoading(false);
+      setMessage({ text: 'Please fix highlighted fields before saving configuration.', type: 'error' });
+      return;
+    }
 
     try {
       await axios.put(`/machines/${machineId}/settings`, {
@@ -173,9 +219,18 @@ const MachineSettings = ({ machineId }) => {
                 <input 
                   type="text" 
                   value={opcUa.url} 
-                  onChange={e => setOpcUa({ url: e.target.value })}
+                  className={getInputClass('opc_url', opcUa.url)}
+                  onChange={e => {
+                    const value = e.target.value;
+                    const nextValues = { ...settingsFormValues, opc_url: value };
+                    setOpcUa({ url: value });
+                    onChangeField('opc_url', value, nextValues);
+                  }}
+                  onBlur={() => onBlurField('opc_url', opcUa.url, settingsFormValues)}
+                  aria-invalid={Boolean(touched.opc_url && errors.opc_url)}
                   placeholder="opc.tcp://10.24.137.37:4840"
                 />
+                <small className="form-helper-text error" aria-live="polite">{touched.opc_url ? (errors.opc_url || ' ') : ' '}</small>
               </div>
             </div>
 
@@ -207,9 +262,18 @@ const MachineSettings = ({ machineId }) => {
                 <input 
                   type="text" 
                   value={ftp.host} 
-                  onChange={e => setFtp({...ftp, host: e.target.value})}
+                  className={getInputClass('ftp_host', ftp.host)}
+                  onChange={e => {
+                    const value = e.target.value;
+                    const nextValues = { ...settingsFormValues, ftp_host: value };
+                    setFtp({...ftp, host: value});
+                    onChangeField('ftp_host', value, nextValues);
+                  }}
+                  onBlur={() => onBlurField('ftp_host', ftp.host, settingsFormValues)}
+                  aria-invalid={Boolean(touched.ftp_host && errors.ftp_host)}
                   placeholder="10.24.137.37"
                 />
+                <small className="form-helper-text error" aria-live="polite">{touched.ftp_host ? (errors.ftp_host || ' ') : ' '}</small>
               </div>
 
               <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '15px' }}>
@@ -218,8 +282,17 @@ const MachineSettings = ({ machineId }) => {
                   <input 
                     type="text" 
                     value={ftp.username} 
-                    onChange={e => setFtp({...ftp, username: e.target.value})}
+                    className={getInputClass('ftp_username', ftp.username)}
+                    onChange={e => {
+                      const value = e.target.value;
+                      const nextValues = { ...settingsFormValues, ftp_username: value };
+                      setFtp({...ftp, username: value});
+                      onChangeField('ftp_username', value, nextValues);
+                    }}
+                    onBlur={() => onBlurField('ftp_username', ftp.username, settingsFormValues)}
+                    aria-invalid={Boolean(touched.ftp_username && errors.ftp_username)}
                   />
+                  <small className="form-helper-text error" aria-live="polite">{touched.ftp_username ? (errors.ftp_username || ' ') : ' '}</small>
                 </div>
                 <div className="form-group">
                   <label style={{ fontSize: '0.8rem', fontWeight: 'bold', color: '#475569' }}>Password</label>
@@ -237,9 +310,18 @@ const MachineSettings = ({ machineId }) => {
                 <input 
                   type="text" 
                   value={ftp.directory} 
-                  onChange={e => setFtp({...ftp, directory: e.target.value})}
+                  className={getInputClass('ftp_directory', ftp.directory)}
+                  onChange={e => {
+                    const value = e.target.value;
+                    const nextValues = { ...settingsFormValues, ftp_directory: value };
+                    setFtp({...ftp, directory: value});
+                    onChangeField('ftp_directory', value, nextValues);
+                  }}
+                  onBlur={() => onBlurField('ftp_directory', ftp.directory, settingsFormValues)}
+                  aria-invalid={Boolean(touched.ftp_directory && errors.ftp_directory)}
                   style={{ fontFamily: 'monospace', fontSize: '0.9rem' }}
                 />
+                <small className="form-helper-text error" aria-live="polite">{touched.ftp_directory ? (errors.ftp_directory || ' ') : ' '}</small>
               </div>
             </div>
 

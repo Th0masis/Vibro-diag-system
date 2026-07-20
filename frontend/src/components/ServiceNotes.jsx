@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useToast } from './ToastProvider';
+import { useValidationState } from '../utils/validation';
 
 function ServiceNotes({ machineId, onNoteAdded }) {
   const toast = useToast();
@@ -11,6 +12,28 @@ function ServiceNotes({ machineId, onNoteAdded }) {
   const [severity, setSeverity] = useState("INFO");
   const [composeOpen, setComposeOpen] = useState(false);
   const [selectedNoteId, setSelectedNoteId] = useState(null);
+
+  const noteFormValues = { title: newTitle, detail: newDetail };
+
+  const validateNoteField = (field, value) => {
+    const v = String(value || '').trim();
+    if (field === 'title') {
+      if (!v) return 'Title is required.';
+      if (v.length < 3) return 'Title must have at least 3 characters.';
+      return '';
+    }
+    return '';
+  };
+
+  const {
+    touched,
+    errors,
+    onBlurField,
+    onChangeField,
+    validateForm,
+    clearValidation,
+    getInputClass,
+  } = useValidationState(validateNoteField);
 
   const parseNoteContent = (content) => {
     const normalized = (content || '').replace(/\r\n/g, '\n').trim();
@@ -61,6 +84,12 @@ function ServiceNotes({ machineId, onNoteAdded }) {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!validateForm(['title'], noteFormValues)) {
+      toast.warning('Please provide a valid message title before saving.');
+      return;
+    }
+
     const title = newTitle.trim();
     const detail = newDetail.trim();
     if (!title) return;
@@ -73,6 +102,7 @@ function ServiceNotes({ machineId, onNoteAdded }) {
       setNewDetail('');
       setSeverity('INFO');
       setComposeOpen(false);
+      clearValidation();
       fetchNotes();
       if (onNoteAdded) onNoteAdded();
     } catch (err) {
@@ -215,7 +245,14 @@ function ServiceNotes({ machineId, onNoteAdded }) {
           <div className="modal-content service-notes-compose-modal" style={{ maxWidth: '620px', width: '92%' }}>
             <div className="service-notes-compose-header">
               <h3 className="service-notes-heading">New maintenance message</h3>
-              <button className="service-notes-delete" onClick={() => setComposeOpen(false)} title="Close">
+              <button
+                className="service-notes-delete"
+                onClick={() => {
+                  setComposeOpen(false);
+                  clearValidation();
+                }}
+                title="Close"
+              >
                 ×
               </button>
             </div>
@@ -225,12 +262,19 @@ function ServiceNotes({ machineId, onNoteAdded }) {
                 <label className="service-notes-label">Title</label>
                 <input
                   value={newTitle}
-                  onChange={(e) => setNewTitle(e.target.value)}
+                  className={`service-notes-input ${getInputClass('title', newTitle)}`.trim()}
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    setNewTitle(value);
+                    onChangeField('title', value, { ...noteFormValues, title: value });
+                  }}
+                  onBlur={() => onBlurField('title', newTitle, noteFormValues)}
+                  aria-invalid={Boolean(touched.title && errors.title)}
                   placeholder="Short title, e.g. Bearing replacement"
-                  className="service-notes-input"
                   maxLength={140}
                   required
                 />
+                <small className="form-helper-text error" aria-live="polite">{touched.title ? (errors.title || ' ') : ' '}</small>
               </div>
 
               <div className="service-notes-field">
@@ -261,7 +305,14 @@ function ServiceNotes({ machineId, onNoteAdded }) {
               </div>
 
               <div className="service-notes-modal-actions">
-                <button type="button" className="btn-cancel" onClick={() => setComposeOpen(false)}>
+                <button
+                  type="button"
+                  className="btn-cancel"
+                  onClick={() => {
+                    setComposeOpen(false);
+                    clearValidation();
+                  }}
+                >
                   Cancel
                 </button>
                 <button type="submit" className="btn-diagnose service-notes-submit">Save message</button>

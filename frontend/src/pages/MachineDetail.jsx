@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import axios from 'axios';
 
@@ -8,6 +8,7 @@ import MachineGraphs from '../components/MachineGraphs';
 import MachineSensors from '../components/MachineSensors';
 import MachineDiagnostics from '../components/MachineDiagnostics';
 import MachineSettings from '../components/MachineSettings';
+import PageTitle from '../components/PageTitle';
 
 /* ── inline tab icons ── */
 const TabIcons = {
@@ -43,6 +44,8 @@ function MachineDetail() {
   const [activeTab, setActiveTab] = useState(location.state?.tab || 'sensors');
   const [preselectedSensorId, setPreselectedSensorId] = useState(null);
   const [moreMenuOpen, setMoreMenuOpen] = useState(false);
+  const moreButtonRef = useRef(null);
+  const tabSheetRef = useRef(null);
 
   const fetchDetail = async () => {
     try {
@@ -83,11 +86,51 @@ function MachineDetail() {
     });
   };
 
+  const closeMoreMenu = () => {
+    setMoreMenuOpen(false);
+    requestAnimationFrame(() => {
+      moreButtonRef.current?.focus();
+    });
+  };
+
   useEffect(() => {
     if (!moreMenuOpen) return undefined;
+
+    const focusableSelector = 'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+    const getFocusable = () => Array.from(tabSheetRef.current?.querySelectorAll(focusableSelector) || []);
+
+    requestAnimationFrame(() => {
+      getFocusable()[0]?.focus();
+    });
+
     const onKeyDown = (event) => {
-      if (event.key === 'Escape') setMoreMenuOpen(false);
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        closeMoreMenu();
+        return;
+      }
+
+      if (event.key !== 'Tab') return;
+
+      const focusable = getFocusable();
+      if (focusable.length === 0) {
+        event.preventDefault();
+        return;
+      }
+
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      const active = document.activeElement;
+
+      if (event.shiftKey && active === first) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && active === last) {
+        event.preventDefault();
+        first.focus();
+      }
     };
+
     document.addEventListener('keydown', onKeyDown);
     return () => document.removeEventListener('keydown', onKeyDown);
   }, [moreMenuOpen]);
@@ -106,33 +149,31 @@ return (
     <div className="page-container">
       
       {/* 1. HLAVIČKA - PŘESKLÁDANÁ */}
-      <div className="machine-header-container">
-        {/* Left: Name, Status, Meta */}
-        <div className="machine-title-section">
-          <h1>
+      <PageTitle 
+        title={
+          <>
             {info.name}
             <span className={`role-badge ${info.status} machine-detail-status-badge`}>
                {info.status}
             </span>
-          </h1>
-          <div className="machine-meta">
+          </>
+        }
+        subtitle={
+          <>
             <span className="machine-meta-type">{info.type}</span>
             <span className="machine-meta-divider">·</span>
             <span className="machine-meta-location">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{display:'inline',verticalAlign:'middle',marginRight:'3px',marginBottom:'1px'}}><path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/><circle cx="12" cy="10" r="3"/></svg>
               {info.location}
             </span>
-          </div>
-        </div>
-
-        {/* Right: Back button */}
-        <div>
-          <button onClick={() => navigate('/machines')} className="btn-back">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-            Back
-          </button>
-        </div>
-      </div>
+          </>
+        }
+      >
+        <button onClick={() => navigate('/machines')} className="btn-back">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back
+        </button>
+      </PageTitle>
 
       {/* 2. HORNÍ GRID */}
       <div className="dashboard-grid-3">
@@ -208,9 +249,11 @@ return (
           ))}
           <button
             type="button"
+            ref={moreButtonRef}
             className={`tab-btn tab-btn--more ${isSecondaryTabActive ? 'active' : ''}`}
-            aria-haspopup="true"
+            aria-haspopup="dialog"
             aria-expanded={moreMenuOpen}
+            aria-controls="machine-detail-more-sheet"
             onClick={() => setMoreMenuOpen(true)}
           >
             <svg className="tab-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/><circle cx="5" cy="12" r="1"/></svg>
@@ -219,23 +262,27 @@ return (
         </div>
 
         {moreMenuOpen && (
-          <div className="tab-sheet-backdrop" onClick={() => setMoreMenuOpen(false)}>
+          <div className="tab-sheet-backdrop" onClick={closeMoreMenu}>
             <div
+              id="machine-detail-more-sheet"
+              ref={tabSheetRef}
               className="tab-sheet"
-              role="menu"
-              aria-label="More sections"
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="machine-detail-more-sheet-title"
               onClick={(e) => e.stopPropagation()}
             >
               <div className="tab-sheet-handle" aria-hidden="true" />
+              <h2 id="machine-detail-more-sheet-title" className="sr-only">More sections</h2>
               {secondaryTabs.map(({ key, label }) => (
                 <button
                   key={key}
                   type="button"
-                  role="menuitem"
                   className={`tab-sheet-item ${activeTab === key ? 'active' : ''}`}
+                  aria-current={activeTab === key ? 'true' : undefined}
                   onClick={() => {
                     setActiveTab(key);
-                    setMoreMenuOpen(false);
+                    closeMoreMenu();
                   }}
                 >
                   {TabIcons[key]} {label}
