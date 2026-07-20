@@ -826,6 +826,7 @@ def get_all_sensors(token: str = Depends(oauth2_scheme)):
                  s.id_machine, s.position, s.sampling_rate, s.calibration_date,
                  s.module_path, s.channel_no
             FROM sensors s
+            WHERE s.deleted_at IS NULL
             ORDER BY s.id_sensor ASC
         """)
         result = conn.execute(query).fetchall()
@@ -874,7 +875,7 @@ def create_sensor(sensor_data: dict, role: str = Depends(get_current_user_role))
         if machine_id and channel_no is not None:
             dup = conn.execute(text("""
                 SELECT 1 FROM sensors
-                WHERE id_machine = :mid AND channel_no = :ch
+                WHERE id_machine = :mid AND channel_no = :ch AND deleted_at IS NULL
                 LIMIT 1
             """), {"mid": machine_id, "ch": channel_no}).fetchone()
             if dup:
@@ -932,7 +933,7 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
         if machine_id and channel_no is not None:
             dup = conn.execute(text("""
                 SELECT 1 FROM sensors
-                WHERE id_machine = :mid AND channel_no = :ch AND id_sensor <> :sid
+                WHERE id_machine = :mid AND channel_no = :ch AND id_sensor <> :sid AND deleted_at IS NULL
                 LIMIT 1
             """), {"mid": machine_id, "ch": channel_no, "sid": sensor_id}).fetchone()
             if dup:
@@ -971,23 +972,45 @@ def update_sensor(sensor_id: int, updated_data: dict, role: str = Depends(get_cu
 
 @app.delete("/sensors/{sensor_id}")
 def delete_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
-    """Odstraní senzor z databáze systému. Pouze pro administrátory."""
+    """Odstraní senzor ze systému (soft delete). Pouze pro administrátory.
+    Senzor zůstává v databázi s vyplněným deleted_at, aby šel obnovit přes
+    /sensors/{sensor_id}/restore (Undo v UI místo trvalé destrukce)."""
     if role != "admin":
         raise HTTPException(status_code=403, detail="Pouze administrátor může mazat senzory")
     
     with engine.connect() as conn:
-        result = conn.execute(text("DELETE FROM sensors WHERE id_sensor = :sid"), {"sid": sensor_id})
+        result = conn.execute(
+            text("UPDATE sensors SET deleted_at = now() WHERE id_sensor = :sid AND deleted_at IS NULL"),
+            {"sid": sensor_id}
+        )
         conn.commit()
         
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Senzor nenalezen")
         return {"message": "Senzor byl odstraněn"}
 
+@app.post("/sensors/{sensor_id}/restore")
+def restore_sensor(sensor_id: int, role: str = Depends(get_current_user_role)):
+    """Vrátí zpět nedávno smazaný senzor (Undo akce z toastu)."""
+    if role != "admin":
+        raise HTTPException(status_code=403, detail="Pouze administrátor může obnovovat senzory")
+
+    with engine.connect() as conn:
+        result = conn.execute(
+            text("UPDATE sensors SET deleted_at = NULL WHERE id_sensor = :sid AND deleted_at IS NOT NULL"),
+            {"sid": sensor_id}
+        )
+        conn.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Senzor nenalezen nebo nebyl smazán")
+        return {"message": "Senzor byl obnoven"}
+
 @app.get("/sensors/available")
 def get_available_sensors(token: str = Depends(oauth2_scheme)):
     """Vrátí seznam dosud nepřiřazených (volných) senzorů pro osazení na stroje."""
     with engine.connect() as conn:
-        query = text("SELECT id_sensor, serial_number, description FROM sensors WHERE status = 'available'")
+        query = text("SELECT id_sensor, serial_number, description FROM sensors WHERE status = 'available' AND deleted_at IS NULL")
         result = conn.execute(query).fetchall()
         
         return [
@@ -1006,7 +1029,7 @@ def attach_sensor(machine_id: int, payload: dict, token: str = Depends(oauth2_sc
             SET id_machine = :mid, 
                 position = :pos, 
                 status = 'active' 
-            WHERE id_sensor = :sid
+            WHERE id_sensor = :sid AND deleted_at IS NULL
         """)
         result = conn.execute(query, {
             "mid": machine_id,
@@ -1054,12 +1077,12 @@ def get_machines(token: str = Depends(oauth2_scheme)):
         query = text("""
             SELECT 
                 m.id_machine, m.name, m.type, m.location, m.status,
-                (SELECT content FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note,
-                (SELECT severity FROM service_notes WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_severity,
+                (SELECT content FROM service_notes WHERE id_machine = m.id_machine AND deleted_at IS NULL ORDER BY timestamp DESC LIMIT 1) as last_note,
+                (SELECT severity FROM service_notes WHERE id_machine = m.id_machine AND deleted_at IS NULL ORDER BY timestamp DESC LIMIT 1) as last_note_severity,
                 (SELECT u.username FROM service_notes sn JOIN users u ON sn.id_user = u.id_user 
-                 WHERE sn.id_machine = m.id_machine ORDER BY sn.timestamp DESC LIMIT 1) as last_note_author,
+                 WHERE sn.id_machine = m.id_machine AND sn.deleted_at IS NULL ORDER BY sn.timestamp DESC LIMIT 1) as last_note_author,
                 (SELECT to_char(timestamp, 'YYYY-MM-DD"T"HH24:MI:SS"Z"') FROM service_notes 
-                 WHERE id_machine = m.id_machine ORDER BY timestamp DESC LIMIT 1) as last_note_time
+                 WHERE id_machine = m.id_machine AND deleted_at IS NULL ORDER BY timestamp DESC LIMIT 1) as last_note_time
             FROM machines m
             ORDER BY m.id_machine ASC
         """)
@@ -1132,14 +1155,14 @@ def get_machine_detail(machine_id: int, token: str = Depends(oauth2_scheme)):
         if not machine: 
             raise HTTPException(status_code=404, detail="Stroj nenalezen")
 
-        query_sensors = text("SELECT * FROM sensors WHERE id_machine = :mid")
+        query_sensors = text("SELECT * FROM sensors WHERE id_machine = :mid AND deleted_at IS NULL")
         sensors = [dict(row._mapping) for row in conn.execute(query_sensors, {"mid": machine_id}).fetchall()]
 
         query_note = text("""
             SELECT content, timestamp, severity, username 
             FROM service_notes sn
             JOIN users u ON sn.id_user = u.id_user
-            WHERE sn.id_machine = :mid 
+            WHERE sn.id_machine = :mid AND sn.deleted_at IS NULL
             ORDER BY sn.timestamp DESC 
             LIMIT 1
         """)
@@ -1441,7 +1464,7 @@ def get_machine_notes(machine_id: int, token: str = Depends(oauth2_scheme)):
         query = text("""
             SELECT sn.id_note, sn.content, sn.severity, sn.timestamp, u.username
             FROM service_notes sn JOIN users u ON sn.id_user = u.id_user
-            WHERE sn.id_machine = :mid ORDER BY sn.timestamp DESC
+            WHERE sn.id_machine = :mid AND sn.deleted_at IS NULL ORDER BY sn.timestamp DESC
         """)
         result = conn.execute(query, {"mid": machine_id}).fetchall()
         
@@ -1480,15 +1503,27 @@ def add_service_note(machine_id: int, note: dict, token: str = Depends(oauth2_sc
 
 @app.delete("/machines/{machine_id}/notes/{note_id}")
 def delete_service_note(machine_id: int, note_id: int, token: str = Depends(oauth2_scheme)):
-    """Smaže vybranou servisní poznámku na základě ID."""
+    """Smaže vybranou servisní poznámku (soft delete, obnovitelné přes /restore)."""
     with engine.connect() as conn:
-        query = text("DELETE FROM service_notes WHERE id_note = :nid AND id_machine = :mid")
+        query = text("UPDATE service_notes SET deleted_at = now() WHERE id_note = :nid AND id_machine = :mid AND deleted_at IS NULL")
         result = conn.execute(query, {"nid": note_id, "mid": machine_id})
         conn.commit()
         
         if result.rowcount == 0:
             raise HTTPException(status_code=404, detail="Poznámka nenalezena")
         return {"message": "Poznámka smazána"}
+
+@app.post("/machines/{machine_id}/notes/{note_id}/restore")
+def restore_service_note(machine_id: int, note_id: int, token: str = Depends(oauth2_scheme)):
+    """Vrátí zpět nedávno smazanou servisní poznámku (Undo akce z toastu)."""
+    with engine.connect() as conn:
+        query = text("UPDATE service_notes SET deleted_at = NULL WHERE id_note = :nid AND id_machine = :mid AND deleted_at IS NOT NULL")
+        result = conn.execute(query, {"nid": note_id, "mid": machine_id})
+        conn.commit()
+
+        if result.rowcount == 0:
+            raise HTTPException(status_code=404, detail="Poznámka nenalezena nebo nebyla smazána")
+        return {"message": "Poznámka byla obnovena"}
 
 
 # ==========================================

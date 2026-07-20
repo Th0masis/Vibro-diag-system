@@ -74,6 +74,7 @@ CREATE TABLE sensors (
     sampling_rate double precision,
     calibration_date date,
     created_at timestamp with time zone DEFAULT now(),
+    deleted_at timestamp with time zone,
     UNIQUE (id_machine, channel_no)
 );
 
@@ -151,7 +152,8 @@ CREATE TABLE service_notes (
     id_user integer NOT NULL REFERENCES users(id_user),
     "timestamp" timestamp with time zone DEFAULT now(),
     content text NOT NULL,
-    severity severity_type DEFAULT 'INFO'::severity_type
+    severity severity_type DEFAULT 'INFO'::severity_type,
+    deleted_at timestamp with time zone
 );
 
 CREATE TABLE buffer_download_jobs (
